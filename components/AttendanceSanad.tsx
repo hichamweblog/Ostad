@@ -1,0 +1,1019 @@
+'use client';
+
+import React, { useState } from 'react';
+import { exportToDoc } from '@/lib/utils';
+import { AppState } from '@/lib/storage';
+import { AttendanceStatus, SessionRecord, Student } from '@/lib/types';
+import {
+  UserCheck,
+  Calendar,
+  Clock,
+  Sparkles,
+  Printer,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Clock3,
+  HelpCircle,
+  Plus,
+  Users,
+  Search,
+  Filter,
+  LayoutGrid,
+  List,
+  AlertTriangle,
+  BookX,
+  UserMinus,
+  Star
+} from 'lucide-react';
+
+interface AttendanceSanadProps {
+  state: AppState;
+  onUpdateState: (updater: (prev: AppState) => AppState) => void;
+  onNavigateToTimetable?: () => void;
+}
+
+export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
+  state,
+  onUpdateState,
+  onNavigateToTimetable
+}) => {
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    state.activeClassId || (state.classes[0]?.id || '')
+  );
+
+  const activeClass = state.classes.find(c => c.id === selectedClassId) || state.classes[0];
+  const classStudents = state.students
+    .filter(s => s.classId === selectedClassId)
+    .sort((a, b) => a.numberInList - b.numberInList);
+
+  const classSessions = state.sessions
+    .filter(s => s.classId === selectedClassId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(
+    classSessions[0]?.id || ''
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'seating'>('table');
+  const [seatingCols, setSeatingCols] = useState<number>(3);
+
+  const handleCycleStatus = (studentId: string) => {
+    const current = activeAttendance[studentId] || 'PRESENT';
+    const nextStatus = current === 'ABSENT' ? 'PRESENT' : 'ABSENT';
+    handleSetStudentStatus(studentId, nextStatus);
+  };
+
+  const activeSession = classSessions.find(s => s.id === selectedSessionId) || classSessions[0];
+
+  // Calculate cumulative stats per student in this class across all sessions
+  const studentStatsMap: Record<string, { absent: number; unwrittenLessons: number; disruptions: number; goodParticipation: number }> = {};
+  for (const s of classStudents) {
+    studentStatsMap[s.id] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+  }
+  for (const session of classSessions) {
+    if (session.attendance) {
+      for (const [studentId, status] of Object.entries(session.attendance)) {
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        if (status === 'ABSENT') studentStatsMap[studentId].absent++;
+      }
+    }
+    if (session.unwrittenLessons) {
+      for (const studentId of session.unwrittenLessons) {
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        studentStatsMap[studentId].unwrittenLessons++;
+      }
+    }
+    if (session.disruptions) {
+      for (const studentId of session.disruptions) {
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        studentStatsMap[studentId].disruptions++;
+      }
+    }
+    if (session.goodParticipation) {
+      for (const studentId of session.goodParticipation) {
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        studentStatsMap[studentId].goodParticipation++;
+      }
+    }
+  }
+
+  // Handle setting status for a student in active session
+  const handleSetStudentStatus = (studentId: string, status: AttendanceStatus) => {
+    if (!activeSession) return;
+
+    onUpdateState(prev => ({
+      ...prev,
+      sessions: prev.sessions.map(ses => {
+        if (ses.id === activeSession.id) {
+          return {
+            ...ses,
+            attendance: {
+              ...(ses.attendance || {}),
+              [studentId]: status
+            }
+          };
+        }
+        return ses;
+      })
+    }));
+  };
+
+  const handleToggleBehavior = (studentId: string, behaviorType: 'disruptions' | 'unwrittenLessons' | 'poorParticipation' | 'goodParticipation') => {
+    if (!activeSession) return;
+
+    onUpdateState(prev => ({
+      ...prev,
+      sessions: prev.sessions.map(ses => {
+        if (ses.id === activeSession.id) {
+          const arr = ses[behaviorType] || [];
+          const exists = arr.includes(studentId);
+          let newArr = exists ? arr.filter(id => id !== studentId) : [...arr, studentId];
+          
+          let updatedSes = { ...ses, [behaviorType]: newArr };
+
+          // Mutually exclusive participation marks
+          if (behaviorType === 'goodParticipation' && !exists) {
+            updatedSes.poorParticipation = (ses.poorParticipation || []).filter(id => id !== studentId);
+          } else if (behaviorType === 'poorParticipation' && !exists) {
+            updatedSes.goodParticipation = (ses.goodParticipation || []).filter(id => id !== studentId);
+          }
+
+          return updatedSes;
+        }
+        return ses;
+      })
+    }));
+  };
+
+  // Mark all students present in active session
+  const handleMarkAllPresent = () => {
+    if (!activeSession) return;
+    const allPresentMap: Record<string, AttendanceStatus> = {};
+    for (const s of classStudents) {
+      allPresentMap[s.id] = 'PRESENT';
+    }
+
+    onUpdateState(prev => ({
+      ...prev,
+      sessions: prev.sessions.map(ses => {
+        if (ses.id === activeSession.id) {
+          return {
+            ...ses,
+            attendance: allPresentMap
+          };
+        }
+        return ses;
+      })
+    }));
+  };
+
+  // Create new session for today
+  const handleCreateTodaySession = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newSession: SessionRecord = {
+      id: `ses-${Date.now()}`,
+      classId: selectedClassId,
+      date: todayStr,
+      startTime: '08:00',
+      endTime: '09:00',
+      sessionGoals: 'تسجيل الحضور والمتابعة اليومية',
+      accomplishments: '',
+      nextSteps: '',
+      teacherNotes: '', attendance: {},
+      };
+
+    onUpdateState(prev => ({
+      ...prev,
+      sessions: [newSession, ...prev.sessions]
+    }));
+    setSelectedSessionId(newSession.id);
+  };
+
+  // Generate sessions for the active trimester according to the weekly timetable
+  const handleGenerateTrimesterSessions = () => {
+    const timetableForClass = state.timetable.filter(s => s.classId === selectedClassId);
+    if (timetableForClass.length === 0) {
+      alert('يرجى أولاً إضافة حصص لهذا الفوج في جدول التوقيت الأسبوعي ليتسنى توليدها تلقائياً.');
+      return;
+    }
+
+    const termDates = state.calendarSettings?.termDates || {
+      term1Start: '2026-09-01',
+      term1End: '2026-12-15',
+      term2Start: '2026-12-16',
+      term2End: '2027-03-15',
+      term3Start: '2027-03-16',
+      term3End: '2027-06-30'
+    };
+
+    let start = new Date(termDates.term1Start);
+    let end = new Date(termDates.term1End);
+    if (state.activeTrimester === 2) {
+      start = new Date(termDates.term2Start);
+      end = new Date(termDates.term2End);
+    } else if (state.activeTrimester === 3) {
+      start = new Date(termDates.term3Start);
+      end = new Date(termDates.term3End);
+    }
+
+    const newSessions: SessionRecord[] = [];
+    const cur = new Date(start);
+
+    // Limit to at most 24 sessions per trimester to avoid massive arrays
+    let count = 0;
+    while (cur <= end && count < 24) {
+      const dayOfWeek = cur.getDay(); // 0=Sun ... 4=Thu
+      const matchSlot = timetableForClass.find(t => t.dayOfWeek === dayOfWeek);
+      if (matchSlot) {
+        const dateStr = cur.toISOString().split('T')[0];
+        // Check if session doesn't already exist
+        const exists = state.sessions.some(s => s.classId === selectedClassId && s.date === dateStr);
+        if (!exists) {
+          newSessions.push({
+            id: `ses-gen-${Date.now()}-${count}`,
+            classId: selectedClassId,
+            date: dateStr,
+            startTime: matchSlot.startTime,
+            endTime: matchSlot.endTime,
+            sessionGoals: `حصة الأسبوع ${Math.floor(count / timetableForClass.length) + 1}`,
+            accomplishments: '',
+            nextSteps: '',
+            teacherNotes: '', attendance: {},
+            });
+          count++;
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    if (newSessions.length > 0) {
+      onUpdateState(prev => ({
+        ...prev,
+        sessions: [...newSessions, ...prev.sessions]
+      }));
+      setSelectedSessionId(newSessions[0].id);
+      alert(`تم بنجاح توليد ${newSessions.length} حصة للفصل ${state.activeTrimester} بناءً على جدول التوقيت!`);
+    } else {
+      alert('جميع حصص هذا الفصل مولدة مسبقاً.');
+    }
+    setShowGenerateConfirm(false);
+  };
+
+  const filteredStudents = classStudents.filter(s =>
+    s.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Active session stats
+  const activeAttendance = activeSession?.attendance || {};
+  const absentCount = Object.values(activeAttendance).filter(v => v === 'ABSENT').length;
+  // الحضور = إجمالي التلاميذ - عدد الغائبين
+  const presentCount = classStudents.length - absentCount;
+
+  // Export official attendance sheet to Word (.doc) with clean table and RTL visual columns
+  const handleExportDoc = () => {
+    const studentRows = classStudents
+      .map(student => {
+        const status = activeAttendance[student.id] || 'PRESENT';
+        const stats = studentStatsMap[student.id] || { absent: 0, late: 0, excused: 0 };
+        const isGood = activeSession?.goodParticipation?.includes(student.id);
+        const isPoor = activeSession?.poorParticipation?.includes(student.id);
+        const isDisruptive = activeSession?.disruptions?.includes(student.id);
+        const isNoLessons = activeSession?.unwrittenLessons?.includes(student.id);
+
+        const behaviorParts: string[] = [];
+        if (isGood) behaviorParts.push('مشارك ونشيط');
+        if (isPoor) behaviorParts.push('مستوى ضعيف يحتاج متابعة');
+        if (isNoLessons) behaviorParts.push('بدون كراس');
+        if (isDisruptive) behaviorParts.push('سلوك غير منضبط');
+
+        const statusLabel =
+          status === 'ABSENT'
+            ? '<span style="color: #dc2626; font-weight: bold;">غائب</span>'
+            : status === 'LATE'
+            ? '<span style="color: #d97706; font-weight: bold;">متأخر</span>'
+            : status === 'EXCUSED'
+            ? '<span style="color: #2563eb; font-weight: bold;">مبرر</span>'
+            : '<span style="color: #16a34a;">حاضر</span>';
+
+        const statsText = `غ: ${stats.absent} | شغب: ${stats.disruptions} | كراس: ${stats.unwrittenLessons}`;
+          
+          return `
+            <tr>
+              <td style="border: 1px solid #d5dfdc; padding: 6px; text-align: center;">${student.numberInList}</td>
+              <td style="border: 1px solid #d5dfdc; padding: 6px;"><b>${student.fullName}</b></td>
+              <td style="border: 1px solid #d5dfdc; padding: 6px; text-align: center;">${statusLabel}</td>
+              <td style="border: 1px solid #d5dfdc; padding: 6px;">${behaviorParts.join('، ') || '-'}</td>
+              <td style="border: 1px solid #d5dfdc; padding: 6px; text-align: center; direction: ltr;">${statsText}</td>
+            </tr>
+          `;
+      })
+      .join('');
+
+    const html = `
+      <div dir="rtl" style="font-family: 'Amiri', 'Traditional Arabic', serif; color: #000000; padding: 5px;">
+        <table style="width: 100%; border: none; margin-bottom: 10px; font-size: 9.5pt;">
+          <tr>
+            <td style="width: 33%; text-align: right; vertical-align: top; line-height: 1.4;">
+              مديرية التربية لولاية: <b>${state.profile.stateName || 'الجزائر'}</b><br/>
+              المؤسسة: <b>${state.profile.schoolName || 'ثانوية التعليم الثانوي'}</b><br/>
+              الأستاذ(ة): <b>${state.profile.name || 'أستاذ المادة'}</b><br/>
+              المادة: <b>العلوم الإسلامية</b>
+            </td>
+            <td style="width: 34%; text-align: center; vertical-align: middle;">
+              <h3 style="margin: 0; font-size: 12pt; color: #0d2c3b;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
+              <h4 style="margin: 2px 0; font-size: 10.5pt; color: #0e7c61;">وزارة التربية الوطنية</h4>
+              <h2 style="margin: 5px 0; font-size: 14pt; color: #0d2c3b; text-decoration: underline;">ورقة رصد الغياب والمتابعة اليومية</h2>
+              <div style="font-size: 10.5pt; font-weight: bold; margin-top: 2px;">
+                القسم: <b>${activeClass?.name || 'فوج تربوي'}</b> (${activeClass?.stream || ''}) — القاعة: <b>${activeClass?.roomNumber || '...'}</b>
+              </div>
+            </td>
+            <td style="width: 33%; text-align: left; vertical-align: top; line-height: 1.4;">
+              الموسم الدراسي: <b>${state.profile.academicYear || '2025/2026'}</b><br/>
+              التاريخ: <b>${activeSession?.date || '..../..../2026 م'}</b><br/>
+              التوقيت: <b>${activeSession ? `${activeSession.startTime} - ${activeSession.endTime}` : '...... إلى ......'}</b>
+            </td>
+          </tr>
+        </table>
+
+        <div style="height: 1.5px; background-color: #0d2c3b; margin-bottom: 10px;"></div>
+
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 10pt;">
+          <thead>
+            <tr style="background-color: #f1f5f9; font-weight: bold;">
+              <th style="border: 1px solid #000; padding: 6px; width: 8%; text-align: center;">الرقم</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 32%; text-align: right;">اسم ولقب التلميذ</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 14%; text-align: center;">حالة الحصة</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 14%; text-align: center;">الغياب والتأخر التراكمي</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 32%; text-align: right;">الملاحظات وتقويم الانضباط</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${studentRows}
+          </tbody>
+        </table>
+
+        <div style="margin-top: 12px; padding: 8px; border: 1px solid #94a3b8; background-color: #f8fafc; font-size: 9.5pt;">
+          <b>إحصاء الحصة:</b> تعداد الفوج: <b>${classStudents.length}</b> تلميذ &nbsp;|&nbsp; 
+          الحاضرون: <b style="color: #16a34a;">${presentCount}</b> &nbsp;|&nbsp; 
+          الغائبون: <b style="color: #dc2626;">${absentCount}</b>
+        </div>
+
+        <table style="width: 100%; border: none; margin-top: 20px; font-size: 10pt;">
+          <tr>
+            <td style="width: 50%; text-align: center; vertical-align: top; border: 1px dashed #cbd5e1; padding: 12px;">
+              <b>توقيع أستاذ(ة) المادة:</b>
+              <p style="margin: 30px 0 0; font-size: 8.5pt; color: #64748b;">حرر في: ${activeSession?.date || '..../..../2026 م'}</p>
+            </td>
+            <td style="width: 50%; text-align: center; vertical-align: top; border: 1px dashed #cbd5e1; padding: 12px;">
+              <b>تأشيرة مستشار التربية / ناظر الدروس:</b>
+              <p style="margin: 30px 0 0; font-size: 8.5pt; color: #64748b;">(الختم والملاحظة)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+
+    exportToDoc(html, `ورقة_الغياب_${activeClass?.name || 'فوج'}_${activeSession?.date || 'حصة'}`);
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-6" id="attendance-sanad-view">
+      {/* Top Class Selector & Action Ribbon (Screenshot 6) */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#0d6547] flex items-center justify-center font-bold">
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 font-medium">الفوج المعروض:</div>
+            <select
+              value={selectedClassId}
+              onChange={e => {
+                setSelectedClassId(e.target.value);
+                const nextSes = state.sessions.find(s => s.classId === e.target.value);
+                if (nextSes) setSelectedSessionId(nextSes.id);
+              }}
+              className="font-bold text-slate-900 bg-transparent text-base focus:outline-none border-b border-dashed border-[#0d6547] cursor-pointer"
+            >
+              {state.classes.map(cls => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.name} - {cls.stream}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Generate sessions button */}
+          <button
+            onClick={() => handleGenerateTrimesterSessions()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#0d6547] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>توليد حصص الفصل {state.activeTrimester}</span>
+          </button>
+
+          {/* New session button */}
+          <button
+            onClick={handleCreateTodaySession}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0d6547] hover:bg-[#0b543b] transition-colors shadow-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>حصة جديدة اليوم</span>
+          </button>
+        </div>
+      </div>
+
+      {/* If No sessions exist for class */}
+      {classSessions.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-3">
+          <Clock3 className="w-8 h-8 text-amber-600 mx-auto" />
+          <h3 className="font-bold text-amber-900 text-sm">
+            لا توجد حصص مسجلة لهذا الفوج حتى الآن
+          </h3>
+          <p className="text-xs text-amber-700 max-w-md mx-auto">
+            يمكنك توليد حصص الفصل تلقائياً وفق جدول التوقيت الأسبوعي، أو إضافة حصة جديدة يدوياً للبدء برصد الحضور.
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleGenerateTrimesterSessions}
+              className="px-4 py-2 bg-[#0d6547] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0b543b] cursor-pointer"
+            >
+              توليد حصص الفصل {state.activeTrimester}
+            </button>
+            {onNavigateToTimetable && (
+              <button
+                onClick={onNavigateToTimetable}
+                className="px-4 py-2 bg-white border border-amber-300 text-amber-900 text-xs font-bold rounded-xl hover:bg-amber-100 cursor-pointer"
+              >
+                الذهاب إلى جدول التوقيت
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Session Active Toolbar */}
+      {activeSession && (
+        <div className="space-y-4">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            {/* Session Selector */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-bold text-slate-700">تحديد الحصة:</span>
+              <select
+                value={selectedSessionId}
+                onChange={e => setSelectedSessionId(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0d6547]"
+              >
+                {classSessions.map(ses => (
+                  <option key={ses.id} value={ses.id}>
+                    {ses.date} ({ses.startTime} - {ses.endTime}) {ses.sessionGoals ? `- ${ses.sessionGoals.slice(0, 30)}...` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {/* Mark All Present */}
+              <button
+                onClick={handleMarkAllPresent}
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition-colors cursor-pointer"
+              >
+                تحديد الكل «حاضر»
+              </button>
+            </div>
+
+            {/* Quick Session Stats */}
+            <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 text-xs w-full sm:w-auto">
+              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
+                <span className="sm:hidden block text-[10px] text-emerald-700">حاضر</span>
+                <span className="hidden sm:inline">حاضر: </span>
+                <span>{presentCount}</span>
+              </div>
+              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-rose-50 text-rose-800 font-bold border border-rose-200">
+                <span className="sm:hidden block text-[10px] text-rose-700">غائب</span>
+                <span className="hidden sm:inline">غائب: </span>
+                <span>{absentCount}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Search bar and View Mode Switcher */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <div className="relative flex-1 w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="بحث عن تلميذ..."
+                  className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#0d6547]"
+                />
+              </div>
+
+              {/* View Switcher: Table vs Seating Plan */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs w-full sm:w-auto justify-between sm:justify-start">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    viewMode === 'table'
+                      ? 'bg-white text-[#0d6547] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>قائمة الحضور</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('seating')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    viewMode === 'seating'
+                      ? 'bg-white text-[#0d6547] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  id="btn-seating-plan-view"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>مخطط الجلوس</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={handleExportDoc}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>تصدير إلى ملف doc</span>
+            </button>
+          </div>
+
+          {/* Conditional View: Table vs Seating Plan */}
+          <div id="attendance-doc">
+          {viewMode === 'table' ? (
+            <div className="space-y-3">
+              {/* 1. Mobile-First Card View (Screens < 768px): ZERO Horizontal Scrolling */}
+              <div className="block md:hidden space-y-2.5">
+                {filteredStudents.map(student => {
+                  const status = activeAttendance[student.id] || 'PRESENT';
+                  const stats = studentStatsMap[student.id] || { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+                  const deductionPoints = (stats.absent * 0.5) + (stats.unwrittenLessons * 0.5) + (stats.disruptions * 0.5);
+                  const bonusPoints = stats.goodParticipation * 0.5;
+                  const estimatedImpact = bonusPoints - deductionPoints;
+
+                  return (
+                    <div
+                      key={student.id}
+                      className="p-3 bg-white rounded-2xl border border-[#D5DFDC] shadow-xs space-y-2.5 transition-all"
+                    >
+                      {/* Top Row: Number, Name, Repeater, & Stats */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-7 h-7 rounded-xl bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200">
+                            {student.numberInList}
+                          </span>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm text-[#0D2C3B] truncate leading-tight">
+                              {student.fullName}
+                            </h4>
+                            {student.isRepeater && (
+                              <span className="inline-block text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold mt-0.5">
+                                معيد
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Badges: Total Absences & Delays */}
+                        <div className="flex items-center gap-1 shrink-0 text-[11px] font-bold font-mono">
+                          <span
+                            className={`px-2 py-0.5 rounded-lg border ${
+                              stats.absent > 0
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}
+                            title="مجموع الغيابات"
+                          >
+                            {stats.absent} غ
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-lg border ${
+                              stats.disruptions > 0 || stats.unwrittenLessons > 0
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}
+                            title="مجموع التأخرات"
+                          >
+                            شغب: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                          </span>
+                          {estimatedImpact !== 0 && (
+                            <span className={`text-[10px] font-semibold ${estimatedImpact > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              ({estimatedImpact > 0 ? '+' : ''}{estimatedImpact.toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Unified Attendance & Behavior Buttons (Mobile) */}
+                      <div className="grid grid-cols-4 gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                                <button
+                                  onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
+                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                    status === 'ABSENT'
+                                      ? 'bg-rose-500 text-white border-rose-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-rose-600 hover:bg-white'
+                                  }`}
+                                  title="تسجيل غياب"
+                                >
+                                  الغياب -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
+                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                    activeSession.unwrittenLessons?.includes(student.id)
+                                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-amber-600 hover:bg-white'
+                                  }`}
+                                  title="لم يكتب الدرس / الكراس"
+                                >
+                                  الكراس -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'disruptions')}
+                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                    activeSession.disruptions?.includes(student.id)
+                                      ? 'bg-[#0D2C3B] text-white border-[#0D2C3B] shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-[#0D2C3B] hover:bg-white'
+                                  }`}
+                                  title="شغب وسلوك سيء"
+                                >
+                                  شغب -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
+                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                    activeSession.goodParticipation?.includes(student.id)
+                                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-emerald-600 hover:bg-white'
+                                  }`}
+                                  title="مشاركة إيجابية"
+                                >
+                                  مشاركة +
+                                </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 2. Desktop Table View (Screens >= 768px) */}
+              <div className="hidden md:block bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                        <th className="p-3 w-14 text-center">الرقم</th>
+                        <th className="p-3">اسم ولقب التلميذ</th>
+                        <th className="p-3 text-center">حالة الحصة والتقويم السلوكي</th>
+                        <th className="p-3 text-center">مجموع الغيابات</th>
+                        <th className="p-3 text-center">مجموع السلوك</th>
+                        <th className="p-3 text-center">أثر التقويم المقدر</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredStudents.map(student => {
+                        const status = activeAttendance[student.id] || null;
+                        const stats = studentStatsMap[student.id] || { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+                  const deductionPoints = (stats.absent * 0.5) + (stats.unwrittenLessons * 0.5) + (stats.disruptions * 0.5);
+                  const bonusPoints = stats.goodParticipation * 0.5;
+                  const estimatedImpact = bonusPoints - deductionPoints;
+
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="p-3 text-center font-mono font-bold text-slate-500">
+                              {student.numberInList}
+                            </td>
+                            <td className="p-3 font-bold text-slate-900">
+                              {student.fullName}
+                              {student.isRepeater && (
+                                <span className="mr-2 text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                                  معيد
+                                </span>
+                              )}
+                            </td>
+                            {/* Unified Attendance & Behavior Buttons */}
+                            <td className="p-2 text-center">
+                              <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                                <button
+                                  onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                    status === 'ABSENT'
+                                      ? 'bg-rose-500 text-white border-rose-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-rose-600 hover:bg-white'
+                                  }`}
+                                  title="تسجيل غياب"
+                                >
+                                  الغياب -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                    activeSession.unwrittenLessons?.includes(student.id)
+                                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-amber-600 hover:bg-white'
+                                  }`}
+                                  title="لم يكتب الدرس / الكراس"
+                                >
+                                  الكراس -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'disruptions')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                    activeSession.disruptions?.includes(student.id)
+                                      ? 'bg-[#0D2C3B] text-white border-[#0D2C3B] shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-[#0D2C3B] hover:bg-white'
+                                  }`}
+                                  title="شغب وسلوك سيء"
+                                >
+                                  شغب -
+                                </button>
+                                <button
+                                  onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                    activeSession.goodParticipation?.includes(student.id)
+                                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-emerald-600 hover:bg-white'
+                                  }`}
+                                  title="مشاركة إيجابية"
+                                >
+                                  مشاركة +
+                                </button>
+                              </div>
+                            </td>
+                            {/* Cumulative Absences */}
+                            <td className="p-3 text-center font-bold">
+                              <span className={stats.absent >= 3 ? 'text-rose-600' : 'text-slate-700'}>
+                                {stats.absent} غ
+                              </span>
+                            </td>
+                            {/* Cumulative Delays */}
+                            <td className="p-3 text-center font-bold text-slate-700">
+                              شغب: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                            </td>
+                            {/* Estimated Penalty in Continuous Eval */}
+                            <td className="p-3 text-center font-bold font-mono text-sm border-r border-slate-100 bg-slate-50/50">
+                              {estimatedImpact > 0 ? (
+                                <span className="text-emerald-600 font-bold">+{estimatedImpact.toFixed(2)} ن</span>
+                              ) : estimatedImpact < 0 ? (
+                                <span className="text-rose-600 font-bold">{estimatedImpact.toFixed(2)} ن</span>
+                              ) : (
+                                <span className="text-slate-400">0.00</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Classroom Seating Plan (مخطط الجلوس داخل حجرة الدراسة) */
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-6">
+              {/* Classroom Header & Blackboard */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 text-xs font-bold text-slate-500 px-1">
+                <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+                  <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
+                    <span>🧱</span>
+                    <span>جهة الحائط</span>
+                  </span>
+                  <span className="sm:hidden flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
+                    <span>🚪</span>
+                    <span>جهة الباب</span>
+                  </span>
+                </div>
+                <div className="w-full sm:flex-1 max-w-lg mx-auto bg-slate-900 text-slate-100 py-2.5 px-4 rounded-xl text-center shadow-sm border border-slate-800 font-black flex items-center justify-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <span className="truncate">السبورة الحائطية ومنصة الأستاذ</span>
+                </div>
+                <span className="hidden sm:flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
+                  <span>🚪</span>
+                  <span>جهة الباب</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-1 mb-2">
+                <label className="text-[11px] font-bold text-slate-500">عدد الصفوف:</label>
+                <select
+                  value={seatingCols}
+                  onChange={(e) => setSeatingCols(Number(e.target.value))}
+                  className="bg-white border border-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value={2}>صفان (2)</option>
+                  <option value={3}>3 صفوف</option>
+                  <option value={4}>4 صفوف</option>
+                </select>
+              </div>
+
+              {/* Classroom Seating Grid: Rows of Double Desks */}
+              <div
+                className="grid gap-4"
+                style={{ gridTemplateColumns: `repeat(${seatingCols}, minmax(0, 1fr))` }}
+              >
+                {Array.from({ length: Math.ceil(filteredStudents.length / 2) }).map((_, deskIndex) => {
+                  const student1 = filteredStudents[deskIndex * 2];
+                  const student2 = filteredStudents[deskIndex * 2 + 1];
+
+                  return (
+                    <div
+                      key={deskIndex}
+                      className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-2xs hover:border-slate-300 transition-all flex flex-col justify-between gap-2.5"
+                    >
+                      {/* Desk Header */}
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 border-b border-slate-100 pb-1.5">
+                        <span className="flex items-center gap-1">
+                          <span>طاولة ثنائية</span>
+                          <span className="font-mono text-slate-600 font-black">#{deskIndex + 1}</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">الصف {Math.floor(deskIndex / seatingCols) + 1}</span>
+                      </div>
+
+                      {/* Seats Pair */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Student 1 (Right Seat) */}
+                        {student1 ? (
+                          <div className="space-y-1.5 p-2 rounded-lg bg-slate-50/70 border border-slate-100">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-mono text-[11px] font-black text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                #{student1.numberInList}
+                              </span>
+                              {student1.isRepeater && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
+                                  معيد
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-bold text-xs text-slate-900 truncate" title={student1.fullName}>
+                              {student1.fullName}
+                            </div>
+                            
+                            {/* Current Status Pill with quick cycle on click */}
+                            <button
+                              type="button"
+                              onClick={() => handleCycleStatus(student1.id)}
+                              className={`w-full py-1 px-1.5 rounded text-[11px] font-black text-center transition-all cursor-pointer border ${
+                                (activeAttendance[student1.id] || 'PRESENT') === 'PRESENT'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                              title="انقر لتبديل الحالة سريعاً"
+                            >
+                              {(activeAttendance[student1.id] || 'PRESENT') === 'PRESENT' ? 'حاضر ✔' : 'غائب ✖'}
+                            </button>
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                                  <button
+                                    onClick={() => handleToggleBehavior(student1.id, 'unwrittenLessons')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.unwrittenLessons?.includes(student1.id)
+                                        ? 'bg-amber-500 text-white border-amber-600'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="لم يكتب الدرس"
+                                  >
+                                    الكراس -
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleBehavior(student1.id, 'disruptions')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.disruptions?.includes(student1.id)
+                                        ? 'bg-[#0D2C3B] text-white border-[#0D2C3B]'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="شغب وسلوك سيء"
+                                  >
+                                    شغب -
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleBehavior(student1.id, 'goodParticipation')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.goodParticipation?.includes(student1.id)
+                                        ? 'bg-emerald-500 text-white border-emerald-600'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="مشاركة إيجابية"
+                                  >
+                                    مشاركة +
+                                  </button>
+                            </div>
+
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center text-slate-300 text-[11px] flex items-center justify-center">
+                            مقعد شاغر
+                          </div>
+                        )}
+
+                        {/* Student 2 (Left Seat) */}
+                        {student2 ? (
+                          <div className="space-y-1.5 p-2 rounded-lg bg-slate-50/70 border border-slate-100">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-mono text-[11px] font-black text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                #{student2.numberInList}
+                              </span>
+                              {student2.isRepeater && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
+                                  معيد
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-bold text-xs text-slate-900 truncate" title={student2.fullName}>
+                              {student2.fullName}
+                            </div>
+                            
+                            {/* Current Status Pill with quick cycle on click */}
+                            <button
+                              type="button"
+                              onClick={() => handleCycleStatus(student2.id)}
+                              className={`w-full py-1 px-1.5 rounded text-[11px] font-black text-center transition-all cursor-pointer border ${
+                                (activeAttendance[student2.id] || 'PRESENT') === 'PRESENT'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                              title="انقر لتبديل الحالة سريعاً"
+                            >
+                              {(activeAttendance[student2.id] || 'PRESENT') === 'PRESENT' ? 'حاضر ✔' : 'غائب ✖'}
+                            </button>
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                                  <button
+                                    onClick={() => handleToggleBehavior(student2.id, 'unwrittenLessons')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.unwrittenLessons?.includes(student2.id)
+                                        ? 'bg-amber-500 text-white border-amber-600'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="لم يكتب الدرس"
+                                  >
+                                    الكراس -
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleBehavior(student2.id, 'disruptions')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.disruptions?.includes(student2.id)
+                                        ? 'bg-[#0D2C3B] text-white border-[#0D2C3B]'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="شغب وسلوك سيء"
+                                  >
+                                    شغب -
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleBehavior(student2.id, 'goodParticipation')}
+                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
+                                      activeSession?.goodParticipation?.includes(student2.id)
+                                        ? 'bg-emerald-500 text-white border-emerald-600'
+                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
+                                    }`}
+                                    title="مشاركة إيجابية"
+                                  >
+                                    مشاركة +
+                                  </button>
+                            </div>
+
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center text-slate-300 text-[11px] flex items-center justify-center">
+                            مقعد شاغر
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Seating Guide Legend */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-600 font-medium">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900">دليل الحالات:</span>
+                  <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[11px]">الغياب -</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[11px]">الكراس -</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">شغب -</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[11px]">مشاركة +</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  💡 انقر مباشرة على حالة التلميذ لتبديلها فوراً أثناء سير الحصة
+                </div>
+              </div>
+            </div>
+          )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

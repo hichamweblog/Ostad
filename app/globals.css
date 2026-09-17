@@ -1,0 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Tajawal:wght@200;300;400;500;700;800;900&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* 1. Official/Deep Palette */
+    --bg-page: #F4F7F6;
+    --bg-page-subtle: #EBEFED;
+    --bg-card: #FFFFFF;
+    --bg-card-subtle: #FAFBFB;
+    --border-card: #D5DFDC;
+    --border-card-subtle: #E2E9E7;
+    --text-primary: #0D2C3B;
+    --text-secondary: #425B67;
+    --text-muted: #647C87;
+    
+    /* Sovereign Sovereign Navy, Active Emerald, Royal Gold */
+    --accent-navy: #0D2C3B;
+    --accent-navy-card: #123749;
+    --accent-green: #0E7C61;
+    --accent-green-hover: #0B634E;
+    --accent-light-green: #E8F5F1;
+    --accent-gold: #D9B44A;
+    --accent-gold-hover: #C5A036;
+
+    /* 2. Academic/Sage Palette (Lesson Preparation & Quiet Spaces) */
+    --accent-sage: #6B8E6D;
+    --accent-sage-light: #F0F5F1;
+    --accent-cream: #FDF7ED;
+    --accent-bronze: #B08D57;
+  }
+}
+
+/* 1. Base Body & UI Controls: Tajawal (تجوال) */
+/* Used for body text, lists, numbers, buttons, navigation, and inputs */
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: #F4F7F6;
+  color: #0D2C3B;
+  font-family: 'Tajawal', system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  position: relative;
+  touch-action: manipulation;
+}
+
+/* 2. Primary Headings & Scholastic Identity: Amiri (الخط الأميري) */
+/* Used for page headings, greetings, unit titles, Quranic verses, and Hadiths */
+h1, h2, h3, 
+.font-display, 
+.font-amiri, 
+.font-quran, 
+.font-scholarly,
+blockquote {
+  font-family: 'Amiri', serif;
+  letter-spacing: normal;
+}
+
+/* 3. Subheadings, Controls, Inputs & Navigation: Tajawal (تجوال) */
+h4, h5, h6, 
+.font-tajawal, 
+.font-heading,
+.font-kufi,
+.font-naskh,
+button, 
+nav, 
+input, 
+select, 
+textarea,
+.sidebar-link,
+.card-title {
+  font-family: 'Tajawal', system-ui, sans-serif;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F4F1EA;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CFC9BC;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B3ABA0;
+}
+
+/* Dark Mode Palette */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0B1922 !important;
+  color: #E2E8F0 !important;
+}
+
+html.dark .bg-white {
+  background-color: #12232E !important;
+  color: #E2E8F0 !important;
+}
+
+html.dark .bg-\[\#F4F1EA\],
+html.dark .bg-\[\#F4F7F6\],
+html.dark .bg-\[\#FAF8F4\],
+html.dark .bg-\[\#FAF8F5\],
+html.dark .bg-slate-50,
+html.dark .bg-stone-50 {
+  background-color: #0E1B24 !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #172D3A !important;
+}
+
+html.dark .border-slate-200,
+html.dark .border-slate-300,
+html.dark .border-\[\#DDD7CB\],
+html.dark .border-\[\#EBE7DF\],
+html.dark .border-\[\#EBE6DC\] {
+  border-color: #1E3747 !important;
+}
+
+html.dark .text-slate-900,
+html.dark .text-\[\#0F172A\],
+html.dark .text-\[\#182026\] {
+  color: #F8FAFC !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-\[\#475569\],
+html.dark .text-\[\#5A6672\] {
+  color: #94A3B8 !important;
+}
+
+html.dark .text-slate-500,
+html.dark .text-\[\#64748B\],
+html.dark .text-\[\#8C96A3\] {
+  color: #64748B !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #152733 !important;
+  color: #F8FAFC !important;
+  border-color: #1E3747 !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  background-color: #1A3140 !important;
+  color: #FFFFFF !important;
+  border-color: #0E7C61 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(14, 124, 97, 0.4) !important;
+}
+
+/* High-Contrast Text Selection Styling */
+::selection {
+  background-color: #0E7C61 !important;
+  color: #FFFFFF !important;
+}
+
+input::selection,
+textarea::selection {
+  background-color: #0E7C61 !important;
+  color: #FFFFFF !important;
+}
+
+html.dark ::selection,
+html.dark input::selection,
+html.dark textarea::selection {
+  background-color: #0E7C61 !important;
+  color: #FFFFFF !important;
+}
+
+/* Chrome/Edge/Safari Autofill Accessibility Fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0F172A !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover, 
+html.dark input:-webkit-autofill:focus,
+html.dark textarea:-webkit-autofill,
+html.dark textarea:-webkit-autofill:hover,
+html.dark textarea:-webkit-autofill:focus,
+html.dark select:-webkit-autofill,
+html.dark select:-webkit-autofill:hover,
+html.dark select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #FFFFFF !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1A3140 inset !important;
+  box-shadow: 0 0 0px 1000px #1A3140 inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Paper-saving Print optimizations */
+@page {
+  size: A4 portrait;
+  margin: 8mm 8mm 8mm 8mm;
+}
+
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.3 !important;
+  }
+  
+  .print\:hidden,
+  nav,
+  header,
+  aside,
+  button,
+  #mobile-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Compact tables to save sheets of paper */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    font-size: 9.5pt !important;
+  }
+
+  th, td {
+    padding: 3px 5px !important;
+    border: 1px solid #94A3B8 !important;
+  }
+
+  tr, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  .border, .border-slate-200, .border-\[\#DDD7CB\] {
+    border-color: #CBD5E1 !important;
+  }
+}
+

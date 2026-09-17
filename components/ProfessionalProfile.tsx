@@ -1,0 +1,608 @@
+'use client';
+
+import React, { useState, useRef } from 'react';
+import { exportToDoc } from '@/lib/utils';
+import { AppState } from '@/lib/storage';
+import { TeacherProfile } from '@/lib/types';
+import {
+  Contact,
+  BadgeCheck,
+  Printer,
+  Save,
+  CheckCircle2,
+  Mail,
+  School,
+  MapPin,
+  Calendar,
+  Award,
+  User,
+  Camera,
+  Trash2,
+  Upload,
+  Briefcase
+} from 'lucide-react';
+
+interface ProfessionalProfileProps {
+  state: AppState;
+  onUpdateState: (updater: (prev: AppState) => AppState) => void;
+}
+
+export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
+  state,
+  onUpdateState
+}) => {
+  const [profile, setProfile] = useState<TeacherProfile>({
+    ...state.profile
+  });
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const totalStudents = state.students.length;
+  const totalClasses = state.classes.length;
+
+  // Calculate experience years from first appointment date
+  const calculateExperience = (appointmentDateStr?: string): number => {
+    if (!appointmentDateStr) return profile.experienceYears || 0;
+    const appDate = new Date(appointmentDateStr);
+    if (isNaN(appDate.getTime())) return profile.experienceYears || 0;
+    const today = new Date();
+    let years = today.getFullYear() - appDate.getFullYear();
+    const m = today.getMonth() - appDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < appDate.getDate())) {
+      years--;
+    }
+    return Math.max(0, years);
+  };
+
+  const handleAppointmentDateChange = (val: string) => {
+    const calcYears = calculateExperience(val);
+    setProfile(prev => ({
+      ...prev,
+      firstAppointmentDate: val,
+      experienceYears: calcYears
+    }));
+  };
+
+  // Image Upload Handler
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 2 ميغابايت.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = event => {
+      const dataUrl = event.target?.result as string;
+      setProfile(prev => ({
+        ...prev,
+        avatarUrl: dataUrl
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setProfile(prev => ({
+      ...prev,
+      avatarUrl: undefined
+    }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateState(prev => ({
+      ...prev,
+      profile: { ...profile }
+    }));
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const handleExportCard = () => {
+    const photoBlock = profile.avatarUrl
+      ? `<img src="${profile.avatarUrl}" alt="${profile.name || 'صورة الأستاذ'}" width="100" height="130" style="width: 100px; height: 130px; max-width: 100px; max-height: 130px; object-fit: cover; border: 2px solid #0d6547; border-radius: 4px; display: block; margin: 0 auto;" />`
+      : `<div style="width: 100px; height: 130px; border: 2px dashed #0d6547; border-radius: 4px; background-color: #f8fafc; font-size: 26pt; color: #0d6547; font-weight: bold; text-align: center; line-height: 130px; margin: 0 auto;">${teacherInitial}</div>`;
+
+    const html = `
+      <div dir="rtl" style="font-family: 'Amiri', 'Traditional Arabic', serif; color: #000000; padding: 10px;">
+        <div style="text-align: center; border-bottom: 2px solid #0d6547; padding-bottom: 12px; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 13pt; font-weight: bold;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
+          <h4 style="margin: 3px 0; font-size: 11.5pt; font-weight: bold; color: #0d6547;">وزارة التربية الوطنية</h4>
+          <p style="margin: 2px 0; font-size: 10pt;">مديرية التربية لولاية ${profile.stateName || '................'} — ${profile.schoolName || 'ثانوية التعليم الثانوي'}</p>
+          <h2 style="margin: 10px 0 4px; font-size: 16pt; font-weight: bold; color: #0d6547; text-decoration: underline;">
+            البطاقة المهنية الرسمية للأستاذ
+          </h2>
+          <p style="margin: 0; font-size: 10pt; color: #475569;">الموسم الدراسي: ${profile.academicYear || '2026/2027 م'}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+          <tr>
+            <!-- Identity Information (Right Side in RTL) -->
+            <td style="width: 68%; vertical-align: top; border: 1px solid #cbd5e1; padding: 12px; background-color: #ffffff;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 10.5pt;">
+                <tr>
+                  <td style="width: 32%; padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">الاسم واللقب:</td>
+                  <td style="padding: 6px; font-weight: bold; font-size: 12pt; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.name || `${profile.firstNameAr || ''} ${profile.lastNameAr || ''}`}</td>
+                </tr>
+                ${profile.firstNameEn || profile.lastNameEn ? `
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #64748b; border-bottom: 1px dashed #e2e8f0; text-align: right;">Nom et Prénom:</td>
+                  <td style="padding: 6px; font-family: Arial; border-bottom: 1px dashed #e2e8f0; text-align: left;" dir="ltr">${profile.lastNameEn || ''} ${profile.firstNameEn || ''}</td>
+                </tr>` : ''}
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">المادة المدرّسة:</td>
+                  <td style="padding: 6px; font-weight: bold; border-bottom: 1px dashed #e2e8f0; text-align: right;">العلوم الإسلامية (التعليم الثانوي)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">الرتبة المهنية الحالية:</td>
+                  <td style="padding: 6px; font-weight: bold; color: #b45309; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.title || 'أستاذ قسم أول'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">تاريخ أول تعيين بالقطاع:</td>
+                  <td style="padding: 6px; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.firstAppointmentDate || 'غير محدد'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">سنوات الأقدمية العامة:</td>
+                  <td style="padding: 6px; font-weight: bold; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.experienceYears || 0} سنوات</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">المؤسسة الحالية:</td>
+                  <td style="padding: 6px; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.schoolName || 'ثانوية الدكتور بن زرجب'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; border-bottom: 1px dashed #e2e8f0; text-align: right;">البريد الإلكتروني:</td>
+                  <td style="padding: 6px; font-family: monospace; border-bottom: 1px dashed #e2e8f0; text-align: left;" dir="ltr">${profile.email || '-'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px; font-weight: bold; color: #0d6547; text-align: right;">رقم الهاتف:</td>
+                  <td style="padding: 6px; font-family: monospace; text-align: left;" dir="ltr">${profile.phoneNumber || '-'}</td>
+                </tr>
+              </table>
+            </td>
+
+            <!-- Photo & Stats Summary (Left Side in RTL) -->
+            <td style="width: 32%; vertical-align: top; border: 1px solid #cbd5e1; padding: 12px; text-align: center; background-color: #f8fafc;">
+              <div style="margin-bottom: 10px;">
+                ${photoBlock}
+                <p style="margin: 4px 0 0; font-size: 8.5pt; color: #64748b;">صورة الأستاذ(ة)</p>
+              </div>
+
+              <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 10px; background-color: #ffffff; border: 1px solid #cbd5e1;">
+                <tr style="background-color: #e2e8f0;">
+                  <th colspan="2" style="padding: 5px; font-size: 9pt; border-bottom: 1px solid #cbd5e1; color: #0d6547; text-align: center;">ملخص الإسناد التربوي</th>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; border-bottom: 1px solid #e2e8f0; text-align: right; width: 60%;">الأفواج المسندة:</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #e2e8f0; font-weight: bold; text-align: center;">${totalClasses} أقسام</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; border-bottom: 1px solid #e2e8f0; text-align: right;">مجموع التلاميذ:</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #e2e8f0; font-weight: bold; text-align: center;">${totalStudents} تلميذاً</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px; text-align: right;">الحجم الساعي الأسبوعي:</td>
+                  <td style="padding: 5px; font-weight: bold; text-align: center;">${totalClasses * 2} سا/أسبوع</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Official Validation & Stamps -->
+        <table style="width: 100%; border-collapse: collapse; margin-top: 24px;">
+          <tr>
+            <td style="width: 50%; text-align: center; border: 1px dashed #94a3b8; padding: 20px; vertical-align: top; background-color: #ffffff;">
+              <p style="margin: 0 0 45px; font-weight: bold; font-size: 11pt; color: #0f172a;">توقيع الأستاذ(ة):</p>
+              <p style="margin: 0; font-size: 9pt; color: #64748b;">حرر بـ: ${profile.stateName || '................'} في: .... / .... / 2026 م</p>
+            </td>
+            <td style="width: 50%; text-align: center; border: 1px dashed #94a3b8; padding: 20px; vertical-align: top; background-color: #ffffff;">
+              <p style="margin: 0 0 45px; font-weight: bold; font-size: 11pt; color: #0f172a;">تأشيرة وختم السيد مدير المؤسسة:</p>
+              <p style="margin: 0; font-size: 9pt; color: #64748b;">(خاتم المؤسسة وتوقيع المدير)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+
+    exportToDoc(html, `البطاقة_المهنية_${(profile.name || 'الأستاذ').replace(/\s+/g, '_')}`);
+  };
+
+  const teacherInitial = profile.name ? profile.name.trim().charAt(0) : 'هـ';
+
+  return (
+    <div className="space-y-6" id="sanad-professional-profile">
+      {/* Top Banner */}
+      <div className="bg-white dark:bg-[#12232E] border border-slate-200/90 dark:border-[#1E3747] rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-linear-to-br from-[#0d6547] to-[#084530] text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Contact className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">الملف المهني والبطاقة الشخصية</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              بيانات الهوية الرسمية للأستاذ وسنوات الأقدمية وفق المعايير الإدارية الجزائرية
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleExportCard}
+          className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-[#152733] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#1E3747] rounded-xl hover:bg-slate-50 dark:hover:bg-[#1B3242] text-xs font-bold transition-colors shadow-xs cursor-pointer"
+        >
+          <Printer className="w-4 h-4 text-slate-500" />
+          <span>تصدير البطاقة كملف doc</span>
+        </button>
+      </div>
+
+      {/* Official Teacher Card Preview */}
+      <div id="teacher-official-card" className="bg-linear-to-br from-[#0d6547] via-[#095239] to-[#063b29] text-white rounded-3xl p-6 sm:p-8 shadow-md border border-emerald-500/30 relative overflow-hidden print:m-0 print:border-none">
+        {/* Background Islamic Watermark */}
+        <div className="absolute top-0 left-0 -translate-x-12 -translate-y-12 w-64 h-64 rounded-full border-8 border-emerald-400/10 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 translate-x-16 translate-y-16 w-80 h-80 rounded-full border-8 border-emerald-400/10 pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-right">
+            {/* Avatar Photo / Initial Circle with upload trigger */}
+            <div className="relative group shrink-0">
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.name || 'صورة الأستاذ'}
+                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-3 border-emerald-300/60 shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white/10 backdrop-blur-md border-2 border-emerald-300/40 text-emerald-100 flex items-center justify-center font-black text-4xl shadow-inner">
+                  {teacherInitial}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-800/60 border border-emerald-400/30 text-[11px] font-bold text-emerald-200">
+                <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>الجمهورية الجزائرية الديمقراطية الشعبية - وزارة التربية الوطنية</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                {profile.name || 'هشام عبد الرحيم'}
+              </h3>
+              <div className="pt-0.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/15 backdrop-blur-xs border border-white/20 text-white font-bold text-xs shadow-xs">
+                  <Award className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{profile.title || 'أستاذ قسم أول • العلوم الإسلامية'}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-center md:justify-start gap-4 text-xs text-emerald-200/90 pt-1 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <School className="w-3.5 h-3.5" />
+                  {profile.schoolName || 'ثانوية الدكتور بن زرجب'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" />
+                  {profile.stateName || 'مديرية التربية لولاية وهران'}
+                </span>
+                <span className="flex items-center gap-1 font-mono">
+                  {profile.academicYear || '2026/2027'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats Badges */}
+          <div className="grid grid-cols-3 gap-3 shrink-0 text-center w-full md:w-auto">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+              <div className="text-xl font-black text-white">{totalClasses}</div>
+              <div className="text-[10px] text-emerald-200">أفواج تربوية</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+              <div className="text-xl font-black text-white">{totalStudents}</div>
+              <div className="text-[10px] text-emerald-200">تلميذاً متمدرساً</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+              <div className="text-xl font-black text-white">{profile.experienceYears ?? 7}</div>
+              <div className="text-[10px] text-emerald-200">سنوات خبرة</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSave} className="bg-white dark:bg-[#12232E] border border-slate-200/90 dark:border-[#1E3747] rounded-2xl p-6 shadow-xs space-y-6">
+        
+        {/* Photo Upload Section */}
+        <div className="p-4 bg-slate-50 dark:bg-[#172D3A] rounded-2xl border border-slate-200/80 dark:border-[#1E3747] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 dark:bg-[#12232E] flex items-center justify-center border border-slate-300 dark:border-[#1E3747] shrink-0">
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatarUrl} alt="معاينة" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-8 h-8 text-slate-400" />
+              )}
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900 dark:text-white">الصورة الشخصية للأستاذ</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                تظهر في البطاقة المهنية والمطبوعات الرسمية (PNG أو JPG، الحد الأقصى 2MB)
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-[#152733] hover:bg-slate-100 text-slate-800 dark:text-white border border-slate-200 dark:border-[#1E3747] rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs"
+            >
+              <Upload className="w-3.5 h-3.5 text-[#0d6547]" />
+              <span>{profile.avatarUrl ? 'تغيير الصورة' : 'رفع صورة'}</span>
+            </button>
+            {profile.avatarUrl && (
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-colors cursor-pointer border border-rose-200 dark:border-rose-900/40"
+                title="حذف الصورة"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Section: الحالة الإدارية وتاريخ أول تعيين */}
+        <div className="space-y-4">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 border-b border-slate-100 dark:border-[#1E3747] pb-3">
+            <Briefcase className="w-4 h-4 text-[#0E7C61] dark:text-[#4ade80]" />
+            <span>الحالة المهنية والإدارية</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            {/* First Appointment Date */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                تاريخ أول تعيين بقطاع التربية الوطنية:
+              </label>
+              <input
+                type="date"
+                value={profile.firstAppointmentDate || ''}
+                onChange={e => handleAppointmentDateChange(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white font-mono"
+              />
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
+                تُحسب الأقدمية تلقائياً بناءً على هذا التاريخ
+              </span>
+            </div>
+
+            {/* Professional Rank */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الرتبة المهنية الحالية:</label>
+              <select
+                value={profile.title || 'أستاذ قسم أول'}
+                onChange={e => setProfile({ ...profile, title: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white font-bold"
+              >
+                <option value="أستاذ قسم أول">أستاذ قسم أول</option>
+                <option value="أستاذ قسم ثان">أستاذ قسم ثان</option>
+                <option value="أستاذ مميز">أستاذ مميز</option>
+              </select>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
+                تنعكس الرتبة فورياً في البطاقة المهنية
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section: الحالة المدنية والعائلية */}
+        <div className="space-y-4 pt-2">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-[#1E3747] pb-3">
+            <User className="w-4 h-4 text-[#0d6547]" />
+            <span>الحالة المدنية والعائلية</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            {/* First Name AR */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم بالعربية</label>
+              <input
+                type="text"
+                value={profile.firstNameAr || ''}
+                onChange={e => setProfile({ ...profile, firstNameAr: e.target.value })}
+                placeholder="هشام"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Last Name AR */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">اللقب بالعربية</label>
+              <input
+                type="text"
+                value={profile.lastNameAr || ''}
+                onChange={e => setProfile({ ...profile, lastNameAr: e.target.value })}
+                placeholder="عبد الرحيم"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Full Name in App */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم الكامل كما يظهر في التطبيق</label>
+              <input
+                type="text"
+                value={profile.name || ''}
+                onChange={e => setProfile({ ...profile, name: e.target.value })}
+                placeholder="هشام عبد الرحيم"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* First Name EN */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم باللاتينية</label>
+              <input
+                type="text"
+                dir="ltr"
+                value={profile.firstNameEn || ''}
+                onChange={e => setProfile({ ...profile, firstNameEn: e.target.value })}
+                placeholder="Hicham"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-left text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Last Name EN */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">اللقب باللاتينية</label>
+              <input
+                type="text"
+                dir="ltr"
+                value={profile.lastNameEn || ''}
+                onChange={e => setProfile({ ...profile, lastNameEn: e.target.value })}
+                placeholder="Abderrahim"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-left text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Birth Date */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">تاريخ الميلاد</label>
+              <input
+                type="date"
+                value={profile.birthDate || ''}
+                onChange={e => setProfile({ ...profile, birthDate: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white font-mono"
+              />
+            </div>
+
+            {/* Birth Place */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">مكان الميلاد</label>
+              <input
+                type="text"
+                value={profile.birthPlace || ''}
+                onChange={e => setProfile({ ...profile, birthPlace: e.target.value })}
+                placeholder="وهران"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الجنس</label>
+              <select
+                value={profile.gender || 'M'}
+                onChange={e => setProfile({ ...profile, gender: e.target.value as 'M' | 'F' })}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              >
+                <option value="M">ذكر</option>
+                <option value="F">أنثى</option>
+              </select>
+            </div>
+
+            {/* Family Status */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الحالة العائلية</label>
+              <select
+                value={profile.familyStatus || 'متزوج'}
+                onChange={e => setProfile({ ...profile, familyStatus: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              >
+                <option value="متزوج">متزوج (ة)</option>
+                <option value="أعزب">أعزب / عزباء</option>
+                <option value="مطلق">مطلق (ة)</option>
+                <option value="أرمل">أرمل (ة)</option>
+              </select>
+            </div>
+
+            {/* School Name */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المؤسسة التعليمية (الثانوية)</label>
+              <input
+                type="text"
+                value={profile.schoolName || ''}
+                onChange={e => setProfile({ ...profile, schoolName: e.target.value })}
+                placeholder="ثانوية الدكتور بن زرجب"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* State / Wilaya */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الولاية (مديرية التربية)</label>
+              <input
+                type="text"
+                value={profile.stateName || ''}
+                onChange={e => setProfile({ ...profile, stateName: e.target.value })}
+                placeholder="وهران"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* Academic Year */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">السنة الدراسية</label>
+              <input
+                type="text"
+                value={profile.academicYear || ''}
+                onChange={e => setProfile({ ...profile, academicYear: e.target.value })}
+                placeholder="2026/2027"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section: بريد الدخول والإشعارات */}
+        <div className="pt-4 border-t border-slate-100 dark:border-[#1E3747]">
+          <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">بريد الدخول والإشعارات</label>
+          <div className="flex items-center gap-2 max-w-md">
+            <div className="relative flex-1">
+              <Mail className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+              <input
+                type="email"
+                dir="ltr"
+                value={profile.email || ''}
+                onChange={e => setProfile({ ...profile, email: e.target.value })}
+                placeholder="hichamdevpro@gmail.com"
+                className="w-full pl-3 pr-9 py-2 border border-slate-200 dark:border-[#1E3747] rounded-xl bg-slate-50 dark:bg-[#152733] focus:bg-white dark:focus:bg-[#1A3140] focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-left text-xs text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-[#1E3747]">
+          {savedSuccess ? (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              تم حفظ البيانات بنجاح في الذاكرة المحلية!
+            </span>
+          ) : <span />}
+
+          <button
+            type="submit"
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#0d6547] hover:bg-[#0b543b] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs"
+          >
+            <Save className="w-4 h-4" />
+            <span>حفظ التعديلات</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
