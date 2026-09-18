@@ -34,9 +34,9 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   return (
     <nav
       aria-label="شريط التنقل السفلي للهاتف"
-      className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white border-t border-[#DEE2E6] pb-[env(safe-area-inset-bottom)]"
+      className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/95 supports-[backdrop-filter]:bg-white/85 backdrop-blur-xl border-t border-[var(--border-default)] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_18px_rgba(15,23,42,0.08)]"
     >
-      <div className="max-w-md mx-auto flex items-center justify-around px-1 py-1">
+      <div className="max-w-md mx-auto flex items-center justify-around px-1 py-1.5">
         {navItems.map((item) => {
           const isActive = currentTab === item.tab;
           const Icon = item.icon;
@@ -47,7 +47,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
               onClick={() => onSelectTab(item.tab)}
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 cursor-pointer transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center min-h-12 py-1 rounded-xl cursor-pointer transition-colors active:scale-95 ${
                 isActive ? 'text-[#2E7D9B]' : 'text-[#8E95A0] hover:text-[#182026]'
               }`}
             >

@@ -25,6 +25,7 @@ export const metadata: Metadata = {
     description: 'منصة وأداة رقمنة العمل التربوي لأستاذ العلوم الإسلامية في التعليم الثانوي بالجزائر.',
   },
   icons: {
+    icon: '/icon.svg',
     apple: '/apple-touch-icon.png',
   }
 };

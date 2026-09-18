@@ -104,7 +104,7 @@ export default function Page() {
         />
 
         {/* View Content Area (with bottom padding for Mobile Navigation bar) */}
-        <main className="flex-1 pb-20 md:pb-12">
+        <main className="flex-1 min-w-0 overflow-x-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-12">
           {currentTab === 'dashboard' && (
             <Dashboard
               state={state}
@@ -190,7 +190,7 @@ export default function Page() {
         </main>
 
         {/* Footer (Desktop & Tablet) */}
-        <footer className="py-6 px-4 pb-24 md:pb-6 text-center text-xs border-t border-[#DEE2E6] bg-white print:hidden">
+        <footer className="hidden md:block py-6 px-4 pb-6 text-center text-xs border-t border-[#DEE2E6] bg-white print:hidden">
           <div className="max-w-7xl mx-auto flex flex-col items-center justify-center gap-1">
             <div className="font-bold text-sm text-[#1A1C1E] mb-1">معين</div>
             <div className="text-slate-500 font-medium">تطبيق مساعد لأستاذ العلوم الإسلامية في التعليم الثانوي</div>

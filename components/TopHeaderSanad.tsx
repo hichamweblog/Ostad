@@ -100,13 +100,13 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
  };
 
  return (
- <header className="sticky top-0 z-30 print:hidden bg-[#FAF8F4]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#FAF8F4]/60 backdrop-blur-md border-b border-[#DDD7CB] ] transition-colors">
- <div className="h-16 px-4 sm:px-8 max-w-7xl mx-auto flex items-center justify-between gap-4">
+ <header className="sticky top-0 z-30 print:hidden bg-white/90 supports-[backdrop-filter]:bg-white/75 backdrop-blur-xl border-b border-[var(--border-default)] transition-colors">
+ <div className="min-h-16 px-3 sm:px-8 max-w-7xl mx-auto flex items-center justify-between gap-3 pt-[env(safe-area-inset-top)]">
  {/* Right Side: Menu toggle & Page Title */}
  <div className="flex items-center gap-3 min-w-0">
  <button
  onClick={onToggleMobileSidebar}
- className="p-2 rounded-xl lg:hidden text-[#475569] hover:text-[var(--text-primary)] hover:bg-[#EBE6DC] ] :text-white :bg-[#1E3747] transition-colors cursor-pointer shrink-0"
+ className="min-h-11 min-w-11 p-2 rounded-xl lg:hidden text-[#475569] hover:text-[var(--text-primary)] hover:bg-[var(--primary-soft)] transition-colors cursor-pointer shrink-0 flex items-center justify-center"
  aria-label="فتح القائمة"
  >
  <Menu className="w-5 h-5"/>
@@ -123,7 +123,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
  {/* Left Side: Gregorian + Hijri Date + Search + Dark/Light + Backup */}
  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
  {/* Automatic Gregorian + Hijri Date */}
- <div className="hidden md:flex flex-col items-end pl-3 border-l border-[#DDD7CB] ] text-right">
+ <div className="hidden md:flex flex-col items-end pl-3 border-l border-[var(--border-default)] text-right">
  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
  <Calendar className="w-3.5 h-3.5 text-[var(--primary)] shrink-0"/>
  <span>{gregorianDate}</span>
@@ -136,12 +136,12 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
  {/* Quick Search Button */}
  <button
  onClick={onOpenSearch}
- className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white ] hover:bg-stone-50 :bg-[#1B3242] border border-[#DDD7CB] ] text-xs text-[#64748B] ] hover:text-[var(--text-primary)] :text-white transition-all cursor-pointer shadow-xs whitespace-nowrap"
+ className="min-h-11 flex items-center gap-2 px-3 rounded-xl bg-white hover:bg-[var(--primary-soft)] border border-[var(--border-default)] text-xs text-[#64748B] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
  title="بحث شامل (Ctrl+K)"
  >
- <Search className="w-4 h-4 text-[#64748B] ]"/>
+ <Search className="w-4 h-4 text-[#64748B]"/>
  <span className="hidden sm:inline font-medium">بحث</span>
- <kbd className="hidden lg:inline-block px-1.5 py-0.5 rounded bg-[#FAF8F4] ] border border-[#DDD7CB] ] text-[10px] font-mono text-[#475569] ]">
+ <kbd className="hidden lg:inline-block px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-[10px] font-mono text-[#475569]">
  Ctrl+K
  </kbd>
  </button>
@@ -171,4 +171,3 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
  </header>
  );
 };
-

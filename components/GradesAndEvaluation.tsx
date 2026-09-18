@@ -587,7 +587,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
         'التقويم المستمر (20)': ce,
         'الفرض المحروس (20)': q,
         'الاختبار الفصلي (20)': ex,
-        'المعدل الفصلي (20)': avg ?? '',
         'التقديرات': draft.estimation || (avg !== null ? getDefaultEstimation(avg) : '-'),
         'الإرشادات': draft.guidance || (avg !== null ? getDefaultGuidance(avg) : '')
       };
@@ -800,15 +799,13 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                   const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                   const ex = draft.exam !== '' ? Number(draft.exam) : null;
                   const avg = calculateStudentAverage(ce, q, ex);
-                  const isPassing = avg !== null && avg >= 10;
 
                   return (
                     <div
                       key={student.id}
-                      className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-xs gap-3"
+                      className="flex flex-col p-3 bg-white rounded-xl border border-slate-200 shadow-xs gap-3"
                     >
-                      {/* Left side: Avatar (#) and Student Name */}
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="flex items-center gap-3 min-w-0">
                         <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200">
                           {student.numberInList}
                         </span>
@@ -816,23 +813,22 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                           <h4 className="font-bold text-sm text-[#1A1C1E] whitespace-normal break-words leading-tight">
                             {student.fullName}
                           </h4>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {student.isRepeater && (
-                              <span className="inline-block text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">
-                                معيد
-                              </span>
-                            )}
-                            {avg !== null && (
-                              <span className={`text-[10px] font-mono font-bold ${isPassing ? 'text-emerald-primary' : 'text-rose-600'}`}>
-                                المعدل: {avg.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
+                          {student.isRepeater && (
+                            <span className="inline-block text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold mt-1">
+                              معيد
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Right side: Input for active tab */}
-                      <div className="shrink-0 w-24">
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-[11px] font-bold text-slate-500 flex-1">
+                          {mobileActiveTab === 'continuousEval'
+                            ? 'التقويم المستمر'
+                            : mobileActiveTab === 'quiz'
+                            ? 'الفرض المحروس'
+                            : 'الاختبار الفصلي'}
+                        </span>
                         <input
                           type="number"
                           step="0.25"
@@ -841,8 +837,29 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                           placeholder="-"
                           value={draft[mobileActiveTab]}
                           onChange={e => handleGradeChange(student.id, mobileActiveTab, e.target.value)}
-                          className="w-full text-center px-2 rounded-lg border border-slate-300 bg-slate-50 font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-gold focus:outline-none focus:bg-white transition-colors min-h-[44px]"
+                          className="w-24 text-center px-2 rounded-lg border border-slate-300 bg-slate-50 font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-gold focus:outline-none focus:bg-white transition-colors min-h-[44px]"
                         />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 w-full border-t border-slate-100 pt-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">التقديرات</label>
+                          <EstimationDropdown
+                            studentId={student.id}
+                            value={draft.estimation}
+                            avg={avg}
+                            onChange={val => handleTextFieldChange(student.id, 'estimation', val)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">الإرشادات</label>
+                          <GuidanceDropdown
+                            studentId={student.id}
+                            value={draft.guidance}
+                            avg={avg}
+                            onChange={val => handleTextFieldChange(student.id, 'guidance', val)}
+                          />
+                        </div>
                       </div>
                     </div>
                   );
@@ -869,13 +886,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                         الاختبار الفصلي
                         <span className="block text-[10px] font-normal text-slate-500">(على 20 × 2)</span>
                       </th>
-                      <th className="py-3 px-3 w-28 text-center bg-amber-50/70 border-x border-amber-200">
-                        المعدل الفصلي
-                        <span className="block text-[10px] font-normal text-amber-700">(حساب آلي)</span>
-                      </th>
                       <th className="py-3 px-3 min-w-[175px]">التقديرات</th>
                       <th className="py-3 px-4 min-w-[200px]">الإرشادات</th>
-                      <th className="py-3 px-4 min-w-[200px]">ملاحظة</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -887,8 +899,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                         const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                         const ex = draft.exam !== '' ? Number(draft.exam) : null;
                         const avg = calculateStudentAverage(ce, q, ex);
-
-                        const isPassing = avg !== null && avg >= 10;
 
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
@@ -941,21 +951,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                               />
                             </td>
 
-                            {/* Calculated Average */}
-                            <td className="py-2.5 px-3 text-center bg-amber-50/50 border-x border-amber-200">
-                              <span
-                                className={`font-mono text-sm font-bold ${
-                                  avg === null
-                                    ? 'text-slate-400'
-                                    : isPassing
-                                    ? 'text-emerald-primary'
-                                    : 'text-rose-700'
-                                }`}
-                              >
-                                {avg !== null ? avg.toFixed(2) : '-'}
-                              </span>
-                            </td>
-
                             {/* Estimation (التقديرات) */}
                             <td className="py-2 px-3">
                               <EstimationDropdown
@@ -976,16 +971,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                               />
                             </td>
 
-                            {/* Remark (ملاحظة) */}
-                            <td className="py-2 px-4">
-                              <input
-                                type="text"
-                                className="w-full text-xs p-2 text-right border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-primary bg-white"
-                                value={draft.remarks || ''}
-                                onChange={e => handleTextFieldChange(student.id, 'remarks', e.target.value)}
-                                placeholder="إضافة ملاحظة..."
-                              />
-                            </td>
                           </tr>
                         );
                       })}

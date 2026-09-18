@@ -160,11 +160,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="bg-gradient-to-r from-[var(--primary)] to-[var(--color-navy)] rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
           <div className="relative z-10">
-            <h2 className="text-2xl font-black mb-3">مرحباً بك أستاذ(ة) في منصة "معين الأستاذ"</h2>
+            <h2 className="text-2xl font-black mb-3">مرحباً بك أستاذ(ة) في منصة «معين الأستاذ»</h2>
             <p className="text-sm text-white/90 mb-6 max-w-3xl leading-relaxed">
               تتصفح حالياً المنصة ببيانات تجريبية واقعية للتعرف على مميزاتها.
               للبدء بأسرع طريقة وأكثرها دقة بحسابك الخاص، لا تقم بإدخال الأقسام يدوياً! 
-              توجّه إلى <strong className="bg-white/20 px-1.5 py-0.5 rounded mx-1">تسيير الأقسام</strong> ثم اختر استيراد ملف "الرقمنة (Excel)" أو "الممتاز".
+              توجّه إلى <strong className="bg-white/20 px-1.5 py-0.5 rounded mx-1">تسيير الأقسام</strong> ثم اختر استيراد ملف «الرقمنة (Excel)» أو «الممتاز».
               ستقوم المنصة آلياً باكتشاف المستويات، الشعب، وتسجيل جميع تلاميذك بضغطة زر واحدة!
             </p>
             <div className="flex flex-wrap items-center gap-3">
