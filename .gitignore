@@ -5,3 +5,11 @@ coverage/
 *.log
 .env*
 !.env.example
+firebase-applet-config.json
+
+# Cleanup scripts and temp files
+*.py
+build_log*.txt
+extracted_*.json
+temp_*.txt
+.dev-logs
