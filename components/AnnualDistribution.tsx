@@ -162,7 +162,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
             <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #065f46; text-align: right; width: 110px;">
               ${unit.domain}
             </td>
-            <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #0f172a; text-align: right;">
+            <td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #1A1C1E; text-align: right;">
               ${unit.title}
             </td>
             <td style="border: 1px solid #94a3b8; padding: 6px 8px; text-align: center; font-weight: bold; width: 55px;">
@@ -178,7 +178,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
       sectionsHtml += `
         <table style="width: 100%; border-collapse: collapse; margin-top: 14px; margin-bottom: 18px; font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">
           <thead>
-            <tr style="background-color: #0d6547; color: #ffffff;">
+            <tr style="background-color: #2E7D9B; color: #ffffff;">
               <th colspan="6" style="border: 1px solid #094530; padding: 8px 10px; font-size: 12pt; text-align: right; font-weight: bold;">
                 ${sec.title} (${sec.units.length} وحدة تعليمية)
               </th>
@@ -210,9 +210,9 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
               المؤسسة: <strong>${state.profile.schoolName || 'ثانوية التعليم الثانوي'}</strong>
             </td>
             <td style="width: 30%; text-align: center; vertical-align: middle;">
-              <h2 style="margin: 0; color: #0d6547; font-size: 15pt; font-weight: bold;">مخطط التوزيع السنوي للتدرجات التعليمية</h2>
-              <div style="font-size: 11.5pt; font-weight: bold; margin-top: 4px; color: #0f172a;">${levelLabel[selectedLevel]}</div>
-              <div style="font-size: 10pt; color: #475569; margin-top: 2px;">مادة العلوم الإسلامية</div>
+              <h2 style="margin: 0; color: #2E7D9B; font-size: 15pt; font-weight: bold;">التوزيع السنوي</h2>
+              <div style="font-size: 11.5pt; font-weight: bold; margin-top: 4px; color: #1A1C1E;">${levelLabel[selectedLevel]}</div>
+              <div style="font-size: 10pt; color: #5C6370; margin-top: 2px;">مادة العلوم الإسلامية</div>
             </td>
             <td style="width: 35%; text-align: left; font-size: 10pt; line-height: 1.4; vertical-align: top;">
               السنة الدراسية: <strong>${state.profile.academicYear || '2025/2026'}</strong><br/>
@@ -222,7 +222,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
           </tr>
         </table>
 
-        <div style="height: 2px; background-color: #0d6547; margin-bottom: 12px;"></div>
+        <div style="height: 2px; background-color: #2E7D9B; margin-bottom: 12px;"></div>
 
         ${sectionsHtml}
 
@@ -251,15 +251,12 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-6" id="annual-distribution-view">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <CalendarRange className="w-5 h-5 text-[#0d6547]" />
-            <span>التوزيع السنوي والتدرجات (المنهاج الرسمي)</span>
+            <CalendarRange className="w-5 h-5 text-[#2E7D9B]" />
+            <span>التوزيع السنوي</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            مخطط التدرجات الرسمية مقسم على المقاطع الثلاثة مع نص الكفاءات المستهدفة
-          </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -271,7 +268,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                 onClick={() => setSelectedLevel(lvl)}
                 className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                   selectedLevel === lvl
-                    ? 'bg-[#0d6547] text-white shadow-xs'
+                    ? 'bg-[#2E7D9B] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -292,20 +289,20 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
       </div>
 
       {/* Main Distribution Document Container - Integrated Months */}
-      <div id="annual-dist-doc" className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-5">
+      <div id="annual-dist-doc" className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-5">
         {/* 1. Official Republic Ministerial Header */}
         <div className="flex flex-col md:flex-row items-center justify-between text-center md:text-right border-b border-slate-100 pb-4 gap-3 text-xs text-slate-600">
           <div>
             <div className="font-amiri font-bold text-sm text-slate-900">الجمهورية الجزائرية الديمقراطية الشعبية</div>
             <div>وزارة التربية الوطنية - مديرية التربية لولاية {state.profile.stateName || 'وهران'}</div>
-            <div className="font-bold text-[#0d6547] mt-0.5">{state.profile.schoolName || 'ثانوية الدكتور بن زرجب'}</div>
+            <div className="font-bold text-[#2E7D9B] mt-0.5">{state.profile.schoolName || 'ثانوية الدكتور بن زرجب'}</div>
           </div>
 
           <div className="text-center">
             <h3 className="text-lg font-amiri font-bold text-slate-900">
-              مخطط التوزيع السنوي للتدرجات التعليمية
+              التوزيع السنوي
             </h3>
-            <div className="text-[#0d6547] font-bold text-sm">
+            <div className="text-[#2E7D9B] font-bold text-sm">
               {levelLabel[selectedLevel]}
             </div>
           </div>
@@ -316,7 +313,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
             <div className="flex items-center gap-2 justify-center md:justify-end">
               <span>الحجم الأسبوعي: <span className="font-bold text-amber-700 font-mono">{getWeeklyHours(selectedLevel)} سا/أسبوع</span></span>
               <span>•</span>
-              <span>الإجمالي: <span className="font-bold text-[#0d6547] font-mono">{totalHours} سا</span></span>
+              <span>الإجمالي: <span className="font-bold text-[#2E7D9B] font-mono">{totalHours} سا</span></span>
             </div>
           </div>
         </div>
@@ -325,9 +322,9 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
         <div className="space-y-6 pt-1">
           {sections.map(sec => (
             <div key={sec.number} className="space-y-2">
-              <div className="flex items-center justify-between bg-emerald-50/90 border border-emerald-200 px-4 py-2.5 rounded-xl">
+              <div className="flex items-center justify-between bg-[var(--primary-soft)]/90 border border-emerald-200 px-4 py-2.5 rounded-xl">
                 <span className="font-bold text-emerald-950 text-xs flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-[#0d6547]" />
+                  <Layers className="w-4 h-4 text-[#2E7D9B]" />
                   <span>{sec.title}</span>
                 </span>
                 <div className="flex items-center gap-2">
@@ -345,7 +342,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
                         <th className="p-2.5 w-12 text-center">الرقم</th>
-                        <th className="p-2.5 w-28 text-center bg-emerald-50/50 text-[#0d6547]">
+                        <th className="p-2.5 w-28 text-center bg-[var(--primary-soft)]/50 text-[#2E7D9B]">
                           الشهر / الأسبوع
                         </th>
                         <th className="p-2.5 w-32">الميدان</th>
@@ -364,9 +361,9 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                               {String(unit.unitNumber).padStart(2, '0')}
                             </td>
                             {/* Integrated Month & Week Column */}
-                            <td className="p-2.5 text-center whitespace-nowrap bg-emerald-50/30 border-x border-emerald-100/50">
+                            <td className="p-2.5 text-center whitespace-nowrap bg-[var(--primary-soft)]/30 border-x border-emerald-100/50">
                               <div className="inline-flex flex-col items-center">
-                                <span className="px-2 py-0.5 rounded bg-white text-[#0d6547] border border-emerald-200 font-bold text-[11px] shadow-2xs">
+                                <span className="px-2 py-0.5 rounded bg-white text-[#2E7D9B] border border-emerald-200 font-bold text-[11px] shadow-2xs">
                                   {sched.monthName}
                                 </span>
                                 <span className="text-[10px] text-slate-600 font-mono mt-0.5">
@@ -410,10 +407,10 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                     <div key={unit.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center text-xs font-black">
+                          <span className="w-6 h-6 rounded bg-[var(--primary-soft)] text-emerald-800 border border-emerald-200 flex items-center justify-center text-xs font-bold">
                             {String(unit.unitNumber).padStart(2, '0')}
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-emerald-50/50 text-[#0d6547] border border-emerald-100 font-bold text-[10px]">
+                          <span className="px-2 py-0.5 rounded bg-[var(--primary-soft)]/50 text-[#2E7D9B] border border-emerald-100 font-bold text-[10px]">
                             {sched.monthName} • {sched.weekName}
                           </span>
                         </div>
@@ -423,7 +420,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                       </div>
                       
                       <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-semibold text-emerald-primary bg-[var(--primary-soft)] px-1.5 py-0.5 rounded">
                           {unit.domain}
                         </span>
                         <h4 className="font-bold text-sm text-slate-900 leading-snug">

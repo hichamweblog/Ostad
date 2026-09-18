@@ -1,5 +1,6 @@
 'use client';
 
+import { showToast } from '@/components/Toast';
 import React, { useState, useRef } from 'react';
 import { AppState, DEFAULT_CALENDAR_SETTINGS, exportBackupJSON, importBackupJSON } from '@/lib/storage';
 import { AcademicCalendarSettings, OfficialHoliday } from '@/lib/types';
@@ -134,10 +135,10 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
         const text = evt.target?.result as string;
         const imported = importBackupJSON(text);
         onUpdateState(() => imported);
-        alert('تمت استعادة البيانات بنجاح تام!');
+        showToast('تمت استعادة البيانات بنجاح تام!', 'success');
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'خطأ غير متوقع';
-        alert(`فشل استيراد الملف: ${message}`);
+        showToast(`فشل استيراد الملف: ${message}`, 'error');
       }
     };
     reader.readAsText(file);
@@ -146,15 +147,12 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 py-6" id="sanad-settings-view">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-[#0d6547]" />
-            إعدادات المنصة ورزنامة السنة الدراسية
+            <Settings className="w-5 h-5 text-[#2E7D9B]" />
+            الإعدادات
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            تهيئة الفصول الدراسية، العطل الرسمية، قواعد احتساب التقويم المستمر والنسخ الاحتياطي
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -169,7 +167,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           </button>
           <button
             onClick={handleSaveSettings}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0d6547] hover:bg-[#0b543b] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#2E7D9B] hover:bg-[#0b543b] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs"
           >
             <Save className="w-4 h-4" />
             <span>حفظ جميع الإعدادات</span>
@@ -178,8 +176,8 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       </div>
 
       {savedSuccess && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="bg-[var(--primary-soft)] border border-[var(--primary)]/30 rounded-xl p-3 text-xs text-[#0D2C3B] font-bold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
           <span>تم حفظ الإعدادات وقواعد الاحتساب بنجاح في التطبيق!</span>
         </div>
       )}
@@ -188,15 +186,15 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       <ProfessionalProfile state={state} onUpdateState={onUpdateState} />
 
       {/* Section 1: السنوات الدراسية والفصول (Screenshot 1) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#0d6547]" />
+              <Calendar className="w-4 h-4 text-[#2E7D9B]" />
               السنوات الدراسية والفصول
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              السنة الدراسية الحالية: <span className="font-bold text-[#0d6547]">{state.profile.academicYear || '2026/2027'}</span>
+              السنة الدراسية الحالية: <span className="font-bold text-[#2E7D9B]">{state.profile.academicYear || '2026/2027'}</span>
             </p>
           </div>
         </div>
@@ -206,7 +204,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
             <div className="font-bold text-slate-800 text-sm flex items-center justify-between">
               <span>الفصل الأول</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">نشط حالياً</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[#0D2C3B] font-bold">نشط حالياً</span>
             </div>
             <div>
               <label className="block text-slate-500 mb-1">تاريخ البداية</label>
@@ -219,7 +217,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term1Start: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
             <div>
@@ -233,7 +231,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term1End: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
           </div>
@@ -252,7 +250,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term2Start: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
             <div>
@@ -266,7 +264,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term2End: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
           </div>
@@ -285,7 +283,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term3Start: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
             <div>
@@ -299,7 +297,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     termDates: { ...prev.termDates, term3End: e.target.value }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
               />
             </div>
           </div>
@@ -307,11 +305,11 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       </div>
 
       {/* Section 2: العطل والأيام المستثناة (Screenshot 2) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#0d6547]" />
+              <Clock className="w-4 h-4 text-[#2E7D9B]" />
               العطل والأيام المستثناة في الجزائر
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -329,7 +327,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
             </button>
             <button
               onClick={() => setIsAddHolidayOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d6547] text-white rounded-xl text-xs font-bold hover:bg-[#0b543b] cursor-pointer shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2E7D9B] text-white rounded-xl text-xs font-bold hover:bg-[#0b543b] cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>إضافة عطلة</span>
@@ -355,9 +353,9 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     <span
                       className={`px-1.5 py-0.2 rounded-md font-semibold text-[10px] ${
                         isTerm
-                          ? 'bg-blue-100 text-blue-800'
+                          ? 'bg-blue-100 text-navy'
                           : isNational
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-[var(--primary-soft)] text-[#0D2C3B]'
                           : 'bg-purple-100 text-purple-800'
                       }`}
                     >
@@ -381,18 +379,18 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       </div>
 
       {/* Section 3: التقويم المستمر — قواعد التقويم المستمر */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-5">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-[#0d6547]" />
+              <ShieldCheck className="w-5 h-5 text-[#2E7D9B]" />
               <span>التقويم المستمر</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               قواعد التقويم المستمر: السلوك (5) | الغيابات (5) | تنظيم الكراس (5) | المشاركة (5)
             </p>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold w-fit">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/30 text-[#0D2C3B] text-xs font-bold w-fit">
             <span>المجموع الإجمالي:</span>
             <span className="font-mono text-sm">20 / 20</span>
           </div>
@@ -404,7 +402,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 text-sm">1. السلوك</span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#0d6547]">5 / 5</span>
+              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#2E7D9B]">5 / 5</span>
             </div>
             <p className="text-[11px] text-slate-500">
               الانضباط واحترام الحرم المدرسي. في حالة الشغب ينقص من السلوك.
@@ -428,7 +426,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 font-bold"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900 font-bold"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">افتراضياً 0.5 نقطة لكل مخالفة شغب</span>
             </div>
@@ -438,7 +436,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 text-sm">2. الغيابات</span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#0d6547]">5 / 5</span>
+              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#2E7D9B]">5 / 5</span>
             </div>
             <p className="text-[11px] text-slate-500">
               المواظبة والحضور. في حالة الغياب غير المبرر يُخصم آلياً.
@@ -462,7 +460,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 font-bold"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900 font-bold"
               />
             </div>
             
@@ -472,7 +470,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 text-sm">3. تنظيم الكراس</span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#0d6547]">5 / 5</span>
+              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#2E7D9B]">5 / 5</span>
             </div>
             <p className="text-[11px] text-slate-500">
               كتابة الدروس والعناية بالدفتر. في حالة عدم كتابة الدروس ينقص من الكراس.
@@ -496,7 +494,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                     }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 font-bold"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900 font-bold"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">افتراضياً 0.5 نقطة لكل درس لم يُكتب</span>
             </div>
@@ -506,31 +504,31 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 text-sm">4. المشاركة</span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#0d6547]">5 / 5</span>
+              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[#2E7D9B]">5 / 5</span>
             </div>
             <p className="text-[11px] text-slate-500">
-              التفاعل الصفي والإجابة والتحضير. في حالة عدم المشاركة ينقص من المشاركة.
+              التفاعل الصفي والإجابة والتحضير. تضاف كنقاط إضافية ولا يخصم لعدمها.
             </p>
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                خصم عدم المشاركة (نقاط):
+                علاوة المشاركة الإيجابية (نقاط):
               </label>
               <input
                 type="number"
                 step="0.25"
                 min="0"
                 max="5"
-                value={calendarSettings.evaluationRules.lackOfParticipationDeduction ?? 0.5}
+                value={calendarSettings.evaluationRules.participationBonus ?? 0.5}
                 onChange={e =>
                   setCalendarSettings(prev => ({
                     ...prev,
                     evaluationRules: {
                       ...prev.evaluationRules,
-                      lackOfParticipationDeduction: parseFloat(e.target.value) || 0
+                      participationBonus: parseFloat(e.target.value) || 0
                     }
                   }))
                 }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900 font-bold"
+                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900 font-bold"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">افتراضياً 0.5 نقطة لكل إهمال في المشاركة</span>
             </div>
@@ -552,7 +550,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                 }
               }))
             }
-            className="w-4 h-4 text-[#0d6547] rounded cursor-pointer"
+            className="w-4 h-4 text-[#2E7D9B] rounded cursor-pointer"
           />
           <label htmlFor="guidance-alerts" className="text-xs font-bold text-slate-700 cursor-pointer">
             إظهار تنبيهات الإرشاد البيداغوجي والتقديرات تلقائياً عند رصد النقاط
@@ -561,10 +559,10 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       </div>
 
       {/* Section 4: النسخ الاحتياطي واستعادة البيانات */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-4">
         <div>
           <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Download className="w-4 h-4 text-[#0d6547]" />
+            <Download className="w-4 h-4 text-[#2E7D9B]" />
             النسخ الاحتياطي وحفظ البيانات دون إنترنت
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -577,7 +575,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
             onClick={handleExportJSON}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-800 transition-colors shadow-xs cursor-pointer"
           >
-            <Download className="w-4 h-4 text-[#0d6547]" />
+            <Download className="w-4 h-4 text-[#2E7D9B]" />
             <span>تصدير نسخة احتياطية (ملف JSON)</span>
           </button>
 
@@ -593,7 +591,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-800 transition-colors shadow-xs cursor-pointer"
           >
-            <Upload className="w-4 h-4 text-[#0d6547]" />
+            <Upload className="w-4 h-4 text-[#2E7D9B]" />
             <span>استعادة من نسخة احتياطية</span>
           </button>
         </div>
@@ -602,8 +600,8 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       {/* Add Holiday Modal */}
       {isAddHolidayOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-200 text-right space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm">إضافة عطلة أو مناسبة مخصصة</h3>
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200 text-right space-y-4">
+            <h3 className="font-bold text-slate-900 text-sm">إضافة عطلة</h3>
 
             <form onSubmit={handleAddHoliday} className="space-y-3 text-xs">
               <div>
@@ -614,7 +612,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                   value={newHolidayName}
                   onChange={e => setNewHolidayName(e.target.value)}
                   placeholder="مثال: زيارة بيداغوجية / ندوة تربوية"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
                 />
               </div>
 
@@ -625,7 +623,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                   value={newHolidayDate}
                   onChange={e => setNewHolidayDate(e.target.value)}
                   placeholder="مثال: 15 أفريل 2027"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
                 />
               </div>
 
@@ -634,7 +632,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                 <select
                   value={newHolidayType}
                   onChange={e => setNewHolidayType(e.target.value as 'national' | 'religious' | 'term')}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0d6547] text-slate-900"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] text-slate-900"
                 >
                   <option value="national">عطلة وطنية</option>
                   <option value="religious">عطلة دينية</option>
@@ -652,7 +650,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#0d6547] text-white font-bold rounded-xl hover:bg-[#0b543b] cursor-pointer"
+                  className="px-4 py-2 bg-[#2E7D9B] text-white font-bold rounded-xl hover:bg-[#0b543b] cursor-pointer"
                 >
                   إضافة
                 </button>
@@ -665,12 +663,12 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       {/* Custom Modals */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-rose-50 border-b border-rose-100 p-4 flex items-center gap-3">
               <div className="p-2 bg-rose-100 text-rose-700 rounded-full">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-black text-rose-900">إعادة تعيين الأقسام</h3>
+              <h3 className="text-base font-bold text-rose-900">إعادة تعيين الأقسام</h3>
             </div>
             <div className="p-5 text-sm text-slate-700 leading-relaxed font-bold">
               هل أنت متأكد؟ سيتم مسح جميع بيانات الأقسام، والتلاميذ، والغيابات، والعلامات بشكل نهائي.
@@ -697,12 +695,12 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
 
       {showHolidaysConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-amber-50 border-b border-amber-100 p-4 flex items-center gap-3">
               <div className="p-2 bg-amber-100 text-amber-700 rounded-full">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-black text-amber-900">استعادة قائمة العطل</h3>
+              <h3 className="text-base font-bold text-amber-900">استعادة قائمة العطل</h3>
             </div>
             <div className="p-5 text-sm text-slate-700 leading-relaxed font-bold">
               هل ترغب في استعادة قائمة العطل الرسمية المعتمدة لوزارة التربية الوطنية؟
@@ -717,7 +715,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
               </button>
               <button
                 onClick={confirmResetHolidays}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition-colors text-sm shadow-sm cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-gold hover:bg-amber-700 text-white font-bold transition-colors text-sm shadow-sm cursor-pointer"
               >
                 نعم، استعادة
               </button>
@@ -727,7 +725,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = ({
       )}
 
       {showSuccessMsg && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-[var(--primary)] text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
           <CheckCircle2 className="w-5 h-5" />
           <span className="font-bold text-sm">{showSuccessMsg}</span>
         </div>

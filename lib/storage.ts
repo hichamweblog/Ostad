@@ -70,7 +70,7 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     unwrittenLessonDeduction: 0.5,
     unexcusedAbsenceDeduction: 1.0,
     lateDeduction: 0.5,
-    lackOfParticipationDeduction: 0.5,
+    participationBonus: 0.5,
     maxScore: 20,
     showGuidanceAlerts: true,
     exemptRuleSecondQuiz: '( الفرض الأول + 0 ) ÷ 2 — القاعدة المعتمدة'

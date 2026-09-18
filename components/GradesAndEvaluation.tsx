@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { AppState } from '@/lib/storage';
 import { calculateStudentAverage } from '@/lib/grade-calculator';
+import { triggerHapticFeedback } from '@/lib/utils';
 import { injectGradesIntoFile } from '@/lib/excel-sync';
 import { Student, StudentGrade } from '@/lib/types';
 import {
@@ -54,7 +55,7 @@ const EstimationDropdown: React.FC<{
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder="اكتب التقدير مخصصاً..."
-          className="w-full text-xs px-2 py-1 rounded-lg border border-amber-400 bg-amber-50/50 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
+          className="w-full text-xs px-2 py-1 rounded-lg border border-gold bg-amber-50/50 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-gold shadow-2xs"
           autoFocus
         />
         <button
@@ -80,7 +81,7 @@ const EstimationDropdown: React.FC<{
             onChange(e.target.value);
           }
         }}
-        className="w-full text-xs px-2 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-slate-800 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs transition-colors"
+        className="w-full text-xs px-2 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-slate-800 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold cursor-pointer shadow-2xs transition-colors"
       >
         <option value="">-- اختر التقدير --</option>
 
@@ -153,7 +154,7 @@ const GuidanceDropdown: React.FC<{
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder="اكتب الإرشاد البيداغوجي..."
-          className="w-full text-xs px-2.5 py-1 rounded-lg border border-amber-400 bg-amber-50/50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
+          className="w-full text-xs px-2.5 py-1 rounded-lg border border-gold bg-amber-50/50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-gold shadow-2xs"
           autoFocus
         />
         <button
@@ -179,7 +180,7 @@ const GuidanceDropdown: React.FC<{
             onChange(e.target.value);
           }
         }}
-        className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs transition-colors"
+        className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold cursor-pointer shadow-2xs transition-colors"
       >
         <option value="">-- اختر الإرشاد --</option>
 
@@ -278,7 +279,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
   const [showFormulaModal, setShowFormulaModal] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [mobileColumnFilter, setMobileColumnFilter] = useState<'all' | 'continuousEval' | 'quiz' | 'exam'>('all');
+  const [mobileActiveTab, setMobileActiveTab] = useState<'continuousEval' | 'quiz' | 'exam'>('continuousEval');
   const [searchStudent, setSearchStudent] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -360,7 +361,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
     
     // New simplified calculation: base 20, subtract penalties, add bonuses
     const penalties = (stats.disruptions * disruptDed) + (stats.unwritten * unwrittenDed) + (stats.absent * absentDed);
-    const bonuses = (stats.goodPart * 0.5); // Fixed bonus per good participation
+    const partBonus = state.calendarSettings?.evaluationRules?.participationBonus ?? 0.5;
+    const bonuses = (stats.goodPart * partBonus);
     
     const total = Math.min(20, Math.max(0, 20 - penalties + bonuses));
     return Number(total.toFixed(2));
@@ -443,6 +445,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
   };
 
   const handleSaveAllGrades = () => {
+    triggerHapticFeedback();
     const updatedGradesList: StudentGrade[] = [...state.grades];
 
     for (const student of classStudents) {
@@ -555,7 +558,9 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
       setTimeout(() => setSaveToast(false), 4000);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'حدث خطأ أثناء حقن البيانات. تأكد من أنه ملف الرقمنة الرسمي الصحيح.');
+      import('@/components/Toast').then(({ showToast }) => {
+        showToast(err.message || 'حدث خطأ أثناء حقن البيانات. تأكد من أنه ملف الرقمنة الرسمي الصحيح.', 'error');
+      });
     } finally {
       setIsExporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -601,12 +606,9 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <GraduationCap className="w-5 h-5 text-amber-600" />
-            <span>دفتر التقويم والعلامات وحساب المعدلات الرسمية</span>
+            <GraduationCap className="w-5 h-5 text-gold" />
+            <span>النقاط</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            صيغة وزارة التربية الوطنية: (التقويم المستمر + الفرض + الاختبار × 2) / 4 • المعامل الرسمي للمادة: 2 ثابت
-          </p>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto">
@@ -630,7 +632,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isExporting}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#0d6547] hover:bg-[#0b543b] disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#2E7D9B] hover:bg-[#0b543b] disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors"
               title="حقن النقاط في ملف الرقمنة (Excel) المفرغ"
             >
               <Download className={`w-4 h-4 shrink-0 ${isExporting ? 'animate-bounce' : ''}`} />
@@ -643,7 +645,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
               title="استخراج كشف النقاط كملف Excel"
               id="btn-export-grades-sheet"
             >
-              <FileSpreadsheet className="w-4 h-4 text-[#0d6547] shrink-0" />
+              <FileSpreadsheet className="w-4 h-4 text-[#2E7D9B] shrink-0" />
               <span>استخراج كشف النقاط</span>
             </button>
           </div>
@@ -651,10 +653,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
           <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
             <button
               onClick={handleAutoFillContinuousEval}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-emerald-900 border border-[var(--primary)] text-xs font-bold cursor-pointer transition-colors shadow-2xs"
               title="حساب التقويم المستمر آلياً بناءً على الغيابات والسلوك المسجل في دفتر النصوص"
             >
-              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+              <Sparkles className="w-4 h-4 text-emerald-primary shrink-0" />
               <span>حساب التقويم آلياً</span>
             </button>
 
@@ -663,13 +665,13 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
               className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold cursor-pointer transition-colors shadow-2xs"
               title="ملء التقديرات والإرشادات آلياً لجميع تلاميذ القسم حسب نقاطهم ومعدلاتهم"
             >
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+              <Sparkles className="w-4 h-4 text-gold shrink-0" />
               <span>تطبيق التقديرات آلياً</span>
             </button>
 
             <button
               onClick={handleSaveAllGrades}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-black shadow-xs cursor-pointer transition-colors"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-xs cursor-pointer transition-colors"
               id="btn-save-all-grades"
             >
               <Save className="w-4 h-4 shrink-0" />
@@ -680,7 +682,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
       </div>
 
       {saveToast && (
-        <div className="p-3.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center gap-2 shadow-md">
+        <div className="p-3.5 rounded-xl bg-emerald-primary text-white font-bold text-xs flex items-center gap-2 shadow-md">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <span>{toastMessage || `تم حفظ وحساب كافة علامات ومعدلات الفصل ${selectedTrimester} بنجاح!`}</span>
         </div>
@@ -688,8 +690,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
 
       {/* Class & Trimester Filter Ribbon */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="space-y-0.5 flex-1 sm:flex-initial">
+        <div className="flex flex-col sm:flex-row gap-4 sm:justify-between items-start sm:items-center w-full sm:w-auto">
+          <div className="space-y-0.5 w-full sm:w-auto">
             <span className="text-[11px] font-bold text-slate-500 block">اختر القسم:</span>
             <select
               value={selectedClassId}
@@ -704,16 +706,16 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
             </select>
           </div>
 
-          <div className="space-y-0.5 flex-1 sm:flex-initial">
+          <div className="space-y-0.5 w-full sm:w-auto">
             <span className="text-[11px] font-bold text-slate-500 block">الفترة الدراسية:</span>
-            <div className="flex items-center bg-slate-50 p-0.5 rounded-lg border border-slate-300">
+            <div className="flex items-center bg-slate-50 p-0.5 rounded-lg border border-slate-300 w-full sm:w-auto">
               {([1, 2, 3] as const).map(tri => (
                 <button
                   key={tri}
                   onClick={() => handleSelectTrimester(tri)}
                   className={`flex-1 sm:flex-initial px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer text-center ${
                     selectedTrimester === tri
-                      ? 'bg-amber-600 text-white shadow-xs'
+                      ? 'bg-gold text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -738,52 +740,41 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
             value={searchStudent}
             onChange={e => setSearchStudent(e.target.value)}
             placeholder="بحث عن تلميذ لتنقيطه..."
-            className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-gold"
           />
         </div>
 
-        {/* Column Focus Tabs on Mobile */}
-        <div className="md:hidden flex items-center bg-white p-1 rounded-xl border border-slate-200 text-xs">
+        {/* Mobile Segmented Control */}
+        <div className="md:hidden flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs w-full mt-3 sm:mt-0">
           <button
             type="button"
-            onClick={() => setMobileColumnFilter('all')}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
-              mobileColumnFilter === 'all'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            كل العلامات
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileColumnFilter('continuousEval')}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
-              mobileColumnFilter === 'continuousEval'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setMobileActiveTab('continuousEval')}
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+              mobileActiveTab === 'continuousEval'
+                ? 'bg-white text-emerald-primary shadow-xs border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             التقويم
           </button>
           <button
             type="button"
-            onClick={() => setMobileColumnFilter('quiz')}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
-              mobileColumnFilter === 'quiz'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setMobileActiveTab('quiz')}
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+              mobileActiveTab === 'quiz'
+                ? 'bg-white text-emerald-primary shadow-xs border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             الفرض
           </button>
           <button
             type="button"
-            onClick={() => setMobileColumnFilter('exam')}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
-              mobileColumnFilter === 'exam'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setMobileActiveTab('exam')}
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+              mobileActiveTab === 'exam'
+                ? 'bg-white text-emerald-primary shadow-xs border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             الاختبار
@@ -799,8 +790,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
           </div>
         ) : (
           <>
-            {/* 1. Mobile-First Card View (Screens < 768px): ZERO Horizontal Scrolling */}
-            <div className="block md:hidden space-y-3">
+            {/* 1. Mobile-First Card View (Screens < 768px): Compact Rows */}
+            <div className="block md:hidden space-y-2">
               {classStudents
                 .filter(s => s.fullName.toLowerCase().includes(searchStudent.toLowerCase()))
                 .map(student => {
@@ -809,155 +800,49 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                   const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                   const ex = draft.exam !== '' ? Number(draft.exam) : null;
                   const avg = calculateStudentAverage(ce, q, ex);
-                  const note = avg !== null ? getDefaultEstimation(avg) : '';
                   const isPassing = avg !== null && avg >= 10;
 
                   return (
                     <div
                       key={student.id}
-                      className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3"
+                      className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-xs gap-3"
                     >
-                      {/* Card Header: Student #, Name, and Calculated Average Badge */}
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200">
-                            {student.numberInList}
-                          </span>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-sm text-[#0D2C3B] truncate leading-tight">
-                              {student.fullName}
-                            </h4>
+                      {/* Left side: Avatar (#) and Student Name */}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200">
+                          {student.numberInList}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-[#1A1C1E] whitespace-normal break-words leading-tight">
+                            {student.fullName}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5">
                             {student.isRepeater && (
-                              <span className="inline-block text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                              <span className="inline-block text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">
                                 معيد
+                              </span>
+                            )}
+                            {avg !== null && (
+                              <span className={`text-[10px] font-mono font-bold ${isPassing ? 'text-emerald-primary' : 'text-rose-600'}`}>
+                                المعدل: {avg.toFixed(2)}
                               </span>
                             )}
                           </div>
                         </div>
-
-                        {/* Calculated Average & Note Pill */}
-                        <div className="flex flex-col items-end shrink-0">
-                          <div
-                            className={`px-2.5 py-1 rounded-xl font-mono text-xs font-black border ${
-                              avg === null
-                                ? 'bg-slate-50 text-slate-400 border-slate-200'
-                                : isPassing
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
-                            }`}
-                          >
-                            <span className="text-[10px] ml-1 text-slate-500 font-normal">المعدل:</span>
-                            {avg !== null ? avg.toFixed(2) : '-'}
-                          </div>
-                          {note && (
-                            <span className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                              {note}
-                            </span>
-                          )}
-                        </div>
                       </div>
 
-                      {/* Grade Inputs: Adaptive layout without horizontal scrolling */}
-                      {mobileColumnFilter === 'all' ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {/* Continuous Eval */}
-                          <div className="space-y-1 text-center bg-slate-50 p-2 rounded-xl border border-slate-200/80">
-                            <label className="block text-[10px] font-bold text-slate-600">
-                              تقويم مستمر
-                            </label>
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              placeholder="-"
-                              value={draft.continuousEval}
-                              onChange={e => handleGradeChange(student.id, 'continuousEval', e.target.value)}
-                              className="w-full text-center py-2 px-1 rounded-lg border border-slate-300 bg-white font-mono font-black text-xs text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            />
-                            <span className="block text-[9px] text-slate-400">على 20</span>
-                          </div>
-
-                          {/* Quiz */}
-                          <div className="space-y-1 text-center bg-slate-50 p-2 rounded-xl border border-slate-200/80">
-                            <label className="block text-[10px] font-bold text-slate-600">
-                              فرض محروس
-                            </label>
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              placeholder="-"
-                              value={draft.quiz}
-                              onChange={e => handleGradeChange(student.id, 'quiz', e.target.value)}
-                              className="w-full text-center py-2 px-1 rounded-lg border border-slate-300 bg-white font-mono font-black text-xs text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            />
-                            <span className="block text-[9px] text-slate-400">على 20</span>
-                          </div>
-
-                          {/* Exam */}
-                          <div className="space-y-1 text-center bg-amber-50/50 p-2 rounded-xl border border-amber-200/80">
-                            <label className="block text-[10px] font-bold text-amber-900">
-                              اختبار فصلي
-                            </label>
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              placeholder="-"
-                              value={draft.exam}
-                              onChange={e => handleGradeChange(student.id, 'exam', e.target.value)}
-                              className="w-full text-center py-2 px-1 rounded-lg border border-amber-300 bg-white font-mono font-black text-xs text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            />
-                            <span className="block text-[9px] text-amber-700">يضاعف (×2)</span>
-                          </div>
-                        </div>
-                      ) : (
-                        /* Single Focused Column Input for fast sequential grading */
-                        <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                          <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                            <span>
-                              {mobileColumnFilter === 'continuousEval' && 'التقويم المستمر (من 20):'}
-                              {mobileColumnFilter === 'quiz' && 'الفرض المحروس (من 20):'}
-                              {mobileColumnFilter === 'exam' && 'الاختبار الفصلي (من 20 - يضاعف في المعدل):'}
-                            </span>
-                            <span className="text-[11px] text-slate-400 font-normal">خطوة 0.25</span>
-                          </div>
-                          <input
-                            type="number"
-                            step="0.25"
-                            min="0"
-                            max="20"
-                            placeholder="أدخل العلامة (مثلاً 14.5)..."
-                            value={draft[mobileColumnFilter]}
-                            onChange={e => handleGradeChange(student.id, mobileColumnFilter, e.target.value)}
-                            className="w-full text-center py-2.5 px-3 rounded-xl border border-slate-300 bg-white font-mono font-black text-base text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
-                          />
-                        </div>
-                      )}
-
-                      {/* Estimations & Pedagogical Guidelines */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-slate-700">التقديرات:</label>
-                          <EstimationDropdown
-                            studentId={student.id}
-                            value={draft.estimation}
-                            avg={avg}
-                            onChange={val => handleTextFieldChange(student.id, 'estimation', val)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-slate-700">الإرشادات:</label>
-                          <GuidanceDropdown
-                            studentId={student.id}
-                            value={draft.guidance}
-                            avg={avg}
-                            onChange={val => handleTextFieldChange(student.id, 'guidance', val)}
-                          />
-                        </div>
+                      {/* Right side: Input for active tab */}
+                      <div className="shrink-0 w-24">
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          max="20"
+                          placeholder="-"
+                          value={draft[mobileActiveTab]}
+                          onChange={e => handleGradeChange(student.id, mobileActiveTab, e.target.value)}
+                          className="w-full text-center px-2 rounded-lg border border-slate-300 bg-slate-50 font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-gold focus:outline-none focus:bg-white transition-colors min-h-[44px]"
+                        />
                       </div>
                     </div>
                   );
@@ -968,7 +853,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
             <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-100 text-slate-800 border-b border-slate-200 font-black">
+                  <thead className="bg-slate-100 text-slate-800 border-b border-slate-200 font-bold">
                     <tr>
                       <th className="py-3 px-3 w-10 text-center">#</th>
                       <th className="py-3 px-4 min-w-[160px]">اسم ولقب التلميذ</th>
@@ -1024,7 +909,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                                 placeholder="-"
                                 value={draft.continuousEval}
                                 onChange={e => handleGradeChange(student.id, 'continuousEval', e.target.value)}
-                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-amber-600"
+                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold"
                               />
                             </td>
 
@@ -1038,7 +923,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                                 placeholder="-"
                                 value={draft.quiz}
                                 onChange={e => handleGradeChange(student.id, 'quiz', e.target.value)}
-                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-amber-600"
+                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold"
                               />
                             </td>
 
@@ -1052,18 +937,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                                 placeholder="-"
                                 value={draft.exam}
                                 onChange={e => handleGradeChange(student.id, 'exam', e.target.value)}
-                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-amber-600"
+                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold"
                               />
                             </td>
 
                             {/* Calculated Average */}
                             <td className="py-2.5 px-3 text-center bg-amber-50/50 border-x border-amber-200">
                               <span
-                                className={`font-mono text-sm font-black ${
+                                className={`font-mono text-sm font-bold ${
                                   avg === null
                                     ? 'text-slate-400'
                                     : isPassing
-                                    ? 'text-emerald-700'
+                                    ? 'text-emerald-primary'
                                     : 'text-rose-700'
                                 }`}
                               >
@@ -1095,7 +980,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
                             <td className="py-2 px-4">
                               <input
                                 type="text"
-                                className="w-full text-xs p-2 text-right border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                className="w-full text-xs p-2 text-right border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-primary bg-white"
                                 value={draft.remarks || ''}
                                 onChange={e => handleTextFieldChange(student.id, 'remarks', e.target.value)}
                                 placeholder="إضافة ملاحظة..."
@@ -1115,10 +1000,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
       {/* Explanatory Formula Modal */}
       {showFormulaModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">
-                كيف يُحسب المعدل الفصلي لمادة العلوم الإسلامية؟
+              <h3 className="text-base font-bold text-slate-900">
+                صيغة المعدل
               </h3>
               <button
                 onClick={() => setShowFormulaModal(false)}
@@ -1131,7 +1016,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({
             <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-2">
                 <div className="text-[11px] font-bold text-amber-900">الصيغة الوزارية الرسمية:</div>
-                <div className="font-mono text-sm font-black text-amber-950 dir-ltr">
+                <div className="font-mono text-sm font-bold text-amber-950 dir-ltr">
                   المعدل = [ التقويم المستمر + الفرض + (الاختبار × 2) ] ÷ 4
                 </div>
               </div>

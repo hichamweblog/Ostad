@@ -5,6 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+import DOMPurify from 'dompurify'
+
 export interface ExportToDocOptions {
   landscape?: boolean;
   title?: string;
@@ -51,7 +53,7 @@ export function exportToDoc(htmlContent: string, filename: string, options?: Exp
     </head><body dir="rtl"><div class="Section1">
   `;
   const footer = "</div></body></html>";
-  const sourceHTML = header + htmlContent + footer;
+  const sourceHTML = header + DOMPurify.sanitize(htmlContent) + footer;
 
   const blob = new Blob(['\ufeff' + sourceHTML], {
     type: 'application/msword;charset=utf-8'
@@ -64,4 +66,10 @@ export function exportToDoc(htmlContent: string, filename: string, options?: Exp
   fileDownload.click();
   document.body.removeChild(fileDownload);
   URL.revokeObjectURL(url);
+}
+
+export function triggerHapticFeedback() {
+  if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+    window.navigator.vibrate(50); // Light tap
+  }
 }

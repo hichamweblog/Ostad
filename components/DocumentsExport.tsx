@@ -377,19 +377,12 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-6" id="documents-pedagogical-view">
       {/* 1. Header Toolbar (Actions & Settings) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#0d6547] border border-emerald-200 text-xs font-bold mb-1">
-            <FileCheck2 className="w-3.5 h-3.5" />
-            <span>منظومة التعليم الثانوي</span>
-          </div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#0d6547]" />
-            <span>الوثائق البيداغوجية</span>
+            <FileText className="w-5 h-5 text-[#2E7D9B]" />
+            <span>الوثائق</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            تصدير الوثائق البيداغوجية الرسمية بصيغة Word (.doc) بجداول مخصصة بالاتجاه العربي السليم
-          </p>
         </div>
 
         {/* Action Button: Export DOC only */}
@@ -397,7 +390,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
           <button
             type="button"
             onClick={handleExportDoc}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0d6547] hover:bg-[#094732] text-white text-xs font-black shadow-xs hover:shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2E7D9B] hover:bg-[#256A85] text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
             title="تصدير الوثيقة كملف Microsoft Word (.doc)"
             id="btn-export-doc-word"
           >
@@ -408,7 +401,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
       </div>
 
       {/* 2. Document Selection Ribbons & Class/Trimester Selectors */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/90">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/90">
         {/* Document Tabs */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
@@ -416,7 +409,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             onClick={() => setDocType('JOURNAL')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               docType === 'JOURNAL'
-                ? 'bg-[#0d6547] text-white shadow-2xs'
+                ? 'bg-[#2E7D9B] text-white shadow-2xs'
                 : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
             }`}
           >
@@ -428,7 +421,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             onClick={() => setDocType('CURRICULUM_DISTRIBUTION')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               docType === 'CURRICULUM_DISTRIBUTION'
-                ? 'bg-[#0d6547] text-white shadow-2xs'
+                ? 'bg-[#2E7D9B] text-white shadow-2xs'
                 : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
             }`}
           >
@@ -440,7 +433,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             onClick={() => setDocType('GRADES_ROSTER')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               docType === 'GRADES_ROSTER'
-                ? 'bg-[#0d6547] text-white shadow-2xs'
+                ? 'bg-[#2E7D9B] text-white shadow-2xs'
                 : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
             }`}
           >
@@ -452,7 +445,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             onClick={() => setDocType('COUNCIL_FORM')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               docType === 'COUNCIL_FORM'
-                ? 'bg-[#0d6547] text-white shadow-2xs'
+                ? 'bg-[#2E7D9B] text-white shadow-2xs'
                 : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
             }`}
           >
@@ -464,7 +457,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             onClick={() => setDocType('STUDENTS_LIST')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               docType === 'STUDENTS_LIST'
-                ? 'bg-[#0d6547] text-white shadow-2xs'
+                ? 'bg-[#2E7D9B] text-white shadow-2xs'
                 : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
             }`}
           >
@@ -510,7 +503,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
       <div
         dir="rtl"
         style={{ direction: 'rtl', textAlign: 'right' }}
-        className="bg-white rounded-2xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right"
+        className="bg-white rounded-xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right"
       >
         {/* Space-Saving Compact Institutional Header */}
         <div className="pb-2 border-b-2 border-slate-900">
@@ -523,7 +516,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
 
         {/* Document Title Banner */}
         <div className="text-center pt-3 pb-2">
-          <h3 className="font-black text-sm sm:text-base text-slate-900 underline underline-offset-4">
+          <h3 className="font-bold text-sm sm:text-base text-slate-900 underline underline-offset-4">
             {getDocTitle()}
           </h3>
         </div>
@@ -534,7 +527,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
         {docType === 'JOURNAL' && (
           <div className="space-y-3">
             <table className="w-full text-right border-collapse border border-slate-900 text-xs">
-              <thead className="bg-slate-100 border-b border-slate-900 font-black">
+              <thead className="bg-slate-100 border-b border-slate-900 font-bold">
                 <tr>
                   <th className="border border-slate-900 p-1.5 text-center w-24">التاريخ والتوقيت</th>
                   <th className="border border-slate-900 p-1.5 w-44">موضوع الدرس / الوحدة</th>
@@ -591,7 +584,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
         {docType === 'CURRICULUM_DISTRIBUTION' && (
           <div className="space-y-3">
             <table className="w-full text-right border-collapse border border-slate-900 text-xs">
-              <thead className="bg-slate-100 border-b border-slate-900 font-black">
+              <thead className="bg-slate-100 border-b border-slate-900 font-bold">
                 <tr>
                   <th className="border border-slate-900 p-1.5 text-center w-10">الرقم</th>
                   <th className="border border-slate-900 p-1.5 w-28">الميدان</th>
@@ -642,7 +635,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
         {docType === 'GRADES_ROSTER' && (
           <div className="space-y-3">
             <table className="w-full text-right border-collapse border border-slate-900 text-xs">
-              <thead className="bg-slate-100 border-b border-slate-900 font-black">
+              <thead className="bg-slate-100 border-b border-slate-900 font-bold">
                 <tr>
                   <th className="border border-slate-900 p-1 text-center w-8">#</th>
                   <th className="border border-slate-900 p-1 min-w-[140px]">اسم ولقب التلميذ</th>
@@ -686,7 +679,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
                       <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
                         {g?.exam ?? '-'}
                       </td>
-                      <td className={`border border-slate-900 text-center font-mono font-black ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                      <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
                         {avg !== null ? avg.toFixed(2) : '-'}
                       </td>
                       <td className={`border border-slate-900 text-center font-semibold ${ecoPaperMode ? 'py-0.5 px-1 text-[9px]' : 'p-1 text-[10px]'}`}>
@@ -715,8 +708,8 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
             <div className="grid grid-cols-3 gap-2 border border-slate-900 p-2 text-xs font-bold bg-slate-50">
               <div>تعداد القسم الكلي: <span className="font-mono">{stats.totalStudents}</span></div>
               <div>المقوّمون فعلياً: <span className="font-mono">{stats.evaluatedCount}</span></div>
-              <div>الحاصلون على المعدل: <span className="font-mono text-[#0d6547]">{stats.passCount}</span></div>
-              <div>نسبة النجاح الفصلي: <span className="font-mono text-[#0d6547]">{stats.passRate.toFixed(1)}%</span></div>
+              <div>الحاصلون على المعدل: <span className="font-mono text-[#2E7D9B]">{stats.passCount}</span></div>
+              <div>نسبة النجاح الفصلي: <span className="font-mono text-[#2E7D9B]">{stats.passRate.toFixed(1)}%</span></div>
               <div>معدل المادة العام: <span className="font-mono">{stats.averageScore.toFixed(2)} / 20</span></div>
               <div>أعلى معدل: <span className="font-mono">{stats.highestScore.toFixed(2)}</span> ({stats.topStudentName})</div>
             </div>
@@ -784,7 +777,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = ({ state }) => {
         {docType === 'STUDENTS_LIST' && (
           <div className="space-y-3">
             <table className="w-full text-right border-collapse border border-slate-900 text-xs">
-              <thead className="bg-slate-100 border-b border-slate-900 font-black">
+              <thead className="bg-slate-100 border-b border-slate-900 font-bold">
                 <tr>
                   <th className="border border-slate-900 p-2 text-center w-12">الرقم</th>
                   <th className="border border-slate-900 p-2">اسم ولقب التلميذ</th>

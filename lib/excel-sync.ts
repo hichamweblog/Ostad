@@ -215,8 +215,12 @@ export async function parseDigitizationFile(
 ): Promise<ParsedDigitizationResult> {
   const arrayBuffer = await file.arrayBuffer();
 
-  // Read workbook (supports HTML-disguised XLS, XLSX, and XLS)
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  let workbook;
+  try {
+    workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  } catch (err) {
+    throw new Error('عذراً، يبدو أن ملف الإكسل غير صالح أو لا يتطابق مع التنسيق الوزاري المعتمد.');
+  }
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
     throw new Error('الملف فارغ أو غير صالح (لا توجد أوراق عمل).');
@@ -407,12 +411,17 @@ export async function injectGradesIntoFile(
   grades: StudentGrade[]
 ): Promise<Blob> {
   const arrayBuffer = await file.arrayBuffer();
-  const workbook = XLSX.read(arrayBuffer, {
-    type: 'array',
-    cellStyles: true,
-    cellNF: true,
-    cellDates: true,
-  });
+  let workbook;
+  try {
+    workbook = XLSX.read(arrayBuffer, {
+      type: 'array',
+      cellStyles: true,
+      cellNF: true,
+      cellDates: true,
+    });
+  } catch (err) {
+    throw new Error('عذراً، يبدو أن ملف الإكسل غير صالح أو لا يتطابق مع التنسيق الوزاري المعتمد.');
+  }
 
   const gradeLookupByReg = new Map<string, StudentGrade>();
   const gradeLookupByName = new Map<string, StudentGrade>();

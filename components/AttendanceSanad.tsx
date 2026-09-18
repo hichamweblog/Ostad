@@ -1,7 +1,8 @@
 'use client';
 
+import { showToast } from '@/components/Toast';
 import React, { useState } from 'react';
-import { exportToDoc } from '@/lib/utils';
+import { exportToDoc, triggerHapticFeedback } from '@/lib/utils';
 import { AppState } from '@/lib/storage';
 import { AttendanceStatus, SessionRecord, Student } from '@/lib/types';
 import {
@@ -56,8 +57,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'seating'>('table');
-  const [seatingCols, setSeatingCols] = useState<number>(3);
 
   const handleCycleStatus = (studentId: string) => {
     const current = activeAttendance[studentId] || 'PRESENT';
@@ -102,6 +101,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   // Handle setting status for a student in active session
   const handleSetStudentStatus = (studentId: string, status: AttendanceStatus) => {
     if (!activeSession) return;
+    
+    triggerHapticFeedback();
 
     onUpdateState(prev => ({
       ...prev,
@@ -195,7 +196,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const handleGenerateTrimesterSessions = () => {
     const timetableForClass = state.timetable.filter(s => s.classId === selectedClassId);
     if (timetableForClass.length === 0) {
-      alert('يرجى أولاً إضافة حصص لهذا الفوج في جدول التوقيت الأسبوعي ليتسنى توليدها تلقائياً.');
+      showToast('يرجى أولاً إضافة حصص لهذا الفوج في جدول التوقيت ليتسنى توليدها تلقائياً.', 'warning');
       return;
     }
 
@@ -254,9 +255,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         sessions: [...newSessions, ...prev.sessions]
       }));
       setSelectedSessionId(newSessions[0].id);
-      alert(`تم بنجاح توليد ${newSessions.length} حصة للفصل ${state.activeTrimester} بناءً على جدول التوقيت!`);
+      showToast(`تم بنجاح توليد ${newSessions.length} حصة للفصل ${state.activeTrimester} بناءً على جدول التوقيت!`, 'success');
     } else {
-      alert('جميع حصص هذا الفصل مولدة مسبقاً.');
+      showToast('جميع حصص هذا الفصل مولدة مسبقاً.', 'warning');
     }
     setShowGenerateConfirm(false);
   };
@@ -323,7 +324,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             </td>
             <td style="width: 34%; text-align: center; vertical-align: middle;">
               <h3 style="margin: 0; font-size: 12pt; color: #0d2c3b;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
-              <h4 style="margin: 2px 0; font-size: 10.5pt; color: #0e7c61;">وزارة التربية الوطنية</h4>
+              <h4 style="margin: 2px 0; font-size: 10.5pt; color: #2E7D9B;">وزارة التربية الوطنية</h4>
               <h2 style="margin: 5px 0; font-size: 14pt; color: #0d2c3b; text-decoration: underline;">ورقة رصد الغياب والمتابعة اليومية</h2>
               <div style="font-size: 10.5pt; font-weight: bold; margin-top: 2px;">
                 القسم: <b>${activeClass?.name || 'فوج تربوي'}</b> (${activeClass?.stream || ''}) — القاعة: <b>${activeClass?.roomNumber || '...'}</b>
@@ -380,10 +381,20 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-6" id="attendance-sanad-view">
+      {/* Page Title */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+            <UserCheck className="w-5 h-5 text-[var(--primary)]" />
+            <span>الحضور والغياب</span>
+          </h2>
+        </div>
+      </div>
+
       {/* Top Class Selector & Action Ribbon (Screenshot 6) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#0d6547] flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-[var(--primary-soft)] text-[#2E7D9B] flex items-center justify-center font-bold">
             <UserCheck className="w-5 h-5" />
           </div>
           <div>
@@ -395,7 +406,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 const nextSes = state.sessions.find(s => s.classId === e.target.value);
                 if (nextSes) setSelectedSessionId(nextSes.id);
               }}
-              className="font-bold text-slate-900 bg-transparent text-base focus:outline-none border-b border-dashed border-[#0d6547] cursor-pointer"
+              className="w-full max-w-full text-wrap whitespace-normal font-bold text-slate-900 bg-transparent text-base focus:outline-none border-b border-dashed border-[#2E7D9B] cursor-pointer"
             >
               {state.classes.map(cls => (
                 <option key={cls.id} value={cls.id}>
@@ -410,7 +421,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           {/* Generate sessions button */}
           <button
             onClick={() => handleGenerateTrimesterSessions()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#0d6547] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#2E7D9B] bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] border border-emerald-200 transition-colors cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>توليد حصص الفصل {state.activeTrimester}</span>
@@ -419,7 +430,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           {/* New session button */}
           <button
             onClick={handleCreateTodaySession}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#0d6547] hover:bg-[#0b543b] transition-colors shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#2E7D9B] hover:bg-[#0b543b] transition-colors shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>حصة جديدة اليوم</span>
@@ -429,18 +440,18 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
       {/* If No sessions exist for class */}
       {classSessions.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-3">
-          <Clock3 className="w-8 h-8 text-amber-600 mx-auto" />
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center space-y-3">
+          <Clock3 className="w-8 h-8 text-gold mx-auto" />
           <h3 className="font-bold text-amber-900 text-sm">
             لا توجد حصص مسجلة لهذا الفوج حتى الآن
           </h3>
           <p className="text-xs text-amber-700 max-w-md mx-auto">
-            يمكنك توليد حصص الفصل تلقائياً وفق جدول التوقيت الأسبوعي، أو إضافة حصة جديدة يدوياً للبدء برصد الحضور.
+            يمكنك توليد حصص الفصل تلقائياً وفق جدول التوقيت، أو إضافة حصة جديدة يدوياً للبدء برصد الحضور.
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
               onClick={handleGenerateTrimesterSessions}
-              className="px-4 py-2 bg-[#0d6547] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0b543b] cursor-pointer"
+              className="px-4 py-2 bg-[#2E7D9B] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0b543b] cursor-pointer"
             >
               توليد حصص الفصل {state.activeTrimester}
             </button>
@@ -459,35 +470,37 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       {/* Session Active Toolbar */}
       {activeSession && (
         <div className="space-y-4">
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             {/* Session Selector */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-xs font-bold text-slate-700">تحديد الحصة:</span>
-              <select
-                value={selectedSessionId}
-                onChange={e => setSelectedSessionId(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0d6547]"
-              >
-                {classSessions.map(ses => (
-                  <option key={ses.id} value={ses.id}>
-                    {ses.date} ({ses.startTime} - {ses.endTime}) {ses.sessionGoals ? `- ${ses.sessionGoals.slice(0, 30)}...` : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-2 w-full sm:flex-1">
+              <span className="text-xs font-bold text-slate-700 shrink-0">تحديد الحصة:</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                    value={selectedSessionId}
+                    onChange={e => setSelectedSessionId(e.target.value)}
+                    className="w-full sm:flex-1 px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-[11px] sm:text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2E7D9B] cursor-pointer"
+                  >
+                    {classSessions.map(ses => (
+                      <option key={ses.id} value={ses.id}>
+                    {ses.date} ({ses.startTime}-{ses.endTime}) {ses.sessionGoals ? `- ${ses.sessionGoals.slice(0, 30)}...` : ''}
+                      </option>
+                    ))}
+                  </select>
 
-              {/* Mark All Present */}
-              <button
-                onClick={handleMarkAllPresent}
-                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition-colors cursor-pointer"
-              >
-                تحديد الكل «حاضر»
-              </button>
+                {/* Mark All Present */}
+                <button
+                  onClick={handleMarkAllPresent}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-emerald-800 text-xs font-bold border border-emerald-200 transition-colors cursor-pointer shrink-0"
+                >
+                  تحديد الكل «حاضر»
+                </button>
+              </div>
             </div>
 
             {/* Quick Session Stats */}
             <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 text-xs w-full sm:w-auto">
-              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
-                <span className="sm:hidden block text-[10px] text-emerald-700">حاضر</span>
+              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-[var(--primary-soft)] text-emerald-800 font-bold border border-emerald-200">
+                <span className="sm:hidden block text-[10px] text-emerald-primary">حاضر</span>
                 <span className="hidden sm:inline">حاضر: </span>
                 <span>{presentCount}</span>
               </div>
@@ -509,38 +522,10 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث عن تلميذ..."
-                  className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#0d6547]"
+                  className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#2E7D9B]"
                 />
               </div>
 
-              {/* View Switcher: Table vs Seating Plan */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs w-full sm:w-auto justify-between sm:justify-start">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('table')}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                    viewMode === 'table'
-                      ? 'bg-white text-[#0d6547] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <List className="w-3.5 h-3.5" />
-                  <span>قائمة الحضور</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('seating')}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                    viewMode === 'seating'
-                      ? 'bg-white text-[#0d6547] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  id="btn-seating-plan-view"
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span>مخطط الجلوس</span>
-                </button>
-              </div>
             </div>
 
             <button
@@ -554,8 +539,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
           {/* Conditional View: Table vs Seating Plan */}
           <div id="attendance-doc">
-          {viewMode === 'table' ? (
-            <div className="space-y-3">
+          <div className="space-y-3">
               {/* 1. Mobile-First Card View (Screens < 768px): ZERO Horizontal Scrolling */}
               <div className="block md:hidden space-y-2.5">
                 {filteredStudents.map(student => {
@@ -568,16 +552,16 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   return (
                     <div
                       key={student.id}
-                      className="p-3 bg-white rounded-2xl border border-[#D5DFDC] shadow-xs space-y-2.5 transition-all"
+                      className="p-3 bg-white rounded-xl border border-[#D5DFDC] shadow-xs space-y-2.5 transition-all"
                     >
                       {/* Top Row: Number, Name, Repeater, & Stats */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-3">
+                        <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
                           <span className="w-7 h-7 rounded-xl bg-slate-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200">
                             {student.numberInList}
                           </span>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-sm text-[#0D2C3B] truncate leading-tight">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-sm text-[#1A1C1E] whitespace-normal break-words leading-tight">
                               {student.fullName}
                             </h4>
                             {student.isRepeater && (
@@ -589,7 +573,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                         </div>
 
                         {/* Badges: Total Absences & Delays */}
-                        <div className="flex items-center gap-1 shrink-0 text-[11px] font-bold font-mono">
+                        <div className="flex items-center gap-1 shrink-0 text-[11px] font-bold font-mono flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded-lg border ${
                               stats.absent > 0
@@ -611,7 +595,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             شغب: {stats.disruptions} | كراس: {stats.unwrittenLessons}
                           </span>
                           {estimatedImpact !== 0 && (
-                            <span className={`text-[10px] font-semibold ${estimatedImpact > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <span className={`text-[10px] font-semibold ${estimatedImpact > 0 ? 'text-emerald-primary' : 'text-rose-600'}`}>
                               ({estimatedImpact > 0 ? '+' : ''}{estimatedImpact.toFixed(2)})
                             </span>
                           )}
@@ -635,8 +619,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
                                   className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-amber-600 hover:bg-white'
+                                      ? 'bg-gold text-white border-gold shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-gold hover:bg-white'
                                   }`}
                                   title="لم يكتب الدرس / الكراس"
                                 >
@@ -646,8 +630,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
-                                      ? 'bg-[#0D2C3B] text-white border-[#0D2C3B] shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-[#0D2C3B] hover:bg-white'
+                                      ? 'bg-[#1A1C1E] text-white border-[#1A1C1E] shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-[#1A1C1E] hover:bg-white'
                                   }`}
                                   title="شغب وسلوك سيء"
                                 >
@@ -657,8 +641,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
                                   className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.goodParticipation?.includes(student.id)
-                                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-emerald-600 hover:bg-white'
+                                      ? 'bg-emerald-primary text-white border-emerald-primary shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-emerald-primary hover:bg-white'
                                   }`}
                                   title="مشاركة إيجابية"
                                 >
@@ -671,7 +655,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               </div>
 
               {/* 2. Desktop Table View (Screens >= 768px) */}
-              <div className="hidden md:block bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+              <div className="hidden md:block bg-white border border-slate-200/90 rounded-xl shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs border-collapse">
                     <thead>
@@ -723,8 +707,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-amber-600 hover:bg-white'
+                                      ? 'bg-gold text-white border-gold shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-gold hover:bg-white'
                                   }`}
                                   title="لم يكتب الدرس / الكراس"
                                 >
@@ -734,8 +718,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
-                                      ? 'bg-[#0D2C3B] text-white border-[#0D2C3B] shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-[#0D2C3B] hover:bg-white'
+                                      ? 'bg-[#1A1C1E] text-white border-[#1A1C1E] shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-[#1A1C1E] hover:bg-white'
                                   }`}
                                   title="شغب وسلوك سيء"
                                 >
@@ -745,8 +729,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.goodParticipation?.includes(student.id)
-                                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
-                                      : 'border-transparent text-slate-500 hover:text-emerald-600 hover:bg-white'
+                                      ? 'bg-emerald-primary text-white border-emerald-primary shadow-xs'
+                                      : 'border-transparent text-slate-500 hover:text-emerald-primary hover:bg-white'
                                   }`}
                                   title="مشاركة إيجابية"
                                 >
@@ -767,7 +751,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             {/* Estimated Penalty in Continuous Eval */}
                             <td className="p-3 text-center font-bold font-mono text-sm border-r border-slate-100 bg-slate-50/50">
                               {estimatedImpact > 0 ? (
-                                <span className="text-emerald-600 font-bold">+{estimatedImpact.toFixed(2)} ن</span>
+                                <span className="text-emerald-primary font-bold">+{estimatedImpact.toFixed(2)} ن</span>
                               ) : estimatedImpact < 0 ? (
                                 <span className="text-rose-600 font-bold">{estimatedImpact.toFixed(2)} ن</span>
                               ) : (
@@ -782,235 +766,20 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 </div>
               </div>
             </div>
-          ) : (
-            /* Classroom Seating Plan (مخطط الجلوس داخل حجرة الدراسة) */
-            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-6">
-              {/* Classroom Header & Blackboard */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 text-xs font-bold text-slate-500 px-1">
-                <div className="flex items-center justify-between w-full sm:w-auto gap-2">
-                  <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
-                    <span>🧱</span>
-                    <span>جهة الحائط</span>
-                  </span>
-                  <span className="sm:hidden flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
-                    <span>🚪</span>
-                    <span>جهة الباب</span>
-                  </span>
-                </div>
-                <div className="w-full sm:flex-1 max-w-lg mx-auto bg-slate-900 text-slate-100 py-2.5 px-4 rounded-xl text-center shadow-sm border border-slate-800 font-black flex items-center justify-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                  <span className="truncate">السبورة الحائطية ومنصة الأستاذ</span>
-                </div>
-                <span className="hidden sm:flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-[11px]">
-                  <span>🚪</span>
-                  <span>جهة الباب</span>
-                </span>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 px-1 mb-2">
-                <label className="text-[11px] font-bold text-slate-500">عدد الصفوف:</label>
-                <select
-                  value={seatingCols}
-                  onChange={(e) => setSeatingCols(Number(e.target.value))}
-                  className="bg-white border border-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-emerald-500"
-                >
-                  <option value={2}>صفان (2)</option>
-                  <option value={3}>3 صفوف</option>
-                  <option value={4}>4 صفوف</option>
-                </select>
-              </div>
-
-              {/* Classroom Seating Grid: Rows of Double Desks */}
-              <div
-                className="grid gap-4"
-                style={{ gridTemplateColumns: `repeat(${seatingCols}, minmax(0, 1fr))` }}
-              >
-                {Array.from({ length: Math.ceil(filteredStudents.length / 2) }).map((_, deskIndex) => {
-                  const student1 = filteredStudents[deskIndex * 2];
-                  const student2 = filteredStudents[deskIndex * 2 + 1];
-
-                  return (
-                    <div
-                      key={deskIndex}
-                      className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-2xs hover:border-slate-300 transition-all flex flex-col justify-between gap-2.5"
-                    >
-                      {/* Desk Header */}
-                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 border-b border-slate-100 pb-1.5">
-                        <span className="flex items-center gap-1">
-                          <span>طاولة ثنائية</span>
-                          <span className="font-mono text-slate-600 font-black">#{deskIndex + 1}</span>
-                        </span>
-                        <span className="text-[10px] text-slate-400">الصف {Math.floor(deskIndex / seatingCols) + 1}</span>
-                      </div>
-
-                      {/* Seats Pair */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Student 1 (Right Seat) */}
-                        {student1 ? (
-                          <div className="space-y-1.5 p-2 rounded-lg bg-slate-50/70 border border-slate-100">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-mono text-[11px] font-black text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                #{student1.numberInList}
-                              </span>
-                              {student1.isRepeater && (
-                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                                  معيد
-                                </span>
-                              )}
-                            </div>
-                            <div className="font-bold text-xs text-slate-900 truncate" title={student1.fullName}>
-                              {student1.fullName}
-                            </div>
-                            
-                            {/* Current Status Pill with quick cycle on click */}
-                            <button
-                              type="button"
-                              onClick={() => handleCycleStatus(student1.id)}
-                              className={`w-full py-1 px-1.5 rounded text-[11px] font-black text-center transition-all cursor-pointer border ${
-                                (activeAttendance[student1.id] || 'PRESENT') === 'PRESENT'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-rose-50 text-rose-700 border-rose-200'
-                              }`}
-                              title="انقر لتبديل الحالة سريعاً"
-                            >
-                              {(activeAttendance[student1.id] || 'PRESENT') === 'PRESENT' ? 'حاضر ✔' : 'غائب ✖'}
-                            </button>
-                            <div className="flex items-center justify-between gap-1 mt-1">
-                                  <button
-                                    onClick={() => handleToggleBehavior(student1.id, 'unwrittenLessons')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.unwrittenLessons?.includes(student1.id)
-                                        ? 'bg-amber-500 text-white border-amber-600'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="لم يكتب الدرس"
-                                  >
-                                    الكراس -
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleBehavior(student1.id, 'disruptions')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.disruptions?.includes(student1.id)
-                                        ? 'bg-[#0D2C3B] text-white border-[#0D2C3B]'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="شغب وسلوك سيء"
-                                  >
-                                    شغب -
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleBehavior(student1.id, 'goodParticipation')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.goodParticipation?.includes(student1.id)
-                                        ? 'bg-emerald-500 text-white border-emerald-600'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="مشاركة إيجابية"
-                                  >
-                                    مشاركة +
-                                  </button>
-                            </div>
-
-                          </div>
-                        ) : (
-                          <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center text-slate-300 text-[11px] flex items-center justify-center">
-                            مقعد شاغر
-                          </div>
-                        )}
-
-                        {/* Student 2 (Left Seat) */}
-                        {student2 ? (
-                          <div className="space-y-1.5 p-2 rounded-lg bg-slate-50/70 border border-slate-100">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-mono text-[11px] font-black text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                #{student2.numberInList}
-                              </span>
-                              {student2.isRepeater && (
-                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                                  معيد
-                                </span>
-                              )}
-                            </div>
-                            <div className="font-bold text-xs text-slate-900 truncate" title={student2.fullName}>
-                              {student2.fullName}
-                            </div>
-                            
-                            {/* Current Status Pill with quick cycle on click */}
-                            <button
-                              type="button"
-                              onClick={() => handleCycleStatus(student2.id)}
-                              className={`w-full py-1 px-1.5 rounded text-[11px] font-black text-center transition-all cursor-pointer border ${
-                                (activeAttendance[student2.id] || 'PRESENT') === 'PRESENT'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-rose-50 text-rose-700 border-rose-200'
-                              }`}
-                              title="انقر لتبديل الحالة سريعاً"
-                            >
-                              {(activeAttendance[student2.id] || 'PRESENT') === 'PRESENT' ? 'حاضر ✔' : 'غائب ✖'}
-                            </button>
-                            <div className="flex items-center justify-between gap-1 mt-1">
-                                  <button
-                                    onClick={() => handleToggleBehavior(student2.id, 'unwrittenLessons')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.unwrittenLessons?.includes(student2.id)
-                                        ? 'bg-amber-500 text-white border-amber-600'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="لم يكتب الدرس"
-                                  >
-                                    الكراس -
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleBehavior(student2.id, 'disruptions')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.disruptions?.includes(student2.id)
-                                        ? 'bg-[#0D2C3B] text-white border-[#0D2C3B]'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="شغب وسلوك سيء"
-                                  >
-                                    شغب -
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleBehavior(student2.id, 'goodParticipation')}
-                                    className={`flex-1 py-1 px-1 rounded cursor-pointer font-bold text-[9px] transition-colors border ${
-                                      activeSession?.goodParticipation?.includes(student2.id)
-                                        ? 'bg-emerald-500 text-white border-emerald-600'
-                                        : 'bg-slate-50 text-slate-500 hover:bg-white border-transparent'
-                                    }`}
-                                    title="مشاركة إيجابية"
-                                  >
-                                    مشاركة +
-                                  </button>
-                            </div>
-
-                          </div>
-                        ) : (
-                          <div className="p-3 rounded-lg border border-dashed border-slate-200 text-center text-slate-300 text-[11px] flex items-center justify-center">
-                            مقعد شاغر
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
 
               {/* Seating Guide Legend */}
               <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-600 font-medium">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900">دليل الحالات:</span>
-                  <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[11px]">الغياب -</span>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[11px]">الكراس -</span>
-                  <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[11px]">شغب -</span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[11px]">مشاركة +</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-slate-900 ml-1">دليل الحالات:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] whitespace-nowrap">الغياب -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px] whitespace-nowrap">الكراس -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[10px] whitespace-nowrap">شغب -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-emerald-800 font-bold text-[10px] whitespace-nowrap">مشاركة +</span>
                 </div>
                 <div className="text-[11px] text-slate-400">
                   💡 انقر مباشرة على حالة التلميذ لتبديلها فوراً أثناء سير الحصة
                 </div>
               </div>
-            </div>
-          )}
           </div>
         </div>
       )}

@@ -35,7 +35,7 @@ export type SanadTab =
   | 'annual_dist'
   | 'curriculum'
   | 'timetable'
-  | 'profile'
+  
   | 'settings'
   | 'prep'
   | 'documents';
@@ -74,27 +74,27 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
       items: [{ id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard }]
     },
     {
-      groupName: 'البيداغوجيا والتخطيط',
+      groupName: 'المنهاج والتخطيط',
       items: [
-        { id: 'annual_dist', label: 'التوزيع السنوي والتدرجات', icon: CalendarRange },
-        { id: 'curriculum', label: 'المقاطع والوحدات التعليمية', icon: BookOpen },
-        { id: 'prep', label: 'المذكرات البيداغوجية (PDF)', icon: FileText },
+        { id: 'timetable', label: 'جدول التوقيت', icon: CalendarDays },
+        { id: 'annual_dist', label: 'التوزيع السنوي', icon: CalendarRange },
+        { id: 'curriculum', label: 'المنهاج', icon: BookOpen },
+        { id: 'prep', label: 'المذكرات', icon: FileText },
         { id: 'sessions', label: 'دفتر النصوص', icon: Edit3 }
       ]
     },
     {
-      groupName: 'الإدارة والنتائج',
+      groupName: 'التقويم',
       items: [
-        { id: 'classes', label: 'تسيير الأقسام', icon: Users },
-        { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
-        { id: 'grades', label: 'دفتر التنقيط', icon: Star },
-        { id: 'council', label: 'مجالس الأقسام', icon: BarChart3 },
-        { id: 'timetable', label: 'جدول الحصص', icon: CalendarDays },
-        { id: 'documents', label: 'الوثائق البيداغوجية', icon: FileText }
+        { id: 'classes', label: 'الأفواج', icon: Users },
+        { id: 'attendance', label: 'الحضور', icon: UserCheck },
+        { id: 'grades', label: 'النقاط', icon: Star },
+        { id: 'council', label: 'المجالس', icon: BarChart3 },
+        { id: 'documents', label: 'الوثائق', icon: FileText }
       ]
     },
     {
-      groupName: 'الحساب والإعدادات',
+      groupName: 'النظام',
       items: [
         { id: 'settings', label: 'الإعدادات', icon: Settings }
       ]
@@ -143,13 +143,13 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
         <div className="h-16 px-4 flex items-center justify-between border-b border-[#1A2E35] shrink-0">
           {isCollapsed ? (
             <div className="mx-auto">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0D6547] to-[#084530] flex items-center justify-center text-white font-black text-base shadow-sm border border-emerald-500/40">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] flex items-center justify-center text-white font-black text-base shadow-sm border border-[var(--primary)]/40">
                 س
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0D6547] to-[#084530] flex items-center justify-center text-white font-black text-base shadow-sm border border-emerald-400/30">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] flex items-center justify-center text-white font-black text-base shadow-sm border border-[var(--primary)]/30">
                 س
               </div>
               <div className="text-right">
@@ -215,7 +215,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                     title={isCollapsed ? item.label : undefined}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer group relative ${
                       isActive
-                        ? 'bg-[#0D6547] text-white shadow-sm border border-emerald-400/30'
+                        ? 'bg-[var(--primary)] text-white shadow-sm border border-[var(--primary)]/30'
                         : 'text-slate-300 hover:text-white hover:bg-[#162B33]'
                     } ${isCollapsed ? 'justify-center px-0' : ''}`}
                     id={`sidebar-link-${item.id}`}
@@ -238,7 +238,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
 
                     {/* Active Pip Indicator for Collapsed Mode */}
                     {isCollapsed && isActive && (
-                      <span className="absolute left-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span className="absolute left-1.5 w-1.5 h-1.5 rounded-full bg-emerald-300" />
                     )}
                   </button>
                 );
@@ -252,7 +252,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
           {!isCollapsed ? (
             <div
               onClick={() => {
-                onSelectTab('profile');
+                onSelectTab('settings');
                 if (onCloseMobile) onCloseMobile();
               }}
               className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#162B33] transition-colors cursor-pointer"
@@ -280,7 +280,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
           ) : (
             <div
               onClick={() => {
-                onSelectTab('profile');
+                onSelectTab('settings');
                 if (onCloseMobile) onCloseMobile();
               }}
               className="w-10 h-10 mx-auto rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-black text-sm flex items-center justify-center cursor-pointer overflow-hidden"
@@ -305,7 +305,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:text-white hover:bg-[#162B33] transition-colors cursor-pointer"
                 title="تصدير نسخة احتياطية"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <Download className="w-3.5 h-3.5 text-[var(--primary)]" />
                 <span>حفظ محلي</span>
               </button>
 

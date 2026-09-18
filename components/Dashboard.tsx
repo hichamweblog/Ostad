@@ -151,20 +151,53 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const syllabusPercentage =
     totalRelevantUnits > 0 ? Math.round((totalCompletedUnits / totalRelevantUnits) * 100) : 45;
 
+  const isDemoData = state.profile.name === 'أستاذ المادة';
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-8 py-6 sm:py-8" id="academic-dashboard">
+      {/* Onboarding Banner for New Teachers */}
+      {isDemoData && (
+        <div className="bg-gradient-to-r from-[var(--primary)] to-[var(--color-navy)] rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
+          <div className="relative z-10">
+            <h2 className="text-2xl font-black mb-3">مرحباً بك أستاذ(ة) في منصة "معين الأستاذ"</h2>
+            <p className="text-sm text-white/90 mb-6 max-w-3xl leading-relaxed">
+              تتصفح حالياً المنصة ببيانات تجريبية واقعية للتعرف على مميزاتها.
+              للبدء بأسرع طريقة وأكثرها دقة بحسابك الخاص، لا تقم بإدخال الأقسام يدوياً! 
+              توجّه إلى <strong className="bg-white/20 px-1.5 py-0.5 rounded mx-1">تسيير الأقسام</strong> ثم اختر استيراد ملف "الرقمنة (Excel)" أو "الممتاز".
+              ستقوم المنصة آلياً باكتشاف المستويات، الشعب، وتسجيل جميع تلاميذك بضغطة زر واحدة!
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => onNavigate('classes')}
+                className="px-5 py-2.5 bg-white text-[#0D2C3B] hover:bg-[var(--primary-soft)] font-bold rounded-xl shadow-lg transition-transform hover:-translate-y-1 cursor-pointer flex items-center gap-2 text-sm w-fit"
+              >
+                <Users className="w-5 h-5" />
+                <span>الذهاب إلى استيراد الأقسام والتلاميذ</span>
+              </button>
+              <button
+                onClick={() => onNavigate('settings')}
+                className="px-5 py-2.5 bg-black/20 text-white hover:bg-black/30 font-bold rounded-xl shadow-lg transition-transform hover:-translate-y-1 cursor-pointer flex items-center gap-2 text-sm w-fit border border-white/10"
+              >
+                <span>إعداد ملفي الشخصي وتفريغ البيانات</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* 1. Quiet, Functional Top Header (Clean & Uncluttered) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#DDD7CB]">
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-[#0F172A] font-display tracking-tight">
-            أهلاً بك، أستاذ {state.profile.name || 'هشام'}
+            أهلاً بك، {(state.profile.name || 'أستاذ المادة').includes('أستاذ') ? (state.profile.name || 'أستاذ المادة') : `الأستاذ(ة) ${state.profile.name}`}
           </h2>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsTodaySessionsModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[#0D6547] hover:bg-[#094732] text-white font-bold text-xs shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs shadow-xs flex items-center gap-2 transition-all cursor-pointer"
             id="btn-quick-today-sessions"
           >
             <Edit3 className="w-3.5 h-3.5" />
@@ -186,11 +219,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 1: إجمالي التلاميذ */}
         <div
           onClick={() => onNavigate('classes')}
-          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[#0D6547] transition-all cursor-pointer"
+          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer"
         >
           <div className="text-xs font-bold text-[#64748B] flex items-center justify-between">
             <span>إجمالي التلاميذ</span>
-            <Users className="w-4 h-4 text-[#0D6547]" />
+            <Users className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div className="text-2xl sm:text-3xl font-black text-[#0F172A] font-display mt-2">
             {state.students.length === 0 && state.classes.length === 0 ? "0" : state.students.length}
@@ -203,17 +236,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 2: الحصص المبرمجة - يفتح نافذة إدخال حصص اليوم */}
         <div
           onClick={() => setIsTodaySessionsModalOpen(true)}
-          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[#0D6547] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-[#0D6547]/50 hover:-translate-y-1 transition-all duration-300 ease-out cursor-pointer group"
+          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[var(--primary)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-[var(--primary)]/50 hover:-translate-y-1 transition-all duration-300 ease-out cursor-pointer group"
           title="انقر لإدخال وتوثيق حصص اليوم في الدفتر اليومي"
         >
           <div className="text-xs font-bold text-[#64748B] flex items-center justify-between">
             <span>حصص اليوم المبرمجة</span>
-            <CalendarDays className="w-4 h-4 text-[#0D6547] group-hover:scale-110 transition-transform" />
+            <CalendarDays className="w-4 h-4 text-[var(--primary)] group-hover:scale-110 transition-transform" />
           </div>
           <div className="text-2xl sm:text-3xl font-black text-[#0F172A] font-display mt-2">
             {todaySlots.length} حصص اليوم
           </div>
-          <div className="text-[11px] text-[#0D6547] mt-1 font-bold flex items-center gap-1">
+          <div className="text-[11px] text-[var(--primary)] mt-1 font-bold flex items-center gap-1">
             <span>انقر لإدخال حصص اليوم ←</span>
           </div>
         </div>
@@ -221,11 +254,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 3: الحصص المنجزة */}
         <div
           onClick={() => onNavigate('sessions')}
-          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[#0D6547] transition-all cursor-pointer"
+          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer"
         >
           <div className="text-xs font-bold text-[#64748B] flex items-center justify-between">
             <span>الدفتر اليومي</span>
-            <Edit3 className="w-4 h-4 text-[#0D6547]" />
+            <Edit3 className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div className="text-2xl sm:text-3xl font-black text-[#0F172A] font-display mt-2">
             {state.sessions.length} حصة
@@ -236,20 +269,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 4: تقدم المنهاج */}
         <div
           onClick={() => onNavigate('annual_dist')}
-          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[#0D6547] transition-all cursor-pointer"
+          className="bg-white p-5 rounded-2xl border border-[#DDD7CB] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer"
         >
           <div className="text-xs font-bold text-[#64748B] flex items-center justify-between">
             <span>تقدم المنهاج</span>
-            <span className="text-[11px] font-bold text-[#0D6547] bg-[#E6F4ED] px-2 py-0.5 rounded-md">
+            <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2 py-0.5 rounded-md">
               الفصل {state.activeTrimester}
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#0D6547] font-display mt-2">
+          <div className="text-2xl sm:text-3xl font-black text-[var(--primary)] font-display mt-2">
             {syllabusPercentage}%
           </div>
           <div className="w-full bg-[#EBE6DC] rounded-full h-1.5 mt-2 overflow-hidden">
             <div
-              className="bg-[#0D6547] h-1.5 rounded-full transition-all duration-500"
+              className="bg-[var(--primary)] h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, syllabusPercentage)}%` }}
             />
           </div>
@@ -264,7 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="bg-white rounded-2xl border border-[#DDD7CB] p-6 shadow-xs space-y-5">
             <div className="flex items-center justify-between border-b border-[#EBE6DC] pb-3">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#0D6547] animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[var(--primary)] animate-pulse" />
                 <h3 className="font-black text-sm text-[#0F172A] font-display">
                   {activeSlot ? 'الحصة الجارية الآن أو القادمة' : 'برنامج اليوم'}
                 </h3>
@@ -309,7 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       }
                       onNavigate('attendance');
                     }}
-                    className="flex-1 py-3 rounded-xl bg-[#0D6547] hover:bg-[#094732] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
+                    className="flex-1 py-3 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
                     id="btn-open-attendance"
                   >
                     <PlayCircle className="w-4 h-4" />
@@ -350,7 +383,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       key={slot.id}
                       className={`flex items-center justify-between p-3 rounded-xl border text-xs transition-colors ${
                         isCurrent
-                          ? 'bg-[#E6F4ED]/60 border-[#0D6547] font-bold'
+                          ? 'bg-[var(--primary-soft)]/60 border-[var(--primary)] font-bold'
                           : 'bg-[#FAF8F4] border-[#DDD7CB] text-[#475569]'
                       }`}
                     >
@@ -360,7 +393,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <span className="text-[#64748B] hidden sm:inline">{cls?.stream}</span>
                       </div>
                       <span className={`text-[11px] px-2 py-0.5 rounded ${
-                        isCurrent ? 'bg-[#0D6547] text-white' : 'text-[#64748B]'
+                        isCurrent ? 'bg-[var(--primary)] text-white' : 'text-[#64748B]'
                       }`}>
                         {isCurrent ? 'الحصة الحالية' : 'مجدولة'}
                       </span>
@@ -379,7 +412,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </h4>
               <button
                 onClick={() => onNavigate('sessions')}
-                className="text-xs font-bold text-[#0D6547] hover:underline flex items-center gap-1 cursor-pointer"
+                className="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <span>فتح الدفتر اليومي</span>
                 <ArrowLeft className="w-3 h-3" />
@@ -395,7 +428,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="font-bold text-[#0F172A]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
                       <div className="text-[11px] text-[#64748B] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
                     </div>
-                    <span className="text-[11px] font-bold text-[#0D6547] bg-[#E6F4ED] px-2.5 py-0.5 rounded-full shrink-0">
+                    <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full shrink-0">
                       موثقة
                     </span>
                   </div>
@@ -420,10 +453,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* Card 1: دفتر العلامات */}
               <button
                 onClick={() => onNavigate('grades')}
-                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[#E6F4ED] border border-[#DDD7CB] hover:border-[#0D6547] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
+                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[var(--primary-soft)] border border-[#DDD7CB] hover:border-[var(--primary)] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-2.5">
-                  <BarChart3 className="w-4 h-4 text-[#0D6547]" />
+                  <BarChart3 className="w-4 h-4 text-[var(--primary)]" />
                   <span>دفتر التنقيط والعلامات</span>
                 </div>
                 <ArrowLeft className="w-3.5 h-3.5 text-[#64748B] group-hover:-translate-x-1 transition-transform" />
@@ -432,10 +465,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* Card 2: المنهاج والتوزيع السنوي */}
               <button
                 onClick={() => onNavigate('curriculum')}
-                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[#E6F4ED] border border-[#DDD7CB] hover:border-[#0D6547] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
+                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[var(--primary-soft)] border border-[#DDD7CB] hover:border-[var(--primary)] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 text-[#0D6547]" />
+                  <BookOpen className="w-4 h-4 text-[var(--primary)]" />
                   <span>البرامج والمنهاج الوزاري</span>
                 </div>
                 <ArrowLeft className="w-3.5 h-3.5 text-[#64748B] group-hover:-translate-x-1 transition-transform" />
@@ -444,10 +477,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* Card 3: مجالس الأقسام */}
               <button
                 onClick={() => onNavigate('council')}
-                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[#E6F4ED] border border-[#DDD7CB] hover:border-[#0D6547] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
+                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[var(--primary-soft)] border border-[#DDD7CB] hover:border-[var(--primary)] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-2.5">
-                  <Users className="w-4 h-4 text-[#0D6547]" />
+                  <Users className="w-4 h-4 text-[var(--primary)]" />
                   <span>تحليل نتائج مجالس الأقسام</span>
                 </div>
                 <ArrowLeft className="w-3.5 h-3.5 text-[#64748B] group-hover:-translate-x-1 transition-transform" />
@@ -456,10 +489,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* Card 4: التوزيع السنوي والتدرجات */}
               <button
                 onClick={() => onNavigate('annual_dist')}
-                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[#E6F4ED] border border-[#DDD7CB] hover:border-[#0D6547] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
+                className="w-full p-3 rounded-xl bg-[#FAF8F4] hover:bg-[var(--primary-soft)] border border-[#DDD7CB] hover:border-[var(--primary)] text-[#0F172A] flex items-center justify-between transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-2.5">
-                  <CalendarRange className="w-4 h-4 text-[#0D6547]" />
+                  <CalendarRange className="w-4 h-4 text-[var(--primary)]" />
                   <span>التوزيع السنوي والتدرجات</span>
                 </div>
                 <ArrowLeft className="w-3.5 h-3.5 text-[#64748B] group-hover:-translate-x-1 transition-transform" />
@@ -476,7 +509,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </h4>
               <button
                 onClick={() => setShowTaskInput(!showTaskInput)}
-                className="text-xs text-[#0D6547] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                className="text-xs text-[var(--primary)] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
               >
                 <Plus className="w-3 h-3" />
                 <span>إضافة</span>
@@ -491,12 +524,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   value={newTaskText}
                   onChange={e => setNewTaskText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addTask()}
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#DDD7CB] text-xs font-medium focus:outline-[#0D6547]"
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#DDD7CB] text-xs font-medium focus:outline-[var(--primary)]"
                   autoFocus
                 />
                 <button
                   onClick={addTask}
-                  className="px-3 py-1.5 rounded-lg bg-[#0D6547] text-white text-xs font-bold cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-bold cursor-pointer"
                 >
                   حفظ
                 </button>
@@ -518,7 +551,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     className="flex items-center gap-2 text-right flex-1 cursor-pointer"
                   >
                     {task.done ? (
-                      <CheckSquare className="w-3.5 h-3.5 text-[#0D6547] shrink-0" />
+                      <CheckSquare className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
                     ) : (
                       <Square className="w-3.5 h-3.5 text-[#64748B] shrink-0" />
                     )}
@@ -543,7 +576,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200" dir="rtl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-[#0D6547]" />
+                <CalendarDays className="w-5 h-5 text-[var(--primary)]" />
                 <h3 className="text-base font-black text-slate-900">
                   حصص اليوم المبرمجة ({dayNames[currentDayOfWeek]})
                 </h3>
@@ -575,7 +608,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   return (
                     <div
                       key={slot.id}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/50 hover:border-emerald-300 transition-all flex items-center justify-between gap-3"
+                      className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-[var(--primary-soft)]/50 hover:border-[var(--primary)] transition-all flex items-center justify-between gap-3"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -596,7 +629,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                       <div className="flex items-center gap-2">
                         {isRecorded ? (
-                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
+                          <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-1 rounded-lg">
                             تم التدوين ✓
                           </span>
                         ) : null}
@@ -608,7 +641,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             setIsTodaySessionsModalOpen(false);
                             onNavigate('sessions');
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-[#0D6547] hover:bg-[#084530] text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                          className="px-3 py-1.5 rounded-lg bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
                         >
                           تدوين بالدفتر اليومي
                         </button>
@@ -625,7 +658,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   setIsTodaySessionsModalOpen(false);
                   onNavigate('timetable');
                 }}
-                className="text-[#0D6547] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                className="text-[var(--primary)] hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <span>فتح جدول الحصص الأسبوعي الكامل</span>
                 <ArrowLeft className="w-3.5 h-3.5" />

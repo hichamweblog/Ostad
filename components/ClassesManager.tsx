@@ -1,5 +1,6 @@
 'use client';
 
+import { showToast } from '@/components/Toast';
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { AppState } from '@/lib/storage';
@@ -323,7 +324,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       }
     } catch (err: any) {
       console.error('File import error:', err);
-      alert(err.message || 'حدث خطأ أثناء قراءة الملف. يرجى التأكد من أنه ملف الرقمنة الأصلي.');
+      showToast(err.message || 'حدث خطأ أثناء قراءة الملف. يرجى التأكد من أنه ملف الرقمنة الأصلي.', 'error');
     }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -340,7 +341,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     try {
       const result = await parseMoumtazeFile(file);
       if (result.classes.length === 0) {
-        alert('لم يتم العثور على أي قوائم أقسام داخل هذا الملف. يرجى التأكد من اختيار ملف برنامج الممتاز الصحيح.');
+        showToast('لم يتم العثور على أي قوائم أقسام داخل هذا الملف. يرجى التأكد من اختيار ملف برنامج الممتاز الصحيح.', 'warning');
         return;
       }
 
@@ -350,7 +351,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       setIsMoumtazeModalOpen(true);
     } catch (err: any) {
       console.error('Error parsing Moumtaze file:', err);
-      alert('حدث خطأ أثناء قراءة ملف الممتاز: ' + (err.message || 'تأكد من سلامة ملف Excel'));
+      showToast('حدث خطأ أثناء قراءة ملف الممتاز: ' + (err.message || 'تأكد من سلامة ملف Excel'), 'error');
     } finally {
       setIsParsingMoumtaze(false);
       if (moumtazeFileInputRef.current) moumtazeFileInputRef.current.value = '';
@@ -374,7 +375,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
   const handleConfirmMoumtazeImport = () => {
     if (!moumtazeData || selectedMoumtazeClassIds.length === 0) {
-      alert('يرجى تحديد قسم واحد على الأقل للاستيراد.');
+      showToast('يرجى تحديد قسم واحد على الأقل للاستيراد.', 'warning');
       return;
     }
 
@@ -733,12 +734,9 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <Users className="w-5 h-5 text-amber-600" />
-            <span>إدارة الأقسام واستعمال الزمن وقوائم التلاميذ</span>
+            <Users className="w-5 h-5 text-[var(--warning)]" />
+            <span>الأفواج التربوية</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            إدخال أقسام الموسم الدراسي الجديد (عادة من 7 إلى 10 أقسام)، ضبط التوقيت، واستيراد القوائم من منصة «الرقمنة»
-          </p>
         </div>
 
         {/* Sub-tab Navigation */}
@@ -778,14 +776,14 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
       {/* Notification Toast */}
       {importNotification && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+        <div className="p-3 rounded-xl bg-[var(--primary-soft)] border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[var(--primary)] shrink-0" />
             <span>{importNotification}</span>
           </div>
           <button
             onClick={() => setImportNotification(null)}
-            className="text-emerald-700 hover:text-emerald-900 font-bold"
+            className="text-[var(--primary)] hover:text-emerald-900 font-bold"
           >
             إغلاق
           </button>
@@ -803,7 +801,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             </div>
             <button
               onClick={handleOpenAddClass}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 text-white text-xs font-bold shadow-xs cursor-pointer"
               id="btn-add-new-class"
             >
               <Plus className="w-4 h-4" />
@@ -871,7 +869,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     </div>
                     <div className="flex justify-between pt-1 border-t border-slate-100">
                       <span className="text-slate-500">عدد التلاميذ:</span>
-                      <span className="font-bold text-emerald-700">{studentsCount} تلميذ</span>
+                      <span className="font-bold text-[var(--primary)]">{studentsCount} تلميذ</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">الحصص الأسبوعية:</span>
@@ -899,7 +897,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         state.activeClassId === cls.id
                           ? 'bg-amber-600 text-white'
-                          : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                          : 'bg-[var(--warning-soft)] text-amber-800 hover:bg-[var(--warning-soft)]'
                       }`}
                     >
                       {state.activeClassId === cls.id ? 'القسم النشط ✓' : 'تفعيل'}
@@ -1049,7 +1047,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] hover:bg-[var(--primary)] text-white text-xs font-bold shadow-xs cursor-pointer"
                 title="استيراد ملف Excel أو CSV مستخرج من منصة الرقمنة لوزارة التربية"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1122,7 +1120,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 <div className="flex items-center justify-center gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-bold cursor-pointer"
                   >
                     استيراد من ملف الرقمنة (Excel)
                   </button>
@@ -1241,7 +1239,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       </button>
                       <button
                         onClick={() => promptDeleteStudent(student)}
-                        className="p-2 text-rose-400 hover:text-rose-600 cursor-pointer bg-rose-50 rounded-lg"
+                        className="p-2 text-[var(--danger)] hover:opacity-80 cursor-pointer bg-[var(--danger-soft)] rounded-lg"
                         title="حذف"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1346,7 +1344,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               </button>
               <button
                 onClick={handleSaveClass}
-                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 text-white text-xs font-bold"
               >
                 حفظ القسم
               </button>
@@ -1589,7 +1587,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200" dir="rtl">
             <div className="flex items-center gap-3 text-rose-600">
-              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-rose-600" />
               </div>
               <div>
@@ -1621,7 +1619,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               <button
                 type="button"
                 onClick={handleExecuteDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-[var(--danger)] hover:opacity-90 text-[var(--color-primary-fg)] text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>نعم، تأكيد الحذف</span>
@@ -1735,7 +1733,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                           <h4 className="font-black text-slate-900 text-sm">{cls.className}</h4>
                         </div>
                         {cls.roomNumber && (
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--warning-soft)] text-amber-900 border border-amber-200">
                             القاعة {cls.roomNumber}
                           </span>
                         )}
@@ -1765,7 +1763,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                        <span className="font-bold text-emerald-800 bg-[var(--primary-soft)] px-2 py-0.5 rounded-md border border-emerald-100">
                           {cls.students.length} تلميذاً
                         </span>
                         <div className="flex items-center gap-1.5 text-slate-500 text-[10px]">
@@ -1811,7 +1809,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                   type="button"
                   onClick={handleConfirmMoumtazeImport}
                   disabled={selectedMoumtazeClassIds.length === 0}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary)] disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>تأكيد استيراد الأقسام المحددة ({selectedMoumtazeClassIds.length})</span>

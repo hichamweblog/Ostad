@@ -1,8 +1,10 @@
 'use client';
 
+import { ConfirmDialog } from './ConfirmDialog';
 import React, { useState } from 'react';
 import { AppState } from '@/lib/storage';
-import { OFFICIAL_CURRICULUM, OFFICIAL_LEVELS, getMergedCurriculumUnits } from '@/lib/curriculum-data';
+import { OFFICIAL_CURRICULUM, OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
+import { useEffect } from 'react';
 import { CurriculumUnit, GradeLevel, LessonStatus } from '@/lib/types';
 import {
   BookOpen,
@@ -34,6 +36,10 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   onUpdateState,
   onPrepareUnit
 }) => {
+  const [, setLoaded] = useState(false);
+  useEffect(() => {
+    loadAllCurriculum().then(() => setLoaded(true));
+  }, []);
   const activeClass = state.classes.find(c => c.id === state.activeClassId);
   const [selectedLevel, setSelectedLevel] = useState<GradeLevel>(
     activeClass?.level || '3AS'
@@ -73,6 +79,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   // State for inline handwritten note insertion
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [activeNoteText, setActiveNoteText] = useState<string>('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const getUnitNote = (unitId: string): string => {
     const prog = state.lessonProgress.find(p => p.unitId === unitId);
@@ -202,19 +209,18 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   };
 
   const handleDeleteCustomUnit = (unitId: string) => {
-    if (confirm('هل أنت متأكد من حذف هذه الوحدة المخصصة؟')) {
-      onUpdateState(prev => ({
-        ...prev,
-        customUnits: prev.customUnits.filter(u => u.id !== unitId)
-      }));
-    }
+    onUpdateState(prev => ({
+      ...prev,
+      customUnits: prev.customUnits.filter(u => u.id !== unitId)
+    }));
+    setDeleteConfirmId(null);
   };
 
   const statusLabels: Record<LessonStatus, { label: string; bg: string; text: string }> = {
     NOT_STARTED: { label: 'لم يبدأ', bg: 'bg-slate-100', text: 'text-slate-600' },
     PLANNED: { label: 'مخطط له', bg: 'bg-blue-50', text: 'text-blue-700' },
     IN_PROGRESS: { label: 'قيد الإنجاز', bg: 'bg-amber-50', text: 'text-amber-800' },
-    COMPLETED: { label: 'أُنجز بحمد الله', bg: 'bg-emerald-50', text: 'text-emerald-800' },
+    COMPLETED: { label: 'أُنجز بحمد الله', bg: 'bg-[var(--primary-soft)]', text: 'text-emerald-800' },
     NEEDS_REMEDIAL: { label: 'يحتاج معالجة / إعادة', bg: 'bg-rose-50', text: 'text-rose-700' }
   };
 
@@ -224,12 +230,9 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-amber-600" />
-            <span>المنهاج والتدرج السنوي</span>
+            <BookOpen className="w-5 h-5 text-gold" />
+            <span>المنهاج</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            جميع الوحدات منقولة حرفياً من التدرجات السنوية الرسمية ومؤشرات الأداء 2025–2026 مع روابط المذكرات
-          </p>
         </div>
       </div>
 
@@ -249,7 +252,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
             >
               <div className="text-xs font-bold">{lvl.name}</div>
               <div className={`text-[11px] mt-1 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                {lvl.hoursTotal} ساعة • {lvl.unitsCount} وحدة • <span className="font-bold text-amber-500">{lvl.weeklyHours} سا/أسبوع</span>
+                {lvl.hoursTotal} ساعة • {lvl.unitsCount} وحدة • <span className="font-bold text-gold">{lvl.weeklyHours} سا/أسبوع</span>
               </div>
             </button>
           );
@@ -285,7 +288,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
           <div key={sectionName} className="space-y-3">
             {/* Section Header */}
             <div className="bg-slate-100/90 px-4 py-2 rounded-lg border border-slate-200 flex items-center justify-between">
-              <h3 className="text-xs font-black text-slate-800">{sectionName}</h3>
+              <h3 className="text-xs font-bold text-slate-800">{sectionName}</h3>
               <span className="text-[11px] font-semibold text-slate-500">
                 {units.length} وحدات
               </span>
@@ -307,18 +310,18 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                   >
                     {/* Unit Main Header Row */}
                     <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center text-xs font-black shrink-0">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
                           {unit.unitNumber}
                         </span>
 
-                        <div className="space-y-1">
+                        <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                            <h4 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
                               {unit.title}
                             </h4>
                             {isCustom && (
-                              <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded bg-purple-50 text-navy border border-purple-200 text-[10px] font-bold">
                                 مخصص
                               </span>
                             )}
@@ -331,16 +334,16 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                           </div>
 
                           {/* Competence full text & Drive PDF badge */}
-                          <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                          <div className="flex flex-col gap-1.5 pt-1">
                             {unit.targetedCompetence && (
-                              <span className="px-2 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200 text-[11px] font-bold line-clamp-1 max-w-[500px]" title={unit.targetedCompetence}>
+                              <div className="px-2 py-1 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200 text-[11px] font-bold truncate" title={unit.targetedCompetence}>
                                 الكفاءة: {unit.targetedCompetence}
-                              </span>
+                              </div>
                             )}
                             {getUnitNote(unit.id) && (
-                              <span className="text-[11px] text-[#0D6547] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded truncate max-w-[280px]">
+                              <div className="text-[11px] text-[#2E7D9B] bg-[var(--primary-soft)] border border-emerald-200 px-2 py-1 rounded truncate">
                                 📝 {getUnitNote(unit.id)}
-                              </span>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -373,7 +376,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                               setActiveNoteText(getUnitNote(unit.id));
                             }
                           }}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#0D6547] border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[#2E7D9B] border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
                           title="أضف ملاحظة للوحدة"
                         >
                           <FileText className="w-3.5 h-3.5" />
@@ -383,17 +386,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {/* Pedagogical Lesson Plan & Embedded PDF button */}
                         <button
                           onClick={() => onPrepareUnit(unit, 'pdf')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-emerald-900 border border-[var(--primary)] text-xs font-bold transition-colors cursor-pointer"
                           title="عرض المذكرة البيداغوجية وملف PDF المدمج"
                         >
-                          <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                          <FileText className="w-3.5 h-3.5 text-emerald-primary" />
                           <span>المذكرة البيداغوجية (PDF)</span>
                         </button>
 
                         {/* Delete button if custom */}
                         {isCustom && (
                           <button
-                            onClick={() => handleDeleteCustomUnit(unit.id)}
+                            onClick={() => setDeleteConfirmId(unit.id)}
                             className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
                             title="حذف الوحدة"
                           >
@@ -415,7 +418,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                     {/* Inline Manual Note Editor Drawer */}
                     {editingNoteId === unit.id && (
                       <div className="bg-amber-50/60 border-t border-amber-200/80 p-3 flex flex-col sm:flex-row items-center gap-2">
-                        <span className="text-xs font-bold text-[#0D6547] shrink-0">
+                        <span className="text-xs font-bold text-[#2E7D9B] shrink-0">
                           📝 إضافة ملاحظة للوحدة:
                         </span>
                         <input
@@ -423,12 +426,12 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                           value={activeNoteText}
                           onChange={e => setActiveNoteText(e.target.value)}
                           placeholder="اكتب ملاحظتك البيداغوجية، تنبيه، أو توصية للدرس..."
-                          className="flex-1 w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 focus:outline-[#0D6547] text-slate-800"
+                          className="flex-1 w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 focus:outline-[#2E7D9B] text-slate-800"
                         />
                         <div className="flex items-center gap-2 self-end sm:self-auto">
                           <button
                             onClick={() => handleSaveUnitNote(unit.id)}
-                            className="px-3 py-1.5 rounded-lg bg-[#0D6547] text-white text-xs font-bold hover:bg-[#0A4F37] transition-colors cursor-pointer whitespace-nowrap"
+                            className="px-3 py-1.5 rounded-lg bg-[#2E7D9B] text-white text-xs font-bold hover:bg-[#0A4F37] transition-colors cursor-pointer whitespace-nowrap"
                           >
                             حفظ
                           </button>
@@ -449,10 +452,10 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {(unit.learningObjective || unit.targetedCompetence) && (
                           <div className="space-y-1">
                             <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                              الهدف التعلمي (وفق التدرجات السنوية ومؤشرات الأداء):
+                              <span className="w-2 h-2 rounded-full bg-emerald-primary"></span>
+                              الهدف التعلمي:
                             </span>
-                            <p className="text-emerald-900 bg-emerald-50/80 p-3 rounded-lg border border-emerald-200 font-serif font-bold leading-relaxed">
+                            <p className="text-emerald-900 bg-[var(--primary-soft)]/80 p-3 rounded-lg border border-emerald-200 font-serif font-bold leading-relaxed">
                               {unit.learningObjective || unit.targetedCompetence}
                             </p>
                           </div>
@@ -477,7 +480,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {unit.implementationMechanisms && unit.implementationMechanisms.length > 0 && (
                           <div className="space-y-1.5">
                             <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                              <span className="w-2 h-2 rounded-full bg-gold"></span>
                               آلية تنفيذ التعلمات (خطوات الإنجاز والأنشطة):
                             </span>
                             <div className="space-y-1.5 bg-amber-50/40 p-3 rounded-lg border border-amber-200/70">
@@ -510,7 +513,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {unit.indicators && unit.indicators.length > 0 && (
                           <div className="space-y-1.5">
                             <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                              <span className="w-2 h-2 rounded-full bg-emerald-primary"></span>
                               مؤشرات الأداء والتقويم:
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-700 bg-white p-3 rounded-lg border border-slate-200 font-serif leading-relaxed">
@@ -525,7 +528,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {unit.referenceTexts && unit.referenceTexts.length > 0 && (
                           <div className="space-y-1.5">
                             <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-700"></span>
+                              <span className="w-2 h-2 rounded-full bg-emerald-primary"></span>
                               السندات والنصوص الشرعية المؤطرة:
                             </span>
                             <div className="bg-stone-50 p-3 rounded-lg border border-stone-200 text-stone-900 space-y-1">
@@ -542,9 +545,9 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
                           <button
                             onClick={() => onPrepareUnit(unit, 'pdf')}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D2C3B] hover:bg-[#164e63] text-white text-xs font-bold transition-colors cursor-pointer"
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1A1C1E] hover:bg-[#256A85] text-white text-xs font-bold transition-colors cursor-pointer"
                           >
-                            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                            <FileText className="w-3.5 h-3.5 text-[var(--primary)]" />
                             <span>فتح بطاقة المذكرة وملف PDF المدمج</span>
                           </button>
                         </div>
@@ -561,10 +564,10 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
       {/* Edit / Add Unit Modal */}
       {isEditingModalOpen && editingUnit && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">
-                {editingUnit.id?.startsWith('custom') ? 'إضافة درس / وحدة جديدة' : 'تعديل بيانات الوحدة'}
+              <h3 className="text-base font-bold text-slate-900">
+                {editingUnit.id?.startsWith('custom') ? 'إضافة وحدة' : 'تعديل بيانات الوحدة'}
               </h3>
               <button
                 onClick={() => setIsEditingModalOpen(false)}
@@ -687,7 +690,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
               </button>
               <button
                 onClick={handleSaveUnit}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold hover:bg-gold text-white text-xs font-bold shadow-xs cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>حفظ التعديلات</span>
@@ -696,6 +699,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
           </div>
         </div>
       )}
-    </div>
+          <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        title="تأكيد الحذف"
+        message="هل أنت متأكد من حذف هذه الوحدة المخصصة؟"
+        onConfirm={() => { if (deleteConfirmId) handleDeleteCustomUnit(deleteConfirmId); }}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
+</div>
   );
 };

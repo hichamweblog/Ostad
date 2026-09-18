@@ -72,7 +72,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
             </td>
             <td style="width: 36%; text-align: center; vertical-align: middle;">
               <h3 style="margin: 0; font-size: 12pt; color: #0d2c3b;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
-              <h4 style="margin: 2px 0; font-size: 10.5pt; color: #0e7c61;">وزارة التربية الوطنية</h4>
+              <h4 style="margin: 2px 0; font-size: 10.5pt; color: #2E7D9B;">وزارة التربية الوطنية</h4>
               <h2 style="margin: 5px 0; font-size: 14pt; color: #0d2c3b; text-decoration: underline;">بطاقة التحليل الإحصائي لنتائج مادة العلوم الإسلامية لمجلس القسم</h2>
               <div style="font-size: 10.5pt; font-weight: bold; margin-top: 2px;">
                 القسم: <b>${activeClass?.name || 'جميع الأقسام'}</b> (${activeClass?.stream || ''})
@@ -107,7 +107,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold;">${stats.totalStudents}</td>
               <td style="border: 1px solid #000; padding: 6px;">${stats.evaluatedCount}</td>
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold;">${stats.passCount}</td>
-              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-size: 10.5pt; color: #0e7c61;">${stats.passRate.toFixed(1)}%</td>
+              <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-size: 10.5pt; color: #2E7D9B;">${stats.passRate.toFixed(1)}%</td>
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-size: 10.5pt; color: #0d2c3b;">${stats.averageScore.toFixed(2)} / 20</td>
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold; color: #16a34a;">${stats.highestScore > 0 ? stats.highestScore.toFixed(2) : '-'}</td>
               <td style="border: 1px solid #000; padding: 6px; font-weight: bold; color: #dc2626;">${stats.lowestScore > 0 ? stats.lowestScore.toFixed(2) : '-'}</td>
@@ -199,11 +199,11 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
   // Grade Bands definition
   const bands = [
     { label: 'أقل من 8', count: stats.lessThan8, color: 'bg-rose-500', textCol: 'text-rose-700', desc: 'دون المعدل بشكل حرج (معالجة مستعجلة)' },
-    { label: 'مابين 8 و 10', count: stats.between8and10, color: 'bg-amber-500', textCol: 'text-amber-700', desc: 'قريب من المعدل (قابل للاستدراك)' },
+    { label: 'مابين 8 و 10', count: stats.between8and10, color: 'bg-gold', textCol: 'text-amber-700', desc: 'قريب من المعدل (قابل للاستدراك)' },
     { label: 'مابين 10 و 12', count: stats.between10and12, color: 'bg-blue-500', textCol: 'text-blue-700', desc: 'متوسط' },
-    { label: 'مابين 12 و 14', count: stats.between12and14, color: 'bg-teal-500', textCol: 'text-teal-700', desc: 'قريب من الجيد' },
-    { label: 'مابين 14 و 16', count: stats.between14and16, color: 'bg-emerald-500', textCol: 'text-emerald-700', desc: 'جيد' },
-    { label: 'أكبر من 16', count: stats.greaterThan16, color: 'bg-indigo-600', textCol: 'text-indigo-700', desc: 'جيد جداً وممتاز' }
+    { label: 'مابين 12 و 14', count: stats.between12and14, color: 'bg-sage', textCol: 'text-sage', desc: 'قريب من الجيد' },
+    { label: 'مابين 14 و 16', count: stats.between14and16, color: 'bg-emerald-primary', textCol: 'text-emerald-primary', desc: 'جيد' },
+    { label: 'أكبر من 16', count: stats.greaterThan16, color: 'bg-navy', textCol: 'text-navy', desc: 'جيد جداً وممتاز' }
   ];
 
   return (
@@ -212,12 +212,9 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-amber-600" />
-            <span>تحليل نتائج مادة العلوم الإسلامية لمجالس الأقسام</span>
+            <BarChart3 className="w-5 h-5 text-gold" />
+            <span>المجالس</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            مطابقة للنموذج الرسمي المعتمد
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -259,7 +256,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
                   onClick={() => setSelectedTrimester(tri)}
                   className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     selectedTrimester === tri
-                      ? 'bg-amber-600 text-white'
+                      ? 'bg-gold text-white'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -282,9 +279,9 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
             <span>نسبة النجاح الفصلي</span>
-            <Percent className="w-4 h-4 text-emerald-600" />
+            <Percent className="w-4 h-4 text-emerald-primary" />
           </div>
-          <div className="text-3xl font-black text-slate-900">
+          <div className="text-3xl font-bold text-slate-900">
             {stats.passRate}%
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
@@ -298,7 +295,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
             <span>معدل القسم في المادة</span>
             <TrendingUp className="w-4 h-4 text-blue-600" />
           </div>
-          <div className="text-3xl font-black text-slate-900">
+          <div className="text-3xl font-bold text-slate-900">
             {stats.averageScore.toFixed(2)} / 20
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
@@ -310,9 +307,9 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
             <span>أعلى معدل بالقسم</span>
-            <Award className="w-4 h-4 text-amber-500" />
+            <Award className="w-4 h-4 text-gold" />
           </div>
-          <div className="text-2xl font-black text-emerald-700 font-mono">
+          <div className="text-2xl font-bold text-emerald-primary font-mono">
             {stats.highestScore > 0 ? stats.highestScore.toFixed(2) : '-'}
           </div>
           <div className="text-xs font-bold text-slate-800 truncate mt-1">
@@ -326,7 +323,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
             <span>أدنى معدل بالقسم</span>
             <AlertCircle className="w-4 h-4 text-rose-500" />
           </div>
-          <div className="text-2xl font-black text-rose-700 font-mono">
+          <div className="text-2xl font-bold text-rose-700 font-mono">
             {stats.lowestScore > 0 ? stats.lowestScore.toFixed(2) : '-'}
           </div>
           <div className="text-xs font-bold text-slate-800 truncate mt-1">
@@ -338,8 +335,8 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
       {/* Official 6-Bands Table & Visual Chart */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div>
-          <h3 className="text-base font-black text-slate-900 mb-1">
-            توزيع نتائج التلاميذ حسب الفئات الست (06) المعتمدة رسمياً
+          <h3 className="text-base font-bold text-slate-900 mb-1">
+            توزيع الفئات
           </h3>
           <p className="text-xs text-slate-500">
             هذا الجدول يطابق وثيقة مجالس الأقسام التي تقدم للإدارة التربوية في نهاية الفصل
@@ -381,7 +378,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
           })}
           <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 flex items-center justify-between">
             <span>المجموع الكلي للمقوّمين:</span>
-            <span className="font-mono font-black text-sm">{stats.evaluatedCount} تلميذ (100%)</span>
+            <span className="font-mono font-bold text-sm">{stats.evaluatedCount} تلميذ (100%)</span>
           </div>
         </div>
 
@@ -422,7 +419,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
                 );
               })}
             </tbody>
-            <tfoot className="bg-slate-100 font-black text-slate-900 border-t border-slate-200">
+            <tfoot className="bg-slate-100 font-bold text-slate-900 border-t border-slate-200">
               <tr>
                 <td className="py-2.5 px-4 border-l border-slate-200">المجموع الكلي للمقوّمين</td>
                 <td className="py-2.5 px-4 text-center font-mono border-l border-slate-200 text-sm">
@@ -451,7 +448,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
                 <div
                   key={idx}
                   style={{ width: `${widthPct}%` }}
-                  className={`${band.color} h-full flex items-center justify-center text-white text-[10px] font-black font-mono transition-all`}
+                  className={`${band.color} h-full flex items-center justify-center text-white text-[10px] font-bold font-mono transition-all`}
                   title={`${band.label}: ${band.count} تلميذ (${widthPct.toFixed(1)}%)`}
                 >
                   {widthPct >= 6 ? `${Math.round(widthPct)}%` : ''}
@@ -464,8 +461,8 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ state }) => {
 
       {/*  */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <h3 className="text-base font-black text-slate-900">
-          التقرير البيداغوجي والتشخيص
+        <h3 className="text-base font-bold text-slate-900">
+          التقرير
         </h3>
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-3 leading-relaxed">
           <p>

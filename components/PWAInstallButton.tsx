@@ -17,7 +17,7 @@ export const PWAInstallButton: React.FC = () => {
     return (
       <button
         onClick={install}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
         title="تثبيت التطبيق"
       >
         <Download className="w-4 h-4" />
@@ -32,7 +32,7 @@ export const PWAInstallButton: React.FC = () => {
       <>
         <button
           onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           title="تثبيت التطبيق"
         >
           <Download className="w-4 h-4" />
@@ -41,9 +41,9 @@ export const PWAInstallButton: React.FC = () => {
 
         {showIOSGuide && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" dir="rtl">
-            <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+            <div role="dialog" aria-modal="true" className="bg-white rounded-xl p-5 max-w-sm w-full shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-bold text-[#0D2C3B] text-lg">تثبيت التطبيق (iOS)</h3>
+                <h3 className="font-bold text-[#1A1C1E] text-lg">تثبيت التطبيق (iOS)</h3>
                 <button
                   onClick={() => setShowIOSGuide(false)}
                   className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-lg"

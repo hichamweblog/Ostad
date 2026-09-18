@@ -1,5 +1,7 @@
 'use client';
 
+import { ConfirmDialog } from './ConfirmDialog';
+import { showToast } from "@/components/Toast";
 import React, { useState, useRef } from 'react';
 import { AppState } from '@/lib/storage';
 import { CurriculumUnit, SessionRecord } from '@/lib/types';
@@ -64,7 +66,7 @@ const FormattingBar: React.FC<FormattingBarProps> = ({ setter }) => {
       <button
         type="button"
         onClick={() => handleApply('﴿ ', ' ﴾')}
-        className="px-1.5 py-0.5 rounded hover:bg-emerald-100 text-emerald-800 font-bold cursor-pointer"
+        className="px-1.5 py-0.5 rounded hover:bg-[var(--primary-soft)] text-emerald-800 font-bold cursor-pointer"
         title="إدراج قوس آية قرآنية"
       >
         ﴿ آية ﴾
@@ -133,6 +135,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const [selectedSectionFilter, setSelectedSectionFilter] = useState<number | 'all'>('all');
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Helper for applying markdown or symbols into a specific state field
   const applyFormat = (
@@ -196,7 +199,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   // Save Session
   const handleSaveSession = () => {
     if (!state.activeClassId) {
-      alert('يرجى تحديد القسم أولاً');
+      showToast('يرجى تحديد القسم أولاً', 'error');
       return;
     }
 
@@ -256,12 +259,11 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    if (confirm('هل أنت متأكد من حذف هذا السجل من الدفتر اليومي؟')) {
-      onUpdateState(prev => ({
-        ...prev,
-        sessions: prev.sessions.filter(s => s.id !== sessionId)
-      }));
-    }
+    onUpdateState(prev => ({
+      ...prev,
+      sessions: prev.sessions.filter(s => s.id !== sessionId)
+    }));
+    setDeleteConfirmId(null);
   };
 
   const classPastSessions = state.sessions.filter(
@@ -360,7 +362,7 @@ ${s.teacherNotes}
       <div style="text-align: center; margin-bottom: 20px;">
         <h2 style="color: #0d2c3b;">الجمهورية الجزائرية الديمقراطية الشعبية</h2>
         <h3 style="color: #0d2c3b;">وزارة التربية الوطنية</h3>
-        <h2 style="color: #0e7c61;">دفتر النصوص وسجل الحصص اليومي الرقمي — مادة العلوم الإسلامية</h2>
+        <h2 style="color: var(--primary);">دفتر النصوص وسجل الحصص اليومي الرقمي — مادة العلوم الإسلامية</h2>
         <p><strong>المؤسسة:</strong> ${state.profile?.schoolName || 'ثانوية التعليم الثانوي'} | <strong>الأستاذ(ة):</strong> ${state.profile?.name || 'أستاذ المادة'} | <strong>السنة الدراسية:</strong> ${state.profile?.academicYear || '2025/2026'}</p>
         <p><strong>الفوج التربوي:</strong> ${activeClass?.name || 'القسم'} (${activeClass?.stream || ''}) | <strong>عدد الحصص الموثقة:</strong> ${classPastSessions.length}</p>
       </div>
@@ -427,15 +429,12 @@ ${s.teacherNotes}
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-6" id="session-cahier-view">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <CalendarCheck className="w-5 h-5 text-[#0E7C61]" />
+            <CalendarCheck className="w-5 h-5 text-[var(--primary)]" />
             <span>دفتر النصوص</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            توثيق الحصص المنجزة زمنياً، استخراج الدروس من المنهاج الرسمي، وتدوين الملاحظات البيداغوجية
-          </p>
         </div>
 
         {/* Actions & Class Selection */}
@@ -444,7 +443,7 @@ ${s.teacherNotes}
             <>
               <button
                 onClick={handleExportCahierDoc}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary)] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                 title="تصدير دفتر النصوص كاملاً إلى ملف Word (.doc)"
               >
                 <FileDown className="w-3.5 h-3.5 text-emerald-200" />
@@ -461,16 +460,16 @@ ${s.teacherNotes}
             </>
           )}
 
-          <div className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center gap-2">
-            <Users className="w-4 h-4 text-[#0d6547]" />
+          <div className="px-3.5 py-1.5 rounded-xl bg-[var(--primary-soft)] border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center gap-2">
+            <Users className="w-4 h-4 text-[var(--primary)]" />
             <span>القسم النشط: {activeClass?.name || 'لم يحدد'}</span>
           </div>
         </div>
       </div>
 
       {savedSuccessMsg && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="p-3 bg-[var(--primary-soft)] border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
+          <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
           <span className="font-bold">تم توثيق الحصة وتحديث حالة الإنجاز في المنهاج بنجاح.</span>
         </div>
       )}
@@ -479,7 +478,7 @@ ${s.teacherNotes}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-[#0d6547]" />
+                <BookOpen className="w-4 h-4 text-[var(--primary)]" />
                 <span>بيانات الحصة والوحدة المقررة</span>
               </h3>
             </div>
@@ -492,7 +491,7 @@ ${s.teacherNotes}
                   type="date"
                   value={sessionDate}
                   onChange={e => setSessionDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[#0d6547]"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
 
@@ -502,7 +501,7 @@ ${s.teacherNotes}
                   type="time"
                   value={startTime}
                   onChange={e => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[#0d6547]"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
 
@@ -512,7 +511,7 @@ ${s.teacherNotes}
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[#0d6547]"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
             </div>
@@ -522,7 +521,7 @@ ${s.teacherNotes}
               <label className="font-bold text-slate-700 flex items-center justify-between">
                 <span>موضوع الدرس / الوحدة التعلمية المقررة:</span>
                 {selectedUnitObj && (
-                  <span className="text-[#0d6547] font-semibold">
+                  <span className="text-[var(--primary)] font-semibold">
                     الميدان: {selectedUnitObj.domain} • الحجم: {selectedUnitObj.hourlyVolume} سا
                   </span>
                 )}
@@ -530,7 +529,7 @@ ${s.teacherNotes}
               <select
                 value={selectedUnitId}
                 onChange={e => handleSelectUnit(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-900 focus:ring-1 focus:ring-[#0d6547] cursor-pointer bg-white"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-900 focus:ring-1 focus:ring-[var(--primary)] cursor-pointer bg-white"
               >
                 {availableUnits.map(unit => (
                   <option key={unit.id} value={unit.id}>
@@ -564,7 +563,7 @@ ${s.teacherNotes}
             <div className="space-y-1 text-xs">
               <div className="flex items-center justify-between gap-2 flex-wrap pb-0.5">
                 <label className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-[#0d6547]" />
+                  <BookOpen className="w-3.5 h-3.5 text-[var(--primary)]" />
                   <span>الأهداف التعلمية المسطرة للحصة:</span>
                 </label>
                 <div className="flex items-center gap-2">
@@ -586,7 +585,7 @@ ${s.teacherNotes}
                 <span>ما تم إنجازه وسير الدرس والمناقشات:</span>
                 <span className="text-slate-400 font-normal text-[10px]">Text Area مع إمكانية التنسيق</span>
               </label>
-              <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[#0d6547]">
+              <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
                 <FormattingBar val={accomplishments} setter={setAccomplishments} />
                 <textarea
                   rows={4}
@@ -604,7 +603,7 @@ ${s.teacherNotes}
                 <label className="font-bold text-slate-700">
                   التوجيهات والواجب للحصة القادمة:
                 </label>
-                <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[#0d6547]">
+                <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
                   <FormattingBar val={nextSteps} setter={setNextSteps} />
                   <textarea
                     rows={3}
@@ -620,7 +619,7 @@ ${s.teacherNotes}
                 <label className="font-bold text-slate-700">
                   ملاحظات عامة حول القسم والانضباط:
                 </label>
-                <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[#0d6547]">
+                <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
                   <FormattingBar val={teacherNotes} setter={setTeacherNotes} />
                   <textarea
                     rows={3}
@@ -696,7 +695,7 @@ ${s.teacherNotes}
             <div className="pt-2 flex justify-end">
               <button
                 onClick={handleSaveSession}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#0d6547] hover:bg-[#0b543b] text-white text-xs font-black shadow-md cursor-pointer transition-all"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[#0b543b] text-white text-xs font-black shadow-md cursor-pointer transition-all"
                 id="btn-save-session-record"
               >
                 <Save className="w-4 h-4" />
@@ -764,6 +763,13 @@ ${s.teacherNotes}
           </div>
         )}
       </div>
-    </div>
+          <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        title="تأكيد الحذف"
+        message="هل أنت متأكد من حذف هذا السجل من الدفتر اليومي؟"
+        onConfirm={() => { if (deleteConfirmId) handleDeleteSession(deleteConfirmId); }}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
+</div>
   );
 };

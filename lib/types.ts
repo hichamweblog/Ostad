@@ -37,7 +37,8 @@ export interface ContinuousEvaluationRules {
   unwrittenLessonDeduction: number; // خصم عدم كتابة الدروس (افتراضياً 1.0)
   unexcusedAbsenceDeduction: number; // خصم الغياب غير المبرر (افتراضياً 1.0)
   lateDeduction: number; // خصم التأخر (افتراضياً 0.5)
-  lackOfParticipationDeduction: number; // خصم عدم المشاركة (افتراضياً 1.0)
+  participationBonus: number; // علاوة المشاركة (افتراضياً 0.5)
+  lackOfParticipationDeduction?: number;
   maxScore: number; // 20
   showGuidanceAlerts: boolean;
   exemptRuleSecondQuiz: string;
