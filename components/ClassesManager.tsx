@@ -1430,48 +1430,36 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => {
+                        onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
+                        if (onNavigate) onNavigate('attendance');
+                      }}
+                      className="py-2 rounded-xl bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)] text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      الحضور
+                    </button>
+                    <button
+                      onClick={() => {
+                        onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
+                        if (onNavigate) onNavigate('grades');
+                      }}
+                      className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      النقاط
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedClassId(cls.id);
                         onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
-                        onNavigate?.('students');
+                        if (onNavigate) onNavigate('students');
                       }}
-                      className="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer text-center" >
-                      إدارة التلاميذ
-                    </button>
-                    <button
-                      onClick={() => {
-                        onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                        state.activeClassId === cls.id
-                          ? 'bg-amber-600 text-white' : 'bg-[var(--warning-soft)] text-amber-800 hover:bg-[var(--warning-soft)]' }`}
+                      className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      {state.activeClassId === cls.id ? 'القسم النشط ✓' : 'تفعيل'}
+                      التفاصيل
                     </button>
                   </div>
-                  {onNavigate && (
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {([
-                        ['attendance', 'الحضور'],
-                        ['grades', 'النقاط'],
-                        ['sessions', 'دفتر النصوص']
-                      ] as const).map(([tab, label]) => (
-                        <button
-                          key={tab}
-                          type="button"
-                          onClick={() => {
-                            onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
-                            onNavigate(tab);
-                          }}
-                          className="min-h-10 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-700 hover:border-[var(--primary)] hover:text-[var(--primary)] cursor-pointer"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}

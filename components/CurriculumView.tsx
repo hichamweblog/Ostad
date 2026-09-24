@@ -267,27 +267,26 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     <div className="space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6" id="curriculum-view">
 
 
-      {/* Level Selector Tabs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      {/* Level Selector Pill Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none snap-x">
         {OFFICIAL_LEVELS.map(lvl => {
           const isSelected = selectedLevel === lvl.id;
           return (
             <button
               key={lvl.id}
               onClick={() => setSelectedLevel(lvl.id)}
-              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+              className={`flex-none snap-start min-w-[100px] h-[36px] px-4 rounded-full border text-xs font-bold transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50' }`}
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
             >
-              <div className="text-xs font-bold">{lvl.name}</div>
-              <div className={`text-[11px] mt-1 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                {lvl.hoursTotal} ساعة • {lvl.unitsCount} وحدة • <span className="font-bold text-gold">{lvl.weeklyHours} سا/أسبوع</span>
-              </div>
+              {lvl.name}
             </button>
           );
         })}
       </div>
-
+      
       {/* Search & Class Progress Context Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
         <div className="relative w-full sm:w-80">

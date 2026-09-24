@@ -545,10 +545,26 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
         </div>
       )}
 
-      {/* 3. Document Sheet Container (Clean, Space-Optimized, Strict RTL) */}
+      {/* Mobile Quick Actions (No A4 preview) */}
+      <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 rounded-2xl shadow-sm text-center">
+          <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-blue-900 mb-1">{getDocTitle()}</h3>
+          <p className="text-[10px] text-blue-700 mb-3">حمل الوثيقة جاهزة للطباعة والتعديل بصيغة Word</p>
+          <button
+            type="button" onClick={handleExportDoc}
+            className="w-full flex justify-center items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md active:scale-95 transition-all"
+          >
+            <Download className="w-4 h-4" />
+            <span>تحميل مباشر (.doc)</span>
+          </button>
+        </div>
+      </div>
+      
+      {/* 3. Document Sheet Container (Hidden on Mobile) */}
       <div
         dir="rtl" style={{ direction: 'rtl', textAlign: 'right' }}
-        className="bg-white rounded-xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right" >
+        className="hidden md:block bg-white rounded-xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right" >
         {/* Space-Saving Compact Institutional Header */}
         <div className="pb-2 border-b-2 border-slate-900">
           <div className="flex justify-between items-center text-xs font-bold text-slate-800 px-1">

@@ -209,6 +209,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
+  const isDuplicatedOnMobile = ['dashboard', 'timetable', 'sessions', 'grades'].includes(item.id);
 
                 return (
                   <button
@@ -218,7 +219,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                       if (onCloseMobile) onCloseMobile();
                     }}
                     title={isCollapsed ? item.label : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer group relative ${
+                    className={`w-full ${isDuplicatedOnMobile ? 'hidden md:flex' : 'flex'} items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer group relative ${
                       isActive
                         ? "bg-[var(--primary)] text-white shadow-sm border border-[var(--primary)]/30"
                         : "text-slate-300 hover:text-white hover:bg-[var(--accent-navy-card)]"

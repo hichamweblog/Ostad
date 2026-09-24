@@ -796,8 +796,8 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
           {/* PDF Viewer */}
           {activePdfUrl ? (
-            <div className="bg-white rounded-xl border border-slate-300 p-2 shadow-sm">
-              <div className="bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative">
+            <div className="bg-white rounded-xl border border-slate-300 p-2 shadow-sm relative">
+              <div className="bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative hidden md:block">
                 <object
                   data={`${activePdfUrl}#toolbar=1&navpanes=0&view=FitH`}
                   type="application/pdf"
@@ -811,6 +811,25 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                     allow="autoplay"
                   />
                 </object>
+              </div>
+              
+              <div className="md:hidden flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-5">
+                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-slate-800 text-base">عارض الهواتف المحمولة</h3>
+                  <p className="text-xs text-slate-500">تم إيقاف العارض المدمج لتوفير الذاكرة وتجنب التشنجات.</p>
+                </div>
+                <a 
+                  href={activePdfUrl} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-full font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>فتح المذكرة (عارض النظام)</span>
+                </a>
               </div>
 
               {/* Viewer Footer Toolbar */}

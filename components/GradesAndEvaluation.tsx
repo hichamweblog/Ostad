@@ -1023,7 +1023,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                           {mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'}
                         </span>
                         <input
-                          type="number" step="0.25" min="0" max="20" placeholder="-" value={draft[mobileActiveTab]}
+                          type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft[mobileActiveTab]}
                           onChange={e => handleGradeChange(student.id, mobileActiveTab, e.target.value)}
                           aria-label={`${mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'} - ${student.fullName}`}
                           className="w-24 text-center px-2 rounded-lg border border-slate-300 bg-slate-50 font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-gold focus:outline-none focus:bg-white transition-colors min-h-[44px]" />
@@ -1104,54 +1104,54 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                         const avg = calculateStudentAverage(ce, q, ex);
 
                         return (
-                          <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-500">
+                          <tr key={student.id} className="hover:bg-slate-50/80 transition-colors h-[54px] max-h-[54px]">
+                            <td className="p-1 px-2 text-center font-mono font-bold text-slate-500">
                               {student.numberInList}
                             </td>
-                            <td className="py-2.5 px-4 font-bold text-slate-900">
+                            <td className="p-1 px-2 font-bold text-slate-900">
                               {student.fullName}
                             </td>
 
                             {/* Continuous Evaluation (0-20) */}
-                            <td className="py-2 px-2 text-center">
+                            <td className="p-1 px-1 text-center">
                               <div className="flex flex-col items-center gap-1">
                                 <input
-                                  type="number" step="0.25" min="0" max="20" placeholder="-" value={draft.continuousEval}
+                                  type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.continuousEval}
                                   onChange={e => handleGradeChange(student.id, 'continuousEval', e.target.value)}
                                   aria-label={`التقويم المستمر - ${student.fullName}`}
-                                  className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
-                                <div className="flex items-center gap-1 text-[10px] text-[var(--primary)]" title="النقطة المقترحة من سجل الحضور والمتابعة">
+                                  className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                <div className="hidden sm:flex items-center gap-1 text-[9px] text-[var(--primary)] whitespace-nowrap" title="النقطة المقترحة">
                                   <span className="font-mono">{calcAutoContinuousEval(student.id).toFixed(2)}</span>
                                   <button
                                     type="button"
                                     onClick={() => handleUseAutoContinuousEval(student.id)}
-                                    className="rounded border border-[var(--primary)]/30 bg-[var(--primary-soft)] px-1.5 py-0.5 font-bold hover:opacity-80"
+                                    className="rounded border border-[var(--primary)]/30 bg-[var(--primary-soft)] px-1 py-0 font-bold hover:opacity-80"
                                   >
-                                    استخدام
+                                    تطبيق
                                   </button>
                                 </div>
                               </div>
                             </td>
 
                             {/* Quiz (0-20) */}
-                            <td className="py-2 px-2 text-center">
+                            <td className="p-1 px-1 text-center">
                               <input
-                                type="number" step="0.25" min="0" max="20" placeholder="-" value={draft.quiz}
+                                type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.quiz}
                                 onChange={e => handleGradeChange(student.id, 'quiz', e.target.value)}
                                 aria-label={`الفرض المحروس - ${student.fullName}`}
-                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
 
                             {/* Exam (0-20) */}
-                            <td className="py-2 px-2 text-center">
+                            <td className="p-1 px-1 text-center">
                               <input
-                                type="number" step="0.25" min="0" max="20" placeholder="-" value={draft.exam}
+                                type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.exam}
                                 onChange={e => handleGradeChange(student.id, 'exam', e.target.value)}
                                 aria-label={`الاختبار الفصلي - ${student.fullName}`}
-                                className="w-18 text-center px-1 py-1 rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
 
-                            <td className="py-2.5 px-3 text-center bg-amber-50/50 border-x border-amber-200">
+                            <td className="p-1 px-2 text-center bg-amber-50/50 border-x border-amber-200">
                               <span className="font-mono text-sm font-bold text-amber-900">
                                 {avg !== null ? avg.toFixed(2) : '-'}
                               </span>

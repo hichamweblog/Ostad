@@ -541,8 +541,9 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
 
  {/* Modal: إضافة حصة إلى الجدول (Screenshot 13) */}
  {isModalOpen && (
- <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
- <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 text-right space-y-4">
+        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setIsModalOpen(false); setEditingSlotId(null); }}>
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 text-right space-y-5 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full mb-2 sm:hidden" />
  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
  <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
  <CalendarDays className="w-5 h-5 text-[var(--primary)]"/>
@@ -574,40 +575,35 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </select>
  </div>
 
- {/* Timing (من ... إلى ...) */}
- <div className="grid grid-cols-2 gap-3">
- <div>
- <label className="block font-bold text-slate-700 mb-1">من (البداية)</label>
- <select
- value={selectedStartTime}
- onChange={e => {
- setSelectedStartTime(e.target.value);
- const matchHour = ALL_HOURS.find(h => h.start === e.target.value);
- if (matchHour) {
- setSelectedEndTime(matchHour.end);
- }
- }}
- className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900" >
- {ALL_HOURS.map(h => (
- <option key={h.start} value={h.start}>
- {h.start}
- </option>
- ))}
- </select>
- </div>
- <div>
- <label className="block font-bold text-slate-700 mb-1">إلى (النهاية)</label>
- <input
- type="text"
- value={ALL_HOURS.find(h => h.start === selectedStartTime)?.end || selectedEndTime}
- readOnly
- className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-100 text-slate-700 font-mono cursor-not-allowed"
- />
- </div>
- </div>
+ 
+          {/* Quick Time Slots */}
+          <div>
+            <label className="block font-bold text-slate-700 mb-2">التوقيت</label>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 scrollbar-thin">
+              {ALL_HOURS.map(h => {
+                const isSelected = selectedStartTime === h.start;
+                return (
+                  <button
+                    key={h.start}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStartTime(h.start);
+                      setSelectedEndTime(h.end);
+                    }}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border ${
+                      isSelected
+                        ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-[var(--primary)] hover:bg-slate-50'
+                    }`}
+                  >
+                    <span dir="ltr">{h.start} - {h.end}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-
- {/* Class Selection */}
+          {/* Class Selection */}
  <div>
  <label className="block font-bold text-slate-700 mb-1">الفوج التربوي</label>
  <select

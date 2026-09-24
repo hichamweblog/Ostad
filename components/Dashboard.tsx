@@ -285,71 +285,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 2. Compact status row */}
-      <div className="order-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Metric 1: إجمالي التلاميذ */}
-        <div
-          onClick={() => onNavigate('classes')}
-          className="order-1 bg-white p-5 rounded-2xl border border-[var(--border-default)] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer" >
-          <div className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
-            <span>إجمالي التلاميذ</span>
-            <Users className="w-4 h-4 text-[var(--primary)]" />
+      
+      {/* 3. Compact 50px Stat Bar */}
+      <div className="order-3 mb-6 bg-white border border-[var(--border-default)] rounded-xl shadow-xs overflow-x-auto scrollbar-none flex items-center h-[54px] divide-x divide-x-reverse divide-slate-100">
+        <button onClick={() => onNavigate('classes')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
+          <div className="w-8 h-8 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><Users className="w-4 h-4" /></div>
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">التلاميذ</div>
+            <div className="text-sm font-black text-slate-900 leading-none">{state.students.length}</div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-display mt-2">
-            {state.students.length === 0 && state.classes.length === 0 ? "0" : state.students.length}
+        </button>
+        <button onClick={() => setIsTodaySessionsModalOpen(true)} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
+          <div className="w-8 h-8 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">حصص اليوم</div>
+            <div className="text-sm font-black text-slate-900 leading-none">{todaySlots.length}</div>
           </div>
-          <div className="text-[11px] text-[var(--text-secondary)] mt-1 font-medium">
-            موزعين على {state.classes.length} أقسام
+        </button>
+        <button onClick={() => onNavigate('sessions')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
+          <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Edit3 className="w-4 h-4" /></div>
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الدفتر</div>
+            <div className="text-sm font-black text-slate-900 leading-none">{state.sessions.length}</div>
           </div>
-        </div>
-
-        {/* Metric 2: الحصص المبرمجة - يفتح نافذة إدخال حصص اليوم */}
-        <div
-          onClick={() => setIsTodaySessionsModalOpen(true)}
-          className="order-3 bg-white p-5 rounded-2xl border border-[var(--border-default)] shadow-xs hover:border-[var(--primary)] hover:-translate-y-1 transition-all duration-300 ease-out cursor-pointer group" title="انقر لإدخال وتوثيق حصص اليوم في الدفتر اليومي" >
-          <div className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
-            <span>حصص اليوم المبرمجة</span>
-            <CalendarDays className="w-4 h-4 text-[var(--primary)] group-hover:scale-110 transition-transform" />
+        </button>
+        <button onClick={() => onNavigate('documents')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
+          <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform"><FileText className="w-4 h-4" /></div>
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الوثائق</div>
+            <div className="text-sm font-black text-slate-900 leading-none">مكتبة</div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-display mt-2">
-            {todaySlots.length} حصص اليوم
-          </div>
-          <div className="text-[11px] text-[var(--primary)] mt-1 font-bold flex items-center gap-1">
-            <span>انقر لإدخال حصص اليوم ←</span>
-          </div>
-        </div>
-
-        {/* Metric 3: الحصص المنجزة */}
-        <div
-          onClick={() => onNavigate('sessions')}
-          className="order-4 bg-white p-5 rounded-2xl border border-[var(--border-default)] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer" >
-          <div className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
-            <span>الدفتر اليومي</span>
-            <Edit3 className="w-4 h-4 text-[var(--primary)]" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-display mt-2">
-            {state.sessions.length} حصة
-          </div>
-          <div className="text-[11px] text-[var(--text-secondary)] mt-1 font-medium">موثقة في السجل</div>
-        </div>
-
-        {/* Metric 4: إجمالي الأقسام */}
-        <div
-          onClick={() => onNavigate('classes')}
-          className="order-2 bg-white p-5 rounded-2xl border border-[var(--border-default)] shadow-xs hover:border-[var(--primary)] transition-all cursor-pointer"
-        >
-          <div className="text-xs font-bold text-[var(--text-secondary)] flex items-center justify-between">
-            <span>الأقسام المسجلة</span>
-            <Users className="w-4 h-4 text-[var(--primary)]" aria-hidden="true" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-display mt-2">
-            {state.classes.length} أقسام
-          </div>
-          <div className="text-[11px] text-[var(--text-secondary)] mt-1 font-medium">
-            جاهزة للمتابعة والإدارة
-          </div>
-        </div>
-
+        </button>
       </div>
 
       <section className="order-4 rounded-2xl border border-[var(--primary)]/25 bg-[var(--primary-soft)]/55 p-5 shadow-xs" aria-labelledby="dashboard-next-action-title">

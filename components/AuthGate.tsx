@@ -18,6 +18,26 @@ export function AuthGate({ children }: AuthGateProps) {
   const [user, setUser] = useState<User | null>(cachedUser ?? null);
   const configured = Boolean(getSupabaseEnv());
   const [loading, setLoading] = useState(configured && cachedUser === undefined);
+  const [showOfflineFallback, setShowOfflineFallback] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: number;
+    if (loading) {
+      timeoutId = window.setTimeout(() => setShowOfflineFallback(true), 2000);
+    }
+    return () => window.clearTimeout(timeoutId);
+  }, [loading]);
+
+  const handleContinueOffline = async () => {
+    const client = createSupabaseBrowserClient();
+    if (client) {
+      const { data } = await client.auth.getSession();
+      if (data.session?.user) {
+        setUser(data.session.user);
+      }
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     let active = true;
@@ -59,8 +79,19 @@ export function AuthGate({ children }: AuthGateProps) {
   if (!configured) return children(null, () => {});
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]" dir="rtl">
-        <p className="text-sm font-bold text-[var(--muted-foreground)]">جارٍ التحقق من جلسة الدخول...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-[var(--bg-page)]" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-bold text-[var(--muted-foreground)]">جارٍ الاتصال بالسحابة...</p>
+        </div>
+        {showOfflineFallback && (
+          <button
+            onClick={handleContinueOffline}
+            className="px-6 py-2.5 rounded-full border border-[var(--border-default)] bg-white shadow-sm text-sm font-bold text-[var(--text-secondary)] active:bg-slate-50 transition-colors animate-in fade-in zoom-in duration-300"
+          >
+            المتابعة دون اتصال (الوضع المحلي)
+          </button>
+        )}
       </div>
     );
   }
@@ -91,44 +122,43 @@ async function supabaseSignOut() {
 function AuthLanding() {
   const [showLogin, setShowLogin] = useState(false);
 
-  if (showLogin) return <LoginPanel onBack={() => setShowLogin(false)} />;
-
   return (
-    <main className="min-h-screen bg-[var(--bg-page)] px-4 py-10" dir="rtl">
-      <section className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-3xl border border-[var(--border-default)] bg-white shadow-sm md:grid-cols-[1.1fr_0.9fr]">
-          <div className="bg-[var(--accent-navy)] p-8 text-white sm:p-12">
-            <p className="text-sm font-bold text-[var(--accent-gold)]">مساعد أستاذ العلوم الإسلامية</p>
-            <h1 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">معين الأستاذ</h1>
-            <p className="mt-5 max-w-lg text-sm leading-8 text-slate-200">
-              دفتر رقمي منظم لإدارة الأقسام، الحضور، النقاط، دفتر النصوص، والتخطيط السنوي في مكان واحد.
+    <main className="min-h-[100dvh] bg-[var(--bg-page)] flex flex-col" dir="rtl">
+      <div className="flex-1 flex flex-col justify-center px-4 py-8 pb-32">
+        <div className="mx-auto w-full max-w-lg text-center space-y-6">
+          <div className="mx-auto w-20 h-20 bg-[var(--primary)] text-white rounded-3xl shadow-xl flex items-center justify-center font-black text-2xl rotate-3">
+            مـ
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black tracking-tight text-[var(--text-primary)]">معين الأستاذ</h1>
+            <p className="text-[var(--text-secondary)] font-medium leading-relaxed max-w-sm mx-auto">
+              دفتر رقمي منظم لإدارة الأقسام، الحضور، النقاط، والمخطط السنوي.
             </p>
-            <button
-              type="button"
-              onClick={() => setShowLogin(true)}
-              className="mt-8 rounded-xl bg-[var(--primary)] px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--primary-hover)]"
-            >
-              الدخول إلى التطبيق
-            </button>
           </div>
-          <div className="flex items-center p-8 sm:p-12">
-            <div>
-              <h2 className="text-xl font-black text-[var(--text-primary)]">كل ما تحتاجه في يومك الدراسي</h2>
-              <ul className="mt-5 space-y-3 text-sm leading-7 text-[var(--text-secondary)]">
-                <li>• تنظيم الأقسام وقوائم التلاميذ</li>
-                <li>• متابعة الحضور والتقويم والنقاط</li>
-                <li>• إعداد المذكرات والوثائق بسرعة</li>
-                <li>• حفظ نسخة احتياطية محلية من بياناتك</li>
-              </ul>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowLogin(true)}
+            className="w-full sm:w-auto min-w-[200px] h-14 rounded-2xl bg-[var(--primary)] text-white font-bold shadow-lg shadow-[var(--primary)]/30 active:scale-95 transition-all mx-auto mt-4"
+          >
+            ابدأ الآن
+          </button>
         </div>
-      </section>
-      <footer className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-center gap-x-5 gap-y-2 pb-2 text-xs text-[var(--text-secondary)]">
-        <Link className="transition-colors hover:text-[var(--primary)]" href="/privacy">سياسة الخصوصية</Link>
-        <Link className="transition-colors hover:text-[var(--primary)]" href="/terms">شروط الاستخدام</Link>
-        <span>© {new Date().getFullYear()} معين الأستاذ</span>
-      </footer>
+      </div>
+      
+      {/* Bottom Sheet Backdrop */}
+      {showLogin && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+          onClick={() => setShowLogin(false)}
+        />
+      )}
+      
+      {/* Bottom Sheet Modal */}
+      <div 
+        className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 ease-out ${showLogin ? 'translate-y-0' : 'translate-y-full'}`}
+      >
+        <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full my-3" />
+        <LoginPanel onBack={() => setShowLogin(false)} />
+      </div>
     </main>
   );
 }
@@ -147,26 +177,19 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
   const signIn = async () => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) return;
-
     setWorking(true);
     setErrorMessage(null);
     try {
       const next = `${window.location.pathname}${window.location.search}`;
-      // Always use the origin currently serving the app. This prevents a
-      // production deployment from inheriting a localhost callback URL.
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo,
-        },
+        options: { redirectTo },
       });
       if (error) throw error;
     } catch (error) {
-      const message = 'تعذر بدء تسجيل الدخول. أعد المحاولة بعد قليل.';
       console.error('Google sign-in failed:', error);
-      setErrorMessage(message);
-      showToast(message, 'error');
+      setErrorMessage('تعذر بدء تسجيل الدخول. أعد المحاولة بعد قليل.');
       setWorking(false);
     }
   };
@@ -174,7 +197,6 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
   const signInWithEmail = async () => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase || !email.trim()) return;
-
     setWorking(true);
     setErrorMessage(null);
     try {
@@ -187,64 +209,65 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
       if (error) throw error;
       setEmailSent(true);
     } catch (error) {
-      const message = 'تعذر إرسال رابط الدخول. تحقق من البريد وأعد المحاولة.';
       console.error('Email sign-in failed:', error);
-      setErrorMessage(message);
-      showToast(message, 'error');
+      setErrorMessage('تعذر إرسال رابط الدخول. تحقق من البريد وأعد المحاولة.');
     } finally {
       setWorking(false);
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] px-4 py-8" dir="rtl">
-      <section className="w-full max-w-md rounded-3xl border border-[var(--border)] bg-white p-8 text-center shadow-sm">
-        <button type="button" onClick={onBack} className="text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--primary)]">العودة إلى التعريف</button>
-        <h1 className="mt-5 text-2xl font-bold text-[var(--primary)]">تسجيل الدخول</h1>
-        <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-          اختر طريقة الدخول المناسبة للمتابعة إلى دفتر الأستاذ.
-        </p>
-        {errorMessage && (
-          <p role="alert" className="mt-4 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs font-bold text-[var(--danger)]">
-            {errorMessage}
-          </p>
-        )}
-        <button
-          type="button"
-          disabled={working}
-          onClick={signIn}
-          className="mt-8 min-h-12 w-full rounded-xl bg-[var(--primary)] px-4 py-3 font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
-        >
-          {working ? 'جارٍ فتح تسجيل الدخول...' : 'الدخول باستخدام Google'}
-        </button>
-        <div className="my-5 flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
-          <span className="h-px flex-1 bg-[var(--border-default)]" />
-          <span>أو بالبريد الإلكتروني</span>
-          <span className="h-px flex-1 bg-[var(--border-default)]" />
+    <div className="px-6 pb-8 pt-2 w-full max-w-md mx-auto flex flex-col gap-5">
+      <div className="text-center">
+        <h2 className="text-xl font-black text-[var(--text-primary)]">تسجيل الدخول</h2>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">اختر طريقة الدخول للوصول إلى دفترك</p>
+      </div>
+      
+      {errorMessage && (
+        <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-100">
+          {errorMessage}
         </div>
+      )}
+
+      <button
+        type="button"
+        disabled={working}
+        onClick={signIn}
+        className="w-full h-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50"
+      >
+        <svg className="w-6 h-6" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        <span className="font-bold text-slate-700">المتابعة باستخدام Google</span>
+      </button>
+
+      <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+        <div className="h-px bg-slate-200 flex-1"></div>
+        أو عبر البريد الإلكتروني
+        <div className="h-px bg-slate-200 flex-1"></div>
+      </div>
+
+      <div className="space-y-3">
         <input
           type="email"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="البريد الإلكتروني"
-          autoComplete="email"
-          className="min-h-12 w-full rounded-xl border border-[var(--border-default)] px-4 text-sm outline-none transition-colors focus:border-[var(--primary)]"
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="أدخل بريدك الإلكتروني"
+          className="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 px-4 text-center text-sm outline-none focus:border-[var(--primary)] focus:bg-white transition-all dir-ltr"
           dir="ltr"
         />
         <button
           type="button"
           disabled={working || !email.trim()}
           onClick={() => void signInWithEmail()}
-          className="mt-3 min-h-12 w-full rounded-xl border border-[var(--primary)] px-4 py-3 font-bold text-[var(--primary)] transition-colors hover:bg-[var(--primary-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full h-14 rounded-2xl bg-[var(--primary)] text-white font-bold shadow-lg shadow-[var(--primary)]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
         >
-          {working ? 'جارٍ الإرسال...' : 'إرسال رابط الدخول'}
+          {emailSent ? 'تم الإرسال (راجع بريدك)' : working ? 'جارٍ الإرسال...' : 'إرسال رابط الدخول السحري'}
         </button>
-        {emailSent && (
-          <p className="mt-3 rounded-lg bg-[var(--success-soft)] px-3 py-2 text-xs font-bold text-[var(--success)]">
-            تم إرسال رابط الدخول إلى بريدك الإلكتروني.
-          </p>
-        )}
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

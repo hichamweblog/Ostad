@@ -397,17 +397,18 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
       id="annual-distribution-view">
       {/* Compact toolbar — level selector + export */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between print:hidden">
-        <div className="grid grid-cols-2 sm:flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs shadow-xs">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none snap-x">
           {(["3AS", "2AS", "1AS_ARTS", "1AS_SCIENCE"] as GradeLevel[]).map(
             (lvl) => (
               <button
                 key={lvl}
                 onClick={() => setSelectedLevel(lvl)}
-                className={`min-h-11 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                className={`flex-none snap-start min-w-[80px] h-[36px] px-4 rounded-full border text-xs font-bold transition-all cursor-pointer ${
                   selectedLevel === lvl
-                    ? "bg-[var(--primary)] text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}>
+                    ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-md"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
                 {lvl === "3AS"
                   ? "3 ثانوي"
                   : lvl === "2AS"

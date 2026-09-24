@@ -443,9 +443,14 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
               <input
                 id="prof-firstNameAr"
                 type="text" value={profile.firstNameAr || ""}
-                onChange={(e) =>
-                  setProfile({ ...profile, firstNameAr: e.target.value })
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ 
+                    ...prev, 
+                    firstNameAr: val,
+                    name: `${val} ${prev.lastNameAr || ''}`.trim()
+                  }));
+                }}
                 placeholder="الاسم بالعربية" className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900" />
             </div>
 
@@ -457,24 +462,15 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
               <input
                 id="prof-lastNameAr"
                 type="text" value={profile.lastNameAr || ""}
-                onChange={(e) =>
-                  setProfile({ ...profile, lastNameAr: e.target.value })
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ 
+                    ...prev, 
+                    lastNameAr: val,
+                    name: `${prev.firstNameAr || ''} ${val}`.trim()
+                  }));
+                }}
                 placeholder="اللقب بالعربية" className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900" />
-            </div>
-
-            {/* Full Name in App */}
-            <div>
-              <label htmlFor="prof-name" className="block font-bold text-slate-700 mb-1">
-                الاسم الكامل كما يظهر في التطبيق
-              </label>
-              <input
-                id="prof-name"
-                type="text" value={profile.name || ""}
-                onChange={(e) =>
-                  setProfile({ ...profile, name: e.target.value })
-                }
-                placeholder="أستاذ المادة" className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900" />
             </div>
 
             {/* First Name EN */}
