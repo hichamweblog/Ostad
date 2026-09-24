@@ -139,6 +139,13 @@ export function getSyncOperationsForState(state: AppState): SyncOperation[] {
   return operations;
 }
 
+function stableStringify(obj: any): string {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+}
+
 export function recordsShallowEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
@@ -152,7 +159,7 @@ export function recordsShallowEqual(a: unknown, b: unknown): boolean {
     const valB = objB[k];
     if (valA === valB) continue;
     if (valA !== null && typeof valA === 'object' && valB !== null && typeof valB === 'object') {
-      if (JSON.stringify(valA) !== JSON.stringify(valB)) return false;
+      if (stableStringify(valA) !== stableStringify(valB)) return false;
     } else {
       return false;
     }
@@ -326,8 +333,8 @@ export function getSyncOperationsDelta(
     const nextIds = new Set(nextItems.map((item) => item.id));
     for (const item of prevItems) {
       if (!nextIds.has(item.id)) {
-        if (deletedClassIds.size > 0 && 'classId' in item && typeof (item as any).classId === 'string') {
-          if (deletedClassIds.has((item as any).classId)) {
+        if (deletedClassIds.size > 0 && typeof item === 'object' && item !== null && 'classId' in item && typeof item.classId === 'string') {
+          if (deletedClassIds.has(item.classId as string)) {
             continue;
           }
         }

@@ -173,6 +173,7 @@ export async function flushSyncOutbox(
   syncingRef: { current: boolean },
   onError: (error: unknown) => void,
   force = false,
+  signal?: AbortSignal
 ): Promise<boolean> {
   if (!client || syncingRef.current) return false;
   if (!(await hasAuthenticatedOwner(client, ownerId))) return false;
@@ -211,17 +212,20 @@ export async function flushSyncOutbox(
     if (completed) {
       void listSyncOutbox(ownerId)
         .then((entries) => {
-          if (entries.length > 0 && client && !syncingRef.current) {
-            void flushSyncOutbox(client, ownerId, syncingRef, onError);
+          if (entries.length > 0 && client && !syncingRef.current && !signal?.aborted) {
+            void flushSyncOutbox(client, ownerId, syncingRef, onError, false, signal);
           }
         })
         .catch(onError);
     } else if (retryAt !== null) {
-      window.setTimeout(() => {
-        if (!syncingRef.current) {
-          void flushSyncOutbox(client, ownerId, syncingRef, onError);
+      const timer = window.setTimeout(() => {
+        if (!syncingRef.current && !signal?.aborted) {
+          void flushSyncOutbox(client, ownerId, syncingRef, onError, false, signal);
         }
       }, Math.max(0, retryAt - Date.now()));
+      if (signal) {
+        signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true });
+      }
     }
   }
 }
@@ -246,6 +250,13 @@ export function useCloudAppState(user: User | null) {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const cloudReady = !user || cloudStatus !== 'loading';
   const syncingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, [user?.id]);
   const pendingSaveTimerRef = useRef<number | null>(null);
   const saveGenerationRef = useRef(0);
   const latestStateRef = useRef(state);
@@ -366,7 +377,7 @@ export function useCloudAppState(user: User | null) {
         if (pendingRecordIds.size > 0) {
           await flushSyncOutbox(client, user.id, syncingRef, (err) => {
             console.warn('Initial pending outbox flush warning:', err);
-          }, true);
+          }, true, abortControllerRef.current?.signal);
           if (!active) return;
           // Recompute instead of assuming the flush drained everything: a partially
           // failed flush must keep its local records, or the refresh would hide them.
@@ -566,7 +577,7 @@ export function useCloudAppState(user: User | null) {
             setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
             void registerConflict(error);
             console.error('Cloud state save failed:', message);
-          });
+          }, false, abortControllerRef.current?.signal);
         })
         .then(async (flushed) => {
           if (!flushed || (await listSyncOutbox(user.id)).length > 0) return;
@@ -606,7 +617,7 @@ export function useCloudAppState(user: User | null) {
       setCloudStatus('loading');
       const flushed = await flushSyncOutbox(client, user.id, syncingRef, (error) => {
         console.error('Cloud sync retry failed:', describeCloudError(error).message);
-      }, true);
+      }, true, abortControllerRef.current?.signal);
       if (!flushed || (await listSyncOutbox(user.id)).length > 0) {
         setCloudStatus('local-only');
         return;
@@ -645,7 +656,7 @@ export function useCloudAppState(user: User | null) {
       setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
       void registerConflict(error);
       console.error('Cloud sync retry failed:', message);
-    }, true);
+    }, true, abortControllerRef.current?.signal);
     if (!flushed || (await listSyncOutbox(user.id)).length > 0) {
       void refreshSyncStatus();
       return;

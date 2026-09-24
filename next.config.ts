@@ -3,7 +3,7 @@ import withSerwistInit from '@serwist/next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  allowedDevOrigins: ['192.168.1.25'],
+
   typescript: {
     ignoreBuildErrors: false,
   },

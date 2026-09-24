@@ -550,14 +550,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   useEffect(() => {
     if (!isDirtyRef.current) return;
     setSaveStatus('pending');
+    let isMounted = true;
     const timer = window.setTimeout(() => {
+      if (!isMounted) return;
       setSaveStatus('saving');
       void persistDraftGradesRef.current()
         .then(() => {
+          if (!isMounted) return;
           isDirtyRef.current = false;
           setSaveStatus('saved');
         })
         .catch((error: unknown) => {
+          if (!isMounted) return;
           console.error('Grades sync failed:', error);
           setSaveStatus('pending');
           setToastMessage('تعذر حفظ النقاط في السحابة.');
@@ -565,6 +569,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         });
     }, 900);
     return () => {
+      isMounted = false;
       window.clearTimeout(timer);
     };
   }, [gradesDraft]);
