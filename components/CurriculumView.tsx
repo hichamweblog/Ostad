@@ -38,19 +38,19 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   const { state, updateStateAndWait } = useAppState();
   const [, setLoaded] = useState(false);
   useEffect(() => {
-    loadAllCurriculum().then(() => setLoaded(true));
+    loadAllCurriculum().then(() => setLoaded(true)).catch(console.error);
   }, []);
   const activeClass = state.classes.find(c => c.id === state.activeClassId);
-  const [prevActiveClassId, setPrevActiveClassId] = useState(state.activeClassId);
   const [selectedLevel, setSelectedLevel] = useState<GradeLevel>(
-    activeClass?.level || '3AS' );
+    activeClass?.level || '3AS'
+  );
 
-  if (state.activeClassId !== prevActiveClassId) {
-    setPrevActiveClassId(state.activeClassId);
+  useEffect(() => {
     if (activeClass?.level) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedLevel(activeClass.level);
     }
-  }
+  }, [state.activeClassId, activeClass?.level]);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
 

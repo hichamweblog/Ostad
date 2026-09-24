@@ -5,6 +5,17 @@ import { OFFICIAL_LEVELS } from './curriculum-data';
  * Generates and downloads a rich, beautifully formatted Microsoft Word (.doc) document
  * compliant with the Algerian Ministry of National Education pedagogical standards.
  */
+
+function escapeHtml(unsafe: string | number): string {
+  if (unsafe == null) return '';
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: TeacherProfile): void {
   const levelObj = OFFICIAL_LEVELS.find(l => l.id === unit.level);
   const levelName = levelObj?.name || (unit.level === '1AS_SCIENCE' ? 'السنة الأولى ثانوي — جذع مشترك علوم وتكنولوجيا' : unit.level);
@@ -25,7 +36,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
       xmlns='http://www.w3.org/TR/REC-html40'>
 <head>
   <meta charset="utf-8">
-  <title>مذكرة ${unit.title}</title>
+  <title>مذكرة ${escapeHtml(unit.title)}</title>
   <!--[if gte mso 9]>
   <xml>
     <w:WordDocument>
@@ -175,27 +186,27 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
   <table class="meta-table" dir="rtl">
     <tr>
       <th>المستوى والشعبة</th>
-      <td>${levelName}</td>
+      <td>${escapeHtml(levelName)}</td>
       <th>الأستاذ(ة)</th>
-      <td>${teacherName}</td>
+      <td>${escapeHtml(teacherName)}</td>
     </tr>
     <tr>
       <th>الميدان التعليمي</th>
-      <td>${unit.domain}</td>
+      <td>${escapeHtml(unit.domain)}</td>
       <th>المؤسسة التربوية</th>
-      <td>${schoolName}</td>
+      <td>${escapeHtml(schoolName)}</td>
     </tr>
     <tr>
       <th>المقطع التعلمي</th>
-      <td>${unit.sectionName}</td>
+      <td>${escapeHtml(unit.sectionName)}</td>
       <th>السنة الدراسية</th>
-      <td>${academicYear}</td>
+      <td>${escapeHtml(academicYear)}</td>
     </tr>
     <tr>
-      <th>الوحدة التعليمية رقم (${unit.unitNumber})</th>
-      <td style="font-weight: bold; color: #0E7C61;">${unit.title}</td>
+      <th>الوحدة التعليمية رقم (${escapeHtml(unit.unitNumber)})</th>
+      <td style="font-weight: bold; color: #0E7C61;">${escapeHtml(unit.title)}</td>
       <th>الحجم الساعي / الزمن</th>
-      <td style="font-weight: bold;">${unit.hourlyVolume} سا (${unit.level === '1AS_SCIENCE' ? 'ساعة واحدة أسبوعياً' : 'ساعتان أسبوعياً'})</td>
+      <td style="font-weight: bold;">${escapeHtml(unit.hourlyVolume)} سا (${unit.level === '1AS_SCIENCE' ? 'ساعة واحدة أسبوعياً' : 'ساعتان أسبوعياً'})</td>
     </tr>
   </table>
 
@@ -204,7 +215,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
     <div class="section-title">1. الهدف التعلمي (وفق التدرجات السنوية ومؤشرات الأداء الرسمية):</div>
     <div class="section-body">
       <div class="objective-box">
-        ${learningObjective || 'يتعرف على المفاهيم الأساسية والأحكام الشرعية للوحدة ويتمثل قيمها سلوكياً وأخلاقياً.'}
+        ${escapeHtml(learningObjective) || 'يتعرف على المفاهيم الأساسية والأحكام الشرعية للوحدة ويتمثل قيمها سلوكياً وأخلاقياً.'}
       </div>
     </div>
   </div>
@@ -214,7 +225,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
   <div class="section-box">
     <div class="section-title">2. السندات والنصوص الشرعية المؤطرة للوحدة:</div>
     <div class="section-body">
-      ${referenceTexts.map(txt => `<div class="quran-box">${txt.replace(/\n/g, '<br/>')}</div>`).join('')}
+      ${referenceTexts.map(txt => `<div class="quran-box">${escapeHtml(txt).replace(/\n/g, '<br/>')}</div>`).join('')}
     </div>
   </div>
   ` : ''}
@@ -224,7 +235,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
     <div class="section-title">3. الموارد المستهدفة (العناصر المفاهيمية وبناء التعلمات):</div>
     <div class="section-body">
       <ol class="item-list">
-        ${targetedResources.map(res => `<li>${res}</li>`).join('')}
+        ${targetedResources.map(res => `<li>${escapeHtml(res)}</li>`).join('')}
       </ol>
     </div>
   </div>
@@ -234,7 +245,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
     <div class="section-title">4. آلية تنفيذ التعلمات (خطوات الإنجاز والأنشطة البيداغوجية):</div>
     <div class="section-body">
       <ul class="item-list">
-        ${implementationMechanisms.map(mech => `<li>${mech}</li>`).join('')}
+        ${implementationMechanisms.map(mech => `<li>${escapeHtml(mech)}</li>`).join('')}
       </ul>
     </div>
   </div>
@@ -244,7 +255,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
   <div class="section-box">
     <div class="section-title">5. توجيهات خاصة بالأستاذ (ليست عناصر مفاهيمية):</div>
     <div class="section-body">
-      ${teacherDirectives.map(dir => `<div class="directive-box">• ${dir}</div>`).join('')}
+      ${teacherDirectives.map(dir => `<div class="directive-box">• ${escapeHtml(dir)}</div>`).join('')}
     </div>
   </div>
   ` : ''}
@@ -255,7 +266,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
     <div class="section-title">6. مؤشرات الأداء والتقويم:</div>
     <div class="section-body">
       <ul class="item-list">
-        ${indicators.map(ind => `<li>${ind}</li>`).join('')}
+        ${indicators.map(ind => `<li>${escapeHtml(ind)}</li>`).join('')}
       </ul>
     </div>
   </div>

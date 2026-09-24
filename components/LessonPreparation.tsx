@@ -2,14 +2,8 @@
 
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
-<<<<<<< ours
-import { binaryKeyForPdf, deleteBinaryFile, loadPdfBinary, savePdfBinary } from '@/lib/binary-storage';
-||||||| base
-import { binaryKeyForPdf, deleteBinaryFile, loadBinaryFile, saveBinaryFile } from '@/lib/binary-storage';
-=======
 import { binaryKeyForPdf, deleteBinaryFile, listStoredPdfUnitIds, loadPdfBinary, savePdfBinary } from '@/lib/binary-storage';
 import { offlinePdfAvailability } from '@/lib/sync-status';
->>>>>>> theirs
 import { deleteTeacherMemorandum, getMemorandumUrl, uploadTeacherMemorandum } from '@/lib/supabase/memoranda-storage';
 import { cancelMemorandaUpload } from '@/lib/supabase/memoranda-outbox';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -140,30 +134,12 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
   // Which attached memoranda are actually stored on this device (offline availability).
   useEffect(() => {
     let cancelled = false;
-<<<<<<< ours
-    const unitId = currentUnit?.id;
-    if (!unitId || !attachedPdf?.fileStorageKey) return;
-    // Reads the owner-scoped key first (migrating a legacy unscoped entry if needed).
-    void loadPdfBinary(unitId, ownerId).then(value => {
-      if (!cancelled && value) setPdfData({ key: binaryKeyForPdf(unitId, ownerId), url: value });
-||||||| base
-    const key = attachedPdf?.fileStorageKey;
-    if (!key) return;
-    void loadBinaryFile(key).then(value => {
-      if (!cancelled && value) setPdfData({ key, url: value });
-=======
     void listStoredPdfUnitIds(ownerId).then((unitIds) => {
       if (!cancelled) setStoredOfflineUnitIds(unitIds);
->>>>>>> theirs
     });
     return () => {
       cancelled = true;
     };
-<<<<<<< ours
-  }, [attachedPdf?.fileStorageKey, currentUnit?.id, ownerId]);
-||||||| base
-  }, [attachedPdf?.fileStorageKey]);
-=======
   }, [ownerId, attachedPdf?.fileStorageKey]);
 
   useEffect(() => {
@@ -178,7 +154,6 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
       cancelled = true;
     };
   }, [attachedPdf?.fileStorageKey, currentUnit?.id, ownerId]);
->>>>>>> theirs
 
   useEffect(() => {
     let cancelled = false;

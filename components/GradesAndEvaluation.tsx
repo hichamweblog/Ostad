@@ -278,13 +278,30 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     )
   );
 
+  const prevGradesRef = React.useRef(state.grades);
+
   useEffect(() => {
+    let changed = false;
+    let nextClassId = selectedClassId;
+    let nextTri = selectedTrimester;
+
     if (state.activeClassId && state.activeClassId !== selectedClassId) {
-      setSelectedClassId(state.activeClassId);
-      isDirtyRef.current = false;
-      setGradesDraft(buildDraft(state.students, state.grades, state.activeClassId, selectedTrimester));
+      nextClassId = state.activeClassId;
+      changed = true;
     }
-  }, [state.activeClassId, selectedClassId, state.students, state.grades, selectedTrimester]);
+    if (state.activeTrimester && state.activeTrimester !== selectedTrimester) {
+      nextTri = state.activeTrimester;
+      changed = true;
+    }
+
+    if (changed || (!isDirtyRef.current && prevGradesRef.current !== state.grades)) {
+      setSelectedClassId(nextClassId);
+      setSelectedTrimester(nextTri);
+      isDirtyRef.current = false;
+      setGradesDraft(buildDraft(state.students, state.grades, nextClassId, nextTri));
+    }
+    prevGradesRef.current = state.grades;
+  }, [state.activeClassId, state.activeTrimester, selectedClassId, selectedTrimester, state.students, state.grades]);
 
   const handleSelectClass = (newClassId: string) => {
     if (isDirtyRef.current) {

@@ -144,16 +144,11 @@ function AppContent({
     conflicts,
     resolveConflictKeepRemote,
     resolveConflictKeepLocal,
-<<<<<<< ours
-    resyncFromCloud,
-||||||| base
-=======
     resyncFromCloud,
     pendingCount,
     lastSyncedAt,
     refreshSyncStatus,
     syncDeviceId,
->>>>>>> theirs
   } = useCloudAppState(user);
   const [conflictBusy, setConflictBusy] = useState(false);
   const [conflictError, setConflictError] = useState<string | null>(null);
@@ -297,10 +292,6 @@ function AppContent({
       commitRosterImport,
       clearRosterData,
       resetWorkspace,
-<<<<<<< ours
-      resyncFromCloud,
-||||||| base
-=======
       resyncFromCloud,
       pendingCount,
       lastSyncedAt,
@@ -308,7 +299,6 @@ function AppContent({
       syncDeviceId,
       retrySync,
       cloudStatus,
->>>>>>> theirs
       conflicts,
       resolveConflictKeepRemote,
       resolveConflictKeepLocal,

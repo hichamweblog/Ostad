@@ -30,13 +30,8 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
-<<<<<<< ours
-  CloudDownload,
-||||||| base
-=======
   CloudDownload,
   RefreshCw,
->>>>>>> theirs
   Download,
   Plus,
   RotateCcw,
@@ -65,10 +60,6 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     updateStateAndWait,
     replaceStateFromBackup,
     clearRosterData,
-<<<<<<< ours
-    resyncFromCloud,
-||||||| base
-=======
     resyncFromCloud,
     pendingCount,
     lastSyncedAt,
@@ -76,7 +67,6 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     syncDeviceId,
     retrySync,
     cloudStatus,
->>>>>>> theirs
   } = useAppState();
   const [calendarSettings, setCalendarSettings] =
     useState<AcademicCalendarSettings>(

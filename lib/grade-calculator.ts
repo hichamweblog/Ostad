@@ -8,15 +8,21 @@ import { CouncilStatistics, Student, StudentGrade } from './types';
  * 4. المشاركة (5): ينقص منه عند عدم المشاركة أو التفاعل.
  */
 export function calculateContinuousEvaluation(
-  behaviorScore: number = 5,
-  attendanceScore: number = 5,
-  notebookScore: number = 5,
-  participationScore: number = 5
+  behaviorScore: number | string | null = 5,
+  attendanceScore: number | string | null = 5,
+  notebookScore: number | string | null = 5,
+  participationScore: number | string | null = 5
 ): number {
-  const b = Math.max(0, Math.min(5, isNaN(behaviorScore) ? 5 : behaviorScore));
-  const a = Math.max(0, Math.min(5, isNaN(attendanceScore) ? 5 : attendanceScore));
-  const n = Math.max(0, Math.min(5, isNaN(notebookScore) ? 5 : notebookScore));
-  const p = Math.max(0, Math.min(5, isNaN(participationScore) ? 5 : participationScore));
+  const safeScore = (val: any, fallback: number) => {
+    if (val === null || val === undefined || val === '') return fallback;
+    const num = Number(val);
+    return isNaN(num) ? fallback : Math.max(0, Math.min(5, num));
+  };
+  
+  const b = safeScore(behaviorScore, 5);
+  const a = safeScore(attendanceScore, 5);
+  const n = safeScore(notebookScore, 5);
+  const p = safeScore(participationScore, 5);
   const total = b + a + n + p;
   return Math.round(total * 100) / 100;
 }

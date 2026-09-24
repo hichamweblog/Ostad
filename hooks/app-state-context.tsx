@@ -23,11 +23,6 @@ export interface AppStateContextValue {
   ) => Promise<void>;
   clearRosterData: () => Promise<void>;
   resetWorkspace: () => Promise<void>;
-<<<<<<< ours
-  /** Reloads the whole workspace from the cloud, discarding queued local operations. */
-  resyncFromCloud: () => Promise<void>;
-||||||| base
-=======
   /** Reloads the whole workspace from the cloud, discarding queued local operations. */
   resyncFromCloud: () => Promise<void>;
   /** Number of queued operations still waiting for the cloud (0 = everything confirmed). */
@@ -42,7 +37,6 @@ export interface AppStateContextValue {
   retrySync: () => Promise<void>;
   /** Current cloud sync status, used by the sync panel. */
   cloudStatus: CloudSyncStatusLike;
->>>>>>> theirs
   conflicts: SyncConflictDescriptor[];
   resolveConflictKeepRemote: (conflict: SyncConflictDescriptor) => Promise<void>;
   resolveConflictKeepLocal: (conflict: SyncConflictDescriptor) => Promise<void>;
