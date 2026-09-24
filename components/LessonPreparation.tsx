@@ -2,7 +2,14 @@
 
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
+<<<<<<< ours
+import { binaryKeyForPdf, deleteBinaryFile, loadPdfBinary, savePdfBinary } from '@/lib/binary-storage';
+||||||| base
 import { binaryKeyForPdf, deleteBinaryFile, loadBinaryFile, saveBinaryFile } from '@/lib/binary-storage';
+=======
+import { binaryKeyForPdf, deleteBinaryFile, listStoredPdfUnitIds, loadPdfBinary, savePdfBinary } from '@/lib/binary-storage';
+import { offlinePdfAvailability } from '@/lib/sync-status';
+>>>>>>> theirs
 import { deleteTeacherMemorandum, getMemorandumUrl, uploadTeacherMemorandum } from '@/lib/supabase/memoranda-storage';
 import { cancelMemorandaUpload } from '@/lib/supabase/memoranda-outbox';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -11,7 +18,7 @@ import { AppState } from '@/lib/storage';
 import { CurriculumUnit, GradeLevel } from '@/lib/types';
 import { OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import { exportUnitToWordDoc } from '@/lib/doc-exporter';
-import {
+import {AlertTriangle, 
   BookOpen,
   FileText,
   Upload,
@@ -45,7 +52,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
   initialUnit,
   initialTab
 }) => {
-  const { state, updateStateAndWait } = useAppState();
+  const { state, updateStateAndWait, ownerId } = useAppState();
   const allUnits = useMemo(() => getMergedCurriculumUnits(state.customUnits), [state.customUnits]);
   const [curriculumLoaded, setCurriculumLoaded] = useState(false);
 
@@ -99,6 +106,8 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
   const [cloudPdfData, setCloudPdfData] = useState<{ unitId: string; url: string } | undefined>();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [offlineSaving, setOfflineSaving] = useState(false);
+  const [storedOfflineUnitIds, setStoredOfflineUnitIds] = useState<string[]>([]);
 
   // Current selected unit
   const currentUnit: CurriculumUnit | undefined =
@@ -106,12 +115,18 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
   // Current attached PDF: local bundled memorandum or teacher override.
   const attachedPdf = currentUnit ? state.unitPdfFiles?.[currentUnit.id] : undefined;
+  const scopedPdfKey = currentUnit ? binaryKeyForPdf(currentUnit.id, ownerId) : undefined;
   const localPdfUrl =
-    attachedPdf?.fileStorageKey && pdfData?.key === attachedPdf.fileStorageKey
+    attachedPdf?.fileStorageKey && pdfData && (pdfData.key === attachedPdf.fileStorageKey || pdfData.key === scopedPdfKey)
       ? pdfData.url
       : attachedPdf?.fileDataUrl;
   const cloudPdfUrl = (cloudPdfData && currentUnit && cloudPdfData.unitId === currentUnit.id) ? cloudPdfData.url : undefined;
   const isLocalPdfPending = Boolean(attachedPdf?.fileStorageKey && !localPdfUrl);
+  const offlineAvailability = offlinePdfAvailability(
+    Object.keys(state.unitPdfFiles || {}),
+    storedOfflineUnitIds,
+  );
+  const currentUnitStoredOffline = Boolean(currentUnit && storedOfflineUnitIds.includes(currentUnit.id));
   const activePdfUrl = isLocalPdfPending
     ? null
     : localPdfUrl ||
@@ -122,17 +137,48 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
   const directViewUrl = localPdfUrl || attachedPdf?.fileUrl || cloudPdfUrl || activePdfUrl;
   const directDownloadUrl = localPdfUrl || currentUnit?.pdfUrl;
 
+  // Which attached memoranda are actually stored on this device (offline availability).
   useEffect(() => {
     let cancelled = false;
+<<<<<<< ours
+    const unitId = currentUnit?.id;
+    if (!unitId || !attachedPdf?.fileStorageKey) return;
+    // Reads the owner-scoped key first (migrating a legacy unscoped entry if needed).
+    void loadPdfBinary(unitId, ownerId).then(value => {
+      if (!cancelled && value) setPdfData({ key: binaryKeyForPdf(unitId, ownerId), url: value });
+||||||| base
     const key = attachedPdf?.fileStorageKey;
     if (!key) return;
     void loadBinaryFile(key).then(value => {
       if (!cancelled && value) setPdfData({ key, url: value });
+=======
+    void listStoredPdfUnitIds(ownerId).then((unitIds) => {
+      if (!cancelled) setStoredOfflineUnitIds(unitIds);
+>>>>>>> theirs
     });
     return () => {
       cancelled = true;
     };
+<<<<<<< ours
+  }, [attachedPdf?.fileStorageKey, currentUnit?.id, ownerId]);
+||||||| base
   }, [attachedPdf?.fileStorageKey]);
+=======
+  }, [ownerId, attachedPdf?.fileStorageKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unitId = currentUnit?.id;
+    if (!unitId || !attachedPdf?.fileStorageKey) return;
+    // Reads the owner-scoped key first (migrating a legacy unscoped entry if needed).
+    void loadPdfBinary(unitId, ownerId).then(value => {
+      if (!cancelled && value) setPdfData({ key: binaryKeyForPdf(unitId, ownerId), url: value });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachedPdf?.fileStorageKey, currentUnit?.id, ownerId]);
+>>>>>>> theirs
 
   useEffect(() => {
     let cancelled = false;
@@ -190,10 +236,10 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       const fileName = file.name;
-      const storageKey = binaryKeyForPdf(currentUnit.id);
+      const storageKey = binaryKeyForPdf(currentUnit.id, ownerId);
 
       try {
-        await saveBinaryFile(storageKey, dataUrl);
+        await savePdfBinary(currentUnit.id, dataUrl, ownerId);
         setPdfData({ key: storageKey, url: dataUrl });
         const { storagePath } = await uploadTeacherMemorandum(currentUnit.id, file);
         await updateStateAndWait(prev => ({
@@ -221,12 +267,46 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
     reader.readAsDataURL(file);
   };
 
+  /**
+   * "Preserve offline PDFs with intent": pull the cloud copy into this device so the
+   * memorandum opens in class without signal, instead of relying on the signed URL.
+   */
+  const handleSaveOfflineCopy = async () => {
+    if (!currentUnit) return;
+    const sourceUrl = cloudPdfUrl || attachedPdf?.fileUrl || currentUnit.pdfUrl;
+    if (!sourceUrl) {
+      showToast('لا يوجد ملف مذكرة مرفوع لهذه الوحدة بعد.', 'error');
+      return;
+    }
+    setOfflineSaving(true);
+    try {
+      const response = await fetch(sourceUrl);
+      if (!response.ok) throw new Error('تعذر تنزيل الملف.');
+      const blob = await response.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('تعذر قراءة الملف.'));
+        reader.readAsDataURL(blob);
+      });
+      const key = await savePdfBinary(currentUnit.id, dataUrl, ownerId);
+      setPdfData({ key, url: dataUrl });
+      setStoredOfflineUnitIds((current) => (current.includes(currentUnit.id) ? current : [...current, currentUnit.id]));
+      setPdfUploadNotice('تم حفظ نسخة على هذا الجهاز. ستعمل المذكرة دون إنترنت.');
+      setTimeout(() => setPdfUploadNotice(null), 4000);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر حفظ نسخة دون إنترنت.', 'error');
+    } finally {
+      setOfflineSaving(false);
+    }
+  };
+
   // Delete attached PDF
   const handleDeletePdf = async () => {
     if (!currentUnit || !deleteConfirmId) return;
     setDeleteConfirmId(null);
     try {
-      await cancelMemorandaUpload(currentUnit.id);
+      await cancelMemorandaUpload(ownerId ?? 'anon', currentUnit.id);
       if (attachedPdf?.cloudStoragePath) {
         await deleteTeacherMemorandum(attachedPdf.cloudStoragePath);
       }
@@ -384,6 +464,44 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Offline memorandum status + one-tap download */}
+        <div className="mt-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
+            {offlineAvailability.complete ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>
+                  كل المذكرات المرفقة ({offlineAvailability.available.length}) محفوظة على هذا
+                  الجهاز وتعمل دون إنترنت.
+                </span>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>
+                  {offlineAvailability.missing.length} من المذكرات المرفقة غير محفوظة على هذا
+                  الجهاز ولن تُفتح دون إنترنت.
+                </span>
+              </>
+            )}
+          </p>
+          {currentUnit && !currentUnitStoredOffline && (cloudPdfUrl || currentUnit.pdfUrl || attachedPdf?.fileUrl) && (
+            <button
+              onClick={() => void handleSaveOfflineCopy()}
+              disabled={offlineSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-800 transition-colors shadow-xs cursor-pointer disabled:opacity-50">
+              <Download className="w-3.5 h-3.5 text-[var(--primary)]" />
+              <span>{offlineSaving ? 'جارٍ الحفظ…' : 'حفظ نسخة للعمل دون إنترنت'}</span>
+            </button>
+          )}
+          {currentUnit && currentUnitStoredOffline && (
+            <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              محفوظة على الجهاز
+            </span>
+          )}
         </div>
 
         {/* Notice alert */}
