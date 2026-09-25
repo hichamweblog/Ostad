@@ -203,6 +203,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
               description: 'سجّل آخر حصة أو راجع الحصص السابقة للقسم النشط.',
               tab: 'sessions' as SanadTab
             };
+
+  const handleStartTodayFlow = () => {
+    const targetClassId = activeSlot?.classId || activeClass?.id || state.classes[0]?.id || null;
+    if (targetClassId) {
+      onUpdateState(prev => ({ ...prev, activeClassId: targetClassId }));
+    }
+    onNavigate(activeSlot || state.classes.length > 0 ? 'attendance' : nextAction.tab);
+  };
+
+  const handleRunNextAction = () => {
+    if (nextAction.tab === 'attendance') {
+      handleStartTodayFlow();
+      return;
+    }
+    onNavigate(nextAction.tab);
+  };
+
   return (
     <div className="flex flex-col space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8" id="academic-dashboard">
       {/* Onboarding Banner for New Teachers */}
@@ -261,31 +278,82 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
       
-      {/* 1. Quiet, Functional Top Header (Clean & Uncluttered) */}
-      <div className="order-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-default)]">
-        <div>
-          <div className="text-xl sm:text-2xl font-black text-[var(--text-primary)] font-display tracking-tight">
-            أهلاً بك، {(state.profile.name || 'أستاذ المادة').includes('أستاذ') ? (state.profile.name || 'أستاذ المادة') : `الأستاذ(ة) ${state.profile.name}`}
+      {/* 1. Today Command Center */}
+      <section className="order-2 overflow-hidden rounded-3xl border border-[var(--primary)]/20 bg-gradient-to-br from-[var(--bg-surface)] via-[var(--primary-soft)]/55 to-white p-5 shadow-xs" aria-labelledby="dashboard-today-title">
+        <div className="grid gap-5 lg:grid-cols-[1fr_22rem] lg:items-center">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-white/80 px-3 py-1 text-[11px] font-bold text-[var(--primary)]">
+              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{dateFormatted}</span>
+            </div>
+            <div>
+              <h2 id="dashboard-today-title" className="text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
+                {activeSlot ? 'جاهز لحصة اليوم؟' : `أهلاً بك، ${(state.profile.name || 'أستاذ المادة').includes('أستاذ') ? (state.profile.name || 'أستاذ المادة') : `الأستاذ(ة) ${state.profile.name}`}`}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-[var(--text-secondary)]">
+                {activeSlot
+                  ? `الحصة ${activeSlotClass?.name || 'القادمة'} من ${activeSlot.startTime} إلى ${activeSlot.endTime}. يمكنك بدء الحضور ثم متابعة دفتر النصوص مباشرة.`
+                  : nextAction.description}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={handleStartTodayFlow}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 text-sm font-black text-white shadow-lg shadow-[var(--primary)]/20 transition-transform active:scale-[0.98]"
+              >
+                <PlayCircle className="h-5 w-5" aria-hidden="true" />
+                {activeSlot ? 'ابدأ الحصة الآن' : state.classes.length ? 'فتح الحضور' : 'إعداد مساحة العمل'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTodaySessionsModalOpen(true)}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <Edit3 className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
+                حصص اليوم
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('documents')}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+              >
+                <FileText className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
+                وثيقة سريعة
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/80 bg-white/85 p-4 shadow-xs backdrop-blur">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
+              <div>
+                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">القسم/الحصة التالية</div>
+                <div className="mt-1 text-base font-black text-[var(--text-primary)]">
+                  {activeSlotClass?.name || activeClass?.name || 'لم يحدد قسم بعد'}
+                </div>
+              </div>
+              <div className="rounded-xl bg-[var(--primary-soft)] p-3 text-[var(--primary)]">
+                <Clock className="h-5 w-5" aria-hidden="true" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-3 text-center text-xs">
+              <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
+                <div className="font-mono text-sm font-black text-[var(--text-primary)]">{todaySlots.length}</div>
+                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">حصص اليوم</div>
+              </div>
+              <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
+                <div className="font-mono text-sm font-black text-[var(--text-primary)]">{state.students.length}</div>
+                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">تلاميذ</div>
+              </div>
+              <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
+                <div className="font-mono text-sm font-black text-[var(--text-primary)]">{activeSlot ? activeSlot.startTime : currentTimeStr}</div>
+                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">التوقيت</div>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsTodaySessionsModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs shadow-xs flex items-center gap-2 transition-all cursor-pointer" id="btn-quick-today-sessions" >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>إدخال حصص اليوم</span>
-          </button>
-          <button
-            onClick={() => onNavigate('documents')}
-            className="px-3 py-2 rounded-xl bg-white hover:bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-[var(--text-primary)] font-bold text-xs shadow-xs flex items-center gap-1.5 transition-all cursor-pointer" id="btn-quick-export" >
-            <FileText className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
-            <span className="hidden sm:inline">تصدير وثيقة (DOC)</span>
-          </button>
-        </div>
-      </div>
-
-      
       {/* 3. Compact 50px Stat Bar */}
       <div className="order-3 mb-6 bg-white border border-[var(--border-default)] rounded-xl shadow-xs overflow-x-auto scrollbar-none flex items-center h-[54px] divide-x divide-x-reverse divide-slate-100">
         <button onClick={() => onNavigate('classes')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
@@ -329,7 +397,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => onNavigate(nextAction.tab)}
+            onClick={handleRunNextAction}
             className="min-h-11 px-5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
           >
             تنفيذ الآن ←

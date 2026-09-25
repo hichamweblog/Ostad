@@ -244,7 +244,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
                   onClick={() => setSelectedTrimester(tri)}
                   className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     selectedTrimester === tri
-                      ? 'bg-gold text-white' : 'text-slate-600 hover:text-slate-900' }`}
+                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)]' : 'text-slate-600 hover:text-slate-900' }`}
                 >
                   الفصل {tri}
                 </button>

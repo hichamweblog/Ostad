@@ -1345,6 +1345,20 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {/* --------------------------------------------- */}
       {activeSubTab === 'classes' && (
         <div className="space-y-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".xlsx, .xls, .csv"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <input
+            type="file"
+            ref={moumtazeFileInputRef}
+            accept=".xlsx, .xls"
+            onChange={handleMoumtazeFileUpload}
+            className="hidden"
+          />
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="text-xs font-bold text-slate-700">
               {state.profile.schoolName
@@ -1404,12 +1418,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenEditClass(cls)}
-                        className="p-1 rounded text-slate-400 hover:text-slate-700 cursor-pointer" title="تعديل القسم" >
+                        className="min-h-10 min-w-10 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center justify-center" title="تعديل القسم" aria-label={`تعديل قسم ${cls.name}`} >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => promptDeleteClass(cls)}
-                        className="p-1 rounded text-rose-400 hover:text-rose-600 cursor-pointer" title="حذف القسم" >
+                        className="min-h-10 min-w-10 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer flex items-center justify-center" title="حذف القسم" aria-label={`حذف قسم ${cls.name}`} >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1449,7 +1463,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
                         if (onNavigate) onNavigate('attendance');
                       }}
-                      className="py-2 rounded-xl bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)] text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      className="min-h-11 py-2 rounded-xl bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)] text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       الحضور
                     </button>
@@ -1458,7 +1472,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
                         if (onNavigate) onNavigate('grades');
                       }}
-                      className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      className="min-h-11 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       النقاط
                     </button>
@@ -1468,7 +1482,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
                         if (onNavigate) onNavigate('students');
                       }}
-                      className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      className="min-h-11 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       التفاصيل
                     </button>
@@ -1478,14 +1492,47 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             })}
           </div>
           {visibleClasses.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-              <p className="text-sm font-bold text-slate-800">
-                {state.classes.length === 0 ? 'لم تتم إضافة أقسام بعد' : 'لا توجد أقسام مطابقة للبحث'}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {state.classes.length === 0 ? 'أضف قسماً أو استورد الأقسام من ملف الرقمنة.' : 'جرّب تغيير عبارة البحث أو المستوى.'}
-              </p>
-            </div>
+            state.classes.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-[var(--primary)]/30 bg-[var(--primary-soft)]/35 p-5 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[var(--primary)] shadow-xs">
+                  <Users className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-black text-[var(--text-primary)]">ابدأ بإضافة أقسامك</h3>
+                <p className="mx-auto mt-2 max-w-md text-xs leading-6 text-[var(--text-secondary)]">
+                  الاستيراد من ملف الرقمنة هو أسرع مسار: سيحاول مُعين إنشاء الأقسام وقوائم التلاميذ دفعة واحدة، ويمكنك دائماً الإضافة يدوياً.
+                </p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-sm font-black text-white shadow-xs active:scale-[0.98]"
+                  >
+                    <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
+                    استيراد ملف الرقمنة
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddClass}
+                    className="flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-sm font-black text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+                  >
+                    <Plus className="h-5 w-5 text-[var(--primary)]" aria-hidden="true" />
+                    إضافة قسم يدوياً
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => moumtazeFileInputRef.current?.click()}
+                  className="mt-3 min-h-11 rounded-xl px-4 text-xs font-bold text-[var(--primary)] hover:bg-white/70"
+                >
+                  أو استيراد ملف الممتاز
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <p className="text-sm font-bold text-slate-800">لا توجد أقسام مطابقة للبحث</p>
+                <p className="text-xs text-slate-500 mt-1">جرّب تغيير عبارة البحث أو المستوى.</p>
+              </div>
+            )
           )}
         </div>
       )}
@@ -1735,12 +1782,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                                 setEditingStudent({ ...student });
                                 setIsStudentModalOpen(true);
                               }}
-                              className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer" title="تعديل" >
+                              className="min-h-10 min-w-10 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer inline-flex items-center justify-center" title="تعديل" aria-label={`تعديل بيانات ${student.fullName}`} >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => promptDeleteStudent(student)}
-                              className="p-1 text-rose-400 hover:text-rose-600 cursor-pointer" title="حذف" >
+                              className="min-h-10 min-w-10 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer inline-flex items-center justify-center" title="حذف" aria-label={`حذف ${student.fullName}`} >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -1784,12 +1831,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                           setEditingStudent({ ...student });
                           setIsStudentModalOpen(true);
                         }}
-                        className="p-2 text-slate-400 hover:text-slate-700 cursor-pointer bg-slate-50 rounded-lg" title="تعديل" >
+                        className="min-h-10 min-w-10 p-2 text-slate-400 hover:text-slate-700 cursor-pointer bg-slate-50 rounded-lg inline-flex items-center justify-center" title="تعديل" aria-label={`تعديل بيانات ${student.fullName}`} >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => promptDeleteStudent(student)}
-                        className="p-2 text-[var(--danger)] hover:opacity-80 cursor-pointer bg-[var(--danger-soft)] rounded-lg" title="حذف" >
+                        className="min-h-10 min-w-10 p-2 text-[var(--danger)] hover:opacity-80 cursor-pointer bg-[var(--danger-soft)] rounded-lg inline-flex items-center justify-center" title="حذف" aria-label={`حذف ${student.fullName}`} >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

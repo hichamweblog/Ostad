@@ -1,6 +1,5 @@
 "use client";
 
-import { AppState } from "@/lib/storage";
 import { useAppState } from '@/hooks/app-state-context';
 import { AlertCircle, Calendar, CheckCircle2, Cloud, Menu, RefreshCw, Search } from "lucide-react";
 import React, { useEffect } from "react";
@@ -77,7 +76,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
   onRetrySync,
   onOpenConflict,
 }) => {
-  const { state, updateState: onUpdateState } = useAppState();
+  const { state } = useAppState();
   const currentInfo = TAB_TITLES[currentTab] || { title: "معين" };
   const activeClass = selectActiveClass(state);
   const activeClassStudentCount = selectStudentsByClass(state, activeClass?.id ?? null).length;
@@ -149,7 +148,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onToggleMobileSidebar}
-            className="p-2 rounded-xl lg:hidden text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] transition-colors cursor-pointer shrink-0"
+            className="min-h-11 min-w-11 p-2 rounded-xl lg:hidden text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)] transition-colors cursor-pointer shrink-0 flex items-center justify-center"
             aria-label="فتح القائمة">
             <Menu className="w-5 h-5" />
           </button>
@@ -187,7 +186,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
           {/* Quick Search Button */}
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            className="flex min-h-11 items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer shadow-xs whitespace-nowrap"
             title="بحث شامل (Ctrl+K)">
             <Search className="w-4 h-4 text-[var(--text-secondary)]" />
             <span className="hidden sm:inline font-medium">بحث</span>
@@ -198,7 +197,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
 
           <PWAInstallButton />
           <div
-            className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold ${syncStatus.className} border-current/20 bg-[var(--bg-surface-subtle)]`}
+            className={`flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-bold ${syncStatus.className} border-current/20 bg-[var(--bg-surface-subtle)]`}
             title={syncError || syncStatus.label}
             aria-live="polite">
             {cloudStatus === "ready" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> :
@@ -207,7 +206,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
               <Cloud className="h-3.5 w-3.5 shrink-0" />}
             <span className="hidden sm:inline">{syncStatus.label}</span>
             {cloudStatus === "conflict" && onOpenConflict && (
-              <button type="button" onClick={onOpenConflict} className="underline underline-offset-2 shrink-0 cursor-pointer">
+              <button type="button" onClick={onOpenConflict} className="min-h-8 px-1 underline underline-offset-2 shrink-0 cursor-pointer">
                 مراجعة
               </button>
             )}
@@ -215,7 +214,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
               <button
                 type="button"
                 onClick={onRetrySync}
-                className="underline underline-offset-2 shrink-0 cursor-pointer"
+                className="min-h-8 px-1 underline underline-offset-2 shrink-0 cursor-pointer"
                 aria-label="إعادة محاولة المزامنة">
                 إعادة المحاولة
               </button>

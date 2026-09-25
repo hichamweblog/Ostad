@@ -1156,7 +1156,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               </button>
               <button
                 onClick={confirmResetHolidays}
-                className="px-4 py-2 rounded-xl bg-gold hover:bg-amber-700 text-white font-bold transition-colors text-sm shadow-sm cursor-pointer">
+                className="px-4 py-2 rounded-xl bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] font-bold transition-colors text-sm shadow-sm cursor-pointer">
                 نعم، استعادة
               </button>
             </div>

@@ -836,7 +836,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
             <button
               onClick={() => setShowFormulaModal(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors" >
               <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
               <span>كيف يُحسب؟</span>
             </button>
@@ -844,14 +844,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isExporting}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors" title="حقن النقاط في ملف الرقمنة (Excel) المفرغ" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-50 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors" title="ملء ملف الرقمنة (Excel) بالنقاط المحفوظة" >
               <Download className={`w-4 h-4 shrink-0 ${isExporting ? 'animate-bounce' : ''}`} />
-              <span>حقن الرقمنة</span>
+              <span>ملء ملف الرقمنة</span>
             </button>
 
             <button
               onClick={handleExportExcel}
-              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold shadow-xs cursor-pointer transition-colors" title="استخراج كشف النقاط كملف Excel" id="btn-export-grades-sheet" >
+              className="col-span-2 sm:col-span-1 flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold shadow-xs cursor-pointer transition-colors" title="استخراج كشف النقاط كملف Excel" id="btn-export-grades-sheet" >
               <FileSpreadsheet className="w-4 h-4 text-[var(--primary)] shrink-0" />
               <span>استخراج كشف النقاط</span>
             </button>
@@ -860,21 +860,21 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
             <button
               onClick={handleAutoFillContinuousEval}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--text-primary)] border border-[var(--primary)] text-xs font-bold cursor-pointer transition-colors shadow-2xs" title="حساب التقويم المستمر آلياً بناءً على الغيابات والسلوك المسجل في دفتر النصوص" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--text-primary)] border border-[var(--primary)] text-xs font-bold cursor-pointer transition-colors shadow-2xs" title="حساب التقويم المستمر آلياً بناءً على الغيابات والسلوك المسجل في دفتر النصوص" >
               <Sparkles className="w-4 h-4 text-[var(--primary)] shrink-0" />
               <span>حساب التقويم آلياً</span>
             </button>
 
             <button
               onClick={handleAutoFillPedagogicalFields}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold cursor-pointer transition-colors shadow-2xs" title="ملء التقديرات والإرشادات آلياً لجميع تلاميذ القسم حسب نقاطهم ومعدلاتهم" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold cursor-pointer transition-colors shadow-2xs" title="ملء التقديرات والإرشادات آلياً لجميع تلاميذ القسم حسب نقاطهم ومعدلاتهم" >
               <Sparkles className="w-4 h-4 text-gold shrink-0" />
               <span>تطبيق التقديرات آلياً</span>
             </button>
 
             <button
               onClick={handleSaveAllGrades}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-xs cursor-pointer transition-colors" id="btn-save-all-grades" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] text-xs font-bold shadow-xs cursor-pointer transition-colors" id="btn-save-all-grades" >
               <Save className="w-4 h-4 shrink-0" />
               <span>حفظ كل العلامات</span>
             </button>
@@ -912,7 +912,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               <button
                 type="button"
                 onClick={handleSaveAllGrades}
-                className="px-2.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-rose-50 text-[11px] font-black transition-colors cursor-pointer"
+                className="min-h-9 px-2.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-rose-50 text-[11px] font-black transition-colors cursor-pointer"
               >
                 إعادة المحاولة
               </button>
@@ -920,7 +920,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <button
               type="button"
               onClick={() => setSaveToast(false)}
-              className="p-1 rounded-lg hover:bg-white/20 text-white transition-colors cursor-pointer"
+              className="min-h-9 min-w-9 p-1 rounded-lg hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
               aria-label="إغلاق التنبيه"
             >
               <X className="w-4 h-4" />
@@ -928,6 +928,24 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           </div>
         </div>
       )}
+
+      <div className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 md:hidden print:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border border-[var(--border-default)] bg-white/95 p-2.5 shadow-xl backdrop-blur">
+          <div className="min-w-0 text-right">
+            <div className="text-[10px] font-bold text-[var(--text-tertiary)]">دفتر النقاط</div>
+            <div className={`text-xs font-black ${saveStatus === 'saved' ? 'text-[var(--success)]' : saveStatus === 'saving' ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`} aria-live="polite">
+              {saveStatus === 'saved' ? 'كل التغييرات محفوظة' : saveStatus === 'saving' ? 'جارٍ الحفظ...' : 'توجد تغييرات غير محفوظة'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveAllGrades}
+            className="min-h-11 shrink-0 rounded-xl bg-[var(--accent-gold)] px-4 text-xs font-black text-[var(--accent-navy)] shadow-xs active:scale-[0.98]"
+          >
+            حفظ العلامات
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="ملخص دفتر النقاط">
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
@@ -974,7 +992,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                   onClick={() => handleSelectTrimester(tri)}
                   className={`flex-1 sm:flex-initial px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer text-center ${
                     selectedTrimester === tri
-                      ? 'bg-gold text-white shadow-xs' : 'text-slate-600 hover:text-slate-900' }`}
+                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] shadow-xs' : 'text-slate-600 hover:text-slate-900' }`}
                 >
                   الفصل {tri}
                 </button>
@@ -1042,6 +1060,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                   const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                   const ex = draft.exam !== '' ? Number(draft.exam) : null;
                   const avg = calculateStudentAverage(ce, q, ex);
+                  const completedFields = [draft.continuousEval, draft.quiz, draft.exam].filter(value => value !== '').length;
 
                   return (
                     <div
@@ -1056,11 +1075,16 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                           <h4 className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
                             {student.fullName}
                           </h4>
-                          {student.isRepeater && (
-                            <span className="inline-block text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold mt-1">
-                              معيد
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${completedFields === 3 ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-amber-50 text-amber-800'}`}>
+                              {completedFields}/3 مكتملة
                             </span>
-                          )}
+                            {student.isRepeater && (
+                              <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                                معيد
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1165,7 +1189,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                                   type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.continuousEval}
                                   onChange={e => handleGradeChange(student.id, 'continuousEval', e.target.value)}
                                   aria-label={`التقويم المستمر - ${student.fullName}`}
-                                  className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                  className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                                 <div className="hidden sm:flex items-center gap-1 text-[9px] text-[var(--primary)] whitespace-nowrap" title="النقطة المقترحة">
                                   <span className="font-mono">{calcAutoContinuousEval(student.id).toFixed(2)}</span>
                                   <button
@@ -1185,7 +1209,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                                 type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.quiz}
                                 onChange={e => handleGradeChange(student.id, 'quiz', e.target.value)}
                                 aria-label={`الفرض المحروس - ${student.fullName}`}
-                                className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
 
                             {/* Exam (0-20) */}
@@ -1194,7 +1218,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                                 type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.exam}
                                 onChange={e => handleGradeChange(student.id, 'exam', e.target.value)}
                                 aria-label={`الاختبار الفصلي - ${student.fullName}`}
-                                className="w-18 text-center px-1 py-1 min-h-[36px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
+                                className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
 
                             <td className="p-1 px-2 text-center bg-amber-50/50 border-x border-amber-200">

@@ -18,7 +18,9 @@ export const PWAInstallButton: React.FC = () => {
     return (
       <button
         onClick={install}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-sm transition-colors cursor-pointer" title="تثبيت التطبيق" >
+        className="flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] text-xs font-black shadow-sm transition-colors cursor-pointer"
+        title="تثبيت التطبيق"
+        aria-label="تثبيت التطبيق" >
         <Download className="w-4 h-4" />
         <span className="hidden sm:inline">تثبيت التطبيق</span>
       </button>
@@ -31,7 +33,9 @@ export const PWAInstallButton: React.FC = () => {
       <>
         <button
           onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold hover:bg-gold text-white text-xs font-bold shadow-sm transition-colors cursor-pointer" title="تثبيت التطبيق" >
+          className="flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] text-xs font-black shadow-sm transition-colors cursor-pointer"
+          title="تثبيت التطبيق"
+          aria-label="تثبيت التطبيق" >
           <Download className="w-4 h-4" />
           <span className="hidden sm:inline">تثبيت التطبيق</span>
         </button>
@@ -42,7 +46,8 @@ export const PWAInstallButton: React.FC = () => {
                 <h3 id="ios-install-title" className="font-bold text-[var(--text-primary)] text-lg">تثبيت التطبيق (iOS)</h3>
                 <button
                   onClick={() => setShowIOSGuide(false)}
-                  className="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-lg" >
+                  className="min-h-10 min-w-10 text-slate-400 hover:text-slate-700 transition-colors p-1 rounded-lg flex items-center justify-center"
+                  aria-label="إغلاق إرشادات تثبيت التطبيق" >
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -56,7 +61,7 @@ export const PWAInstallButton: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowIOSGuide(false)}
-                className="w-full mt-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl transition-colors" >
+                className="w-full min-h-11 mt-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl transition-colors" >
                 حسناً، فهمت
               </button>
           </AccessibleDialog>
