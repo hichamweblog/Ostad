@@ -478,33 +478,6 @@ ${sessionNotes}
     exportToDoc(html, `دفتر_نصوص_${activeClass?.name || 'القسم'}`);
   };
 
-  // Export the unified notebook to Word (.doc)
-  const handleExportNotesDoc = () => {
-    const noteSessions = classPastSessions.filter(s => getSessionNotes(s));
-
-    const noteRows = noteSessions.map((s, idx) => {
-      const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = unitObj?.title || s.customTopic || 'حصة تعلمية';
-      return `
-        <div style="margin-bottom: 25px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; background-color: #fafaf9;">
-          <h3 style="color: #0d2c3b; margin-top: 0;">الحصة ${idx + 1}: ${title} — ${s.date}</h3>
-          <p style="white-space: pre-wrap;"><strong>ملاحظات الحصة:</strong><br/>${getSessionNotes(s)}</p>
-        </div>
-      `;
-    }).join('');
-
-    const html = `
-      <div dir="rtl" style="text-align: center; margin-bottom: 10px;">
-        <div style="color: #b45309;">دفتر الملاحظات للأستاذ</div>
-        <p><strong>الأستاذ(ة):</strong> ${state.profile?.name || 'أستاذ المادة'} | <strong>المؤسسة:</strong> ${state.profile?.schoolName || 'ثانوية التعليم الثانوي'} | <strong>السنة الدراسية:</strong> ${state.profile?.academicYear || '2026/2027'}</p>
-        <p><strong>القسم:</strong> ${activeClass?.name || 'جميع الأقسام'} | <strong>عدد الملاحظات:</strong> ${noteSessions.length}</p>
-      </div>
-      ${noteRows.length > 0 ? noteRows : '<p style="text-align:center;">لا توجد ملاحظات مسجلة حتى الآن.</p>'}
-    `;
-
-    exportToDoc(html, `دفتر_الملاحظات_${activeClass?.name || 'القسم'}`);
-  };
-
   return (
     <div className="space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6" id="session-cahier-view">
       {/* Actions bar — no redundant h2 title */}
@@ -515,12 +488,6 @@ ${sessionNotes}
             className="px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" title="تصدير دفتر النصوص كاملاً إلى ملف Word (.doc)" >
             <FileDown className="w-3.5 h-3.5 text-white/70" />
             <span>تصدير (.doc)</span>
-          </button>
-          <button
-            onClick={handleExportNotesDoc}
-            className="px-3.5 py-1.5 rounded-xl bg-[var(--warning)] hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" >
-            <Lightbulb className="w-3.5 h-3.5 text-white/70" />
-            <span>تصدير دفتر الملاحظات (.doc)</span>
           </button>
           <div className="px-3.5 py-1.5 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
             <Users className="w-4 h-4 text-[var(--primary)]" />

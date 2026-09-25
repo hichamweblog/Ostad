@@ -350,8 +350,8 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
         </div>
       )}
 
-      {/* Section 0: Professional Profile */}
-      <div className="flex overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xs" role="tablist" aria-label="أقسام الإعدادات">
+      {/* أقسام الإعدادات: كل قسم كزر مستقل (2×2 في الموبايل دون تمرير أفقي) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="أقسام الإعدادات">
         {([
           ["profile", "الملف المهني", UserRound],
           ["calendar", "التقويم الدراسي", Calendar],
@@ -364,13 +364,13 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            className={`min-h-11 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center text-xs font-bold transition-colors cursor-pointer ${
               activeTab === tab
-                ? "bg-[var(--primary-soft)] text-[var(--accent-navy)]"
-                : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                ? "border-[var(--primary)]/40 bg-[var(--primary-soft)] text-[var(--accent-navy)] shadow-xs"
+                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
             }`}>
-            <Icon className="mx-auto mb-1 h-4 w-4" />
-            {label}
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="leading-tight">{label}</span>
           </button>
         ))}
       </div>

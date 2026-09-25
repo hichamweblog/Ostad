@@ -3,6 +3,7 @@
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
 import React, { useEffect, useState, useRef } from 'react';
+import { CLASS_COLORS, DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
 import { AppState } from '@/lib/storage';
 import { SanadTab } from './SidebarSanad';
 import { ClassRoom, GradeLevel, Student, StudentGrade, TimetableSlot } from '@/lib/types';
@@ -367,7 +368,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       level: '3AS',
       stream: 'علوم تجريبية',
       roomNumber: 'القاعة 01',
-      color: '#0d9488' });
+      color: pickClassColor(state.classes.map(c => c.color)) });
     setIsClassModalOpen(true);
   };
 
@@ -494,11 +495,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     let totalExistingStudentsRetained = 0;
     const processedClassIds: string[] = [];
 
-    const classColors = [
-      '#0d9488', '#0284c7', '#d97706', '#7c3aed', '#e11d48',
-      '#059669', '#4f46e5', '#ca8a04', '#2563eb', '#db2777'
-    ];
-
     // Loop through all parsed classes from all sheets in the Excel file
     parsedData.classes.forEach((pClass, idx) => {
       // Check if class already exists by exact name or matching normalized name
@@ -518,7 +514,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           classObj.name = pClass.className;
           classObj.level = pClass.level;
           classObj.stream = pClass.stream;
-          classObj.color = classObj.color || classColors[(updatedClasses.length + idx) % classColors.length];
+          classObj.color = classObj.color || pickClassColor(updatedClasses.map(c => c.color));
         }
       }
 
@@ -530,7 +526,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           name: pClass.className,
           level: pClass.level,
           stream: pClass.stream,
-          color: classColors[(updatedClasses.length + idx) % classColors.length],
+          color: pickClassColor(updatedClasses.map(c => c.color)),
         };
         updatedClasses.push(classObj);
       } else {
@@ -545,6 +541,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         name: classObj.name,
         level: classObj.level,
         stream: classObj.stream,
+        color: classObj.color,
       });
 
       // Process students for this specific class
@@ -732,11 +729,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     let updatedStudents = state.students.map(student => ({ ...student }));
     const processedClassIds: string[] = [];
 
-    const classColors = [
-      '#0d9488', '#0284c7', '#d97706', '#7c3aed', '#e11d48',
-      '#059669', '#4f46e5', '#ca8a04', '#2563eb', '#db2777'
-    ];
-
     classesToImport.forEach((mClass, idx) => {
       // Check if class already exists by exact name or normalized matching
       let classObj = updatedClasses.find(c => !processedClassIds.includes(c.id) && isSameClass(c.name, mClass.className));
@@ -754,7 +746,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           classObj.level = mClass.level;
           classObj.stream = mClass.stream;
           if (mClass.roomNumber) classObj.roomNumber = mClass.roomNumber;
-          classObj.color = classObj.color || classColors[(updatedClasses.length + idx) % classColors.length];
+          classObj.color = classObj.color || pickClassColor(updatedClasses.map(c => c.color));
         }
       }
 
@@ -767,7 +759,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           level: mClass.level,
           stream: mClass.stream,
           roomNumber: mClass.roomNumber || 'القاعة 01',
-          color: classColors[(updatedClasses.length + idx) % classColors.length],
+          color: pickClassColor(updatedClasses.map(c => c.color)),
         };
         updatedClasses.push(classObj);
       } else {
@@ -785,6 +777,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         name: classObj.name,
         level: classObj.level,
         stream: classObj.stream,
+        color: classObj.color,
       });
 
       // Process students for this class
@@ -1406,12 +1399,13 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               return (
                 <div
                   key={cls.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-slate-300 transition-all space-y-3" id={`class-card-${cls.id}`}
+                  className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-slate-300 transition-all space-y-3 overflow-hidden" id={`class-card-${cls.id}`}
+                  style={{ borderTop: `3px solid ${cls.color || DEFAULT_CLASS_COLOR}` }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: cls.color || '#0d9488' }}
+                        className="w-4 h-4 rounded-full ring-2 ring-white shadow-xs" style={{ backgroundColor: cls.color || DEFAULT_CLASS_COLOR }}
                       />
                       <h3 className="text-base font-black text-slate-900">{cls.name}</h3>
                     </div>
@@ -1911,10 +1905,26 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">لون التمييز:</label>
-                  <input
-                    type="color" value={editingClass.color || '#0d9488'}
-                    onChange={e => setEditingClass({ ...editingClass, color: e.target.value })}
-                    className="w-full h-9 rounded-lg border border-slate-300 cursor-pointer" />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {CLASS_COLORS.map(color => {
+                      const isSelected = (editingClass.color || DEFAULT_CLASS_COLOR).toLowerCase() === color.toLowerCase();
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setEditingClass({ ...editingClass, color })}
+                          aria-label={`اختيار اللون ${color}`}
+                          aria-pressed={isSelected}
+                          className={`h-8 w-8 rounded-lg border-2 transition-transform hover:scale-105 cursor-pointer ${isSelected ? 'border-slate-900 scale-105' : 'border-slate-200'}`}
+                          style={{ backgroundColor: color }} />
+                      );
+                    })}
+                    <input
+                      type="color" value={editingClass.color || DEFAULT_CLASS_COLOR}
+                      onChange={e => setEditingClass({ ...editingClass, color: e.target.value })}
+                      aria-label="لون مخصص"
+                      className="h-8 w-10 rounded-lg border border-slate-300 cursor-pointer bg-white p-0.5" />
+                  </div>
                 </div>
               </div>
             </div>

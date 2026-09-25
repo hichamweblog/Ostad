@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getSupabaseEnv } from '@/lib/supabase/env';
@@ -126,9 +127,14 @@ function AuthLanding() {
     <main className="min-h-[100dvh] bg-[var(--bg-page)] flex flex-col" dir="rtl">
       <div className="flex-1 flex flex-col justify-center px-4 py-8 pb-32">
         <div className="mx-auto w-full max-w-lg text-center space-y-6">
-          <div className="mx-auto w-20 h-20 bg-[var(--primary)] text-white rounded-3xl shadow-xl flex items-center justify-center font-black text-2xl rotate-3">
-            مـ
-          </div>
+          <Image
+            src="/brand-logo-text.png"
+            alt="شعار معين الأستاذ"
+            width={192}
+            height={192}
+            priority
+            className="mx-auto h-32 w-32 sm:h-40 sm:w-40 drop-shadow-lg"
+          />
           <div className="space-y-2">
             <h1 className="text-3xl font-black tracking-tight text-[var(--text-primary)]">معين الأستاذ</h1>
             <p className="text-[var(--text-secondary)] font-medium leading-relaxed max-w-sm mx-auto">

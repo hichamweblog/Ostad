@@ -1093,12 +1093,18 @@ export function useCloudAppState(user: User | null) {
       // Reconcile local state with any cloud IDs reconciled by the server
       let reconciledState = nextState;
       if (committed.classes.length > 0 || committed.students.length > 0) {
-        const classMap = new Map(committed.classes.map(c => [c.name, c.id]));
+        const classMap = new Map(committed.classes.map(c => [c.name, c]));
         const studentMap = new Map(committed.students.map(s => [`${s.classId}:${s.numberInList}`, s.id]));
 
         const updatedClasses = nextState.classes.map(c => {
-          const cloudId = classMap.get(c.name);
-          return cloudId && cloudId !== c.id ? { ...c, id: cloudId } : c;
+          const cloudClass = classMap.get(c.name);
+          if (!cloudClass) return c;
+          // Keep the cloud id and the distinct colour acknowledged by the atomic import.
+          return {
+            ...c,
+            id: cloudClass.id !== c.id ? cloudClass.id : c.id,
+            color: cloudClass.color || c.color,
+          };
         });
 
         const updatedStudents = nextState.students.map(s => {

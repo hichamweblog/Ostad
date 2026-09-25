@@ -18,7 +18,7 @@ interface NavItem {
 }
 
 const sideItems: NavItem[] = [
-  { tab: 'dashboard', label: 'اليوم', icon: Home },
+  { tab: 'dashboard', label: 'الرئيسية', icon: Home },
   { tab: 'classes', label: 'الأقسام', icon: Users },
   { tab: 'grades', label: 'النقاط', icon: ClipboardList },
 ];
@@ -84,13 +84,17 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
           type="button"
           onClick={handleStartClass}
           aria-label={startLabel}
+          title={startLabel}
           aria-current={currentTab === 'attendance' ? 'page' : undefined}
           className="relative -mt-5 flex min-h-[68px] flex-col items-center justify-start text-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-white bg-[var(--primary)] text-white shadow-lg shadow-[var(--primary)]/30 active:scale-95">
             <PlayCircle className="h-6 w-6" />
           </span>
-          <span className="mt-1 max-w-[4.5rem] truncate text-[10px] font-black leading-none">ابدأ</span>
+          <span className="mt-1 max-w-[5.5rem] truncate text-[10px] font-black leading-none">ابدأ الحصة</span>
+          {slotClass && (
+            <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">{slotClass.name}</span>
+          )}
         </button>
 
         {sideItems.slice(2).map(item => {
@@ -116,11 +120,11 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          aria-label="فتح المزيد من المسارات"
+          aria-label="فتح قائمة جميع الأقسام"
           className="flex min-h-[52px] flex-col items-center justify-center py-1 text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
         >
           <MoreHorizontal className="h-[22px] w-[22px]" />
-          <span className="mt-1 text-[10px] font-medium leading-none">المزيد</span>
+          <span className="mt-1 text-[10px] font-medium leading-none">القائمة</span>
         </button>
       </div>
     </nav>

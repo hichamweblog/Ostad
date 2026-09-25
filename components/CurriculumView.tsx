@@ -267,15 +267,15 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     <div className="space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6" id="curriculum-view">
 
 
-      {/* Level Selector Pill Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none snap-x">
+      {/* Level Selector — شبكة 2×2 في الموبايل دون تمرير أفقي */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {OFFICIAL_LEVELS.map(lvl => {
           const isSelected = selectedLevel === lvl.id;
           return (
             <button
               key={lvl.id}
               onClick={() => setSelectedLevel(lvl.id)}
-              className={`flex-none snap-start min-w-[100px] h-[36px] px-4 rounded-full border text-xs font-bold transition-all cursor-pointer ${
+              className={`flex min-h-11 items-center justify-center rounded-xl border px-3 py-2 text-center text-xs font-bold leading-tight transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-slate-900 text-white border-slate-900 shadow-md'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'

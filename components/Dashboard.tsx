@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   PlayCircle,
   Users,
+  LayoutGrid,
   ArrowLeft,
   CalendarDays,
   CalendarRange,
@@ -34,7 +35,6 @@ import {
   Trash2,
   CheckSquare,
   Square,
-  FileText,
   Download,
   ExternalLink,
   ShieldCheck,
@@ -313,14 +313,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <Edit3 className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
                 حصص اليوم
               </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('documents')}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
-              >
-                <FileText className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
-                وثيقة سريعة
-              </button>
             </div>
           </div>
 
@@ -354,34 +346,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 3. Compact 50px Stat Bar */}
-      <div className="order-3 mb-6 bg-white border border-[var(--border-default)] rounded-xl shadow-xs overflow-x-auto scrollbar-none flex items-center h-[54px] divide-x divide-x-reverse divide-slate-100">
-        <button onClick={() => onNavigate('classes')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
-          <div className="w-8 h-8 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><Users className="w-4 h-4" /></div>
-          <div className="text-right">
+      {/* 3. Compact Stat Cards — الأقسام | التلاميذ | حصص اليوم | الدفتر */}
+      <div className="order-3 mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        <button onClick={() => onNavigate('classes')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><LayoutGrid className="w-4 h-4" /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الأقسام</div>
+            <div className="text-sm font-black text-slate-900 leading-none">{state.classes.length}</div>
+          </div>
+        </button>
+        <button onClick={() => onNavigate('students')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><Users className="w-4 h-4" /></div>
+          <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">التلاميذ</div>
             <div className="text-sm font-black text-slate-900 leading-none">{state.students.length}</div>
           </div>
         </button>
-        <button onClick={() => setIsTodaySessionsModalOpen(true)} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
-          <div className="w-8 h-8 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
-          <div className="text-right">
+        <button onClick={() => setIsTodaySessionsModalOpen(true)} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
+          <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">حصص اليوم</div>
             <div className="text-sm font-black text-slate-900 leading-none">{todaySlots.length}</div>
           </div>
         </button>
-        <button onClick={() => onNavigate('sessions')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
-          <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Edit3 className="w-4 h-4" /></div>
-          <div className="text-right">
+        <button onClick={() => onNavigate('sessions')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Edit3 className="w-4 h-4" /></div>
+          <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الدفتر</div>
             <div className="text-sm font-black text-slate-900 leading-none">{state.sessions.length}</div>
-          </div>
-        </button>
-        <button onClick={() => onNavigate('documents')} className="flex-1 min-w-[120px] px-4 flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group">
-          <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform"><FileText className="w-4 h-4" /></div>
-          <div className="text-right">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الوثائق</div>
-            <div className="text-sm font-black text-slate-900 leading-none">مكتبة</div>
           </div>
         </button>
       </div>

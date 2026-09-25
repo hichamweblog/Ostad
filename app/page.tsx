@@ -354,7 +354,7 @@ function AppContent({
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-12">
+          className="flex-1 pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-12">
           {currentTab === "dashboard" && (
             <Dashboard
               onNavigate={setCurrentTab}
