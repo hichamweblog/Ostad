@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -390,5 +390,43 @@ describe('Phase 3 CI: the pipeline actually gates on the checks we run locally',
   it('runs on pull requests against main', () => {
     expect(ci).toMatch(/pull_request:/);
     expect(ci).toMatch(/branches: \[main\]/);
+  });
+});
+
+describe('Phase 4 / Performance: Unindexed Foreign Keys have covering indexes on owner_id', () => {
+  const dir = join(process.cwd(), 'supabase', 'migrations');
+  const allSql = readdirSync(dir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()
+    .map((name) => readFileSync(join(dir, name), 'utf8'))
+    .join('\n');
+
+  it('indexes owner_id on high-density tables grades, attendance, and session_behaviors', () => {
+    expect(allSql).toMatch(/create\s+index\s+(if\s+not\s+exists\s+)?grades_owner_idx\s+on\s+public\.grades\s*\(\s*owner_id\s*\)/i);
+    expect(allSql).toMatch(/create\s+index\s+(if\s+not\s+exists\s+)?attendance_owner_idx\s+on\s+public\.attendance\s*\(\s*owner_id\s*\)/i);
+    expect(allSql).toMatch(/create\s+index\s+(if\s+not\s+exists\s+)?attendance_workspace_owner_idx\s+on\s+public\.attendance\s*\(\s*workspace_id,\s*owner_id\s*\)/i);
+    expect(allSql).toMatch(/create\s+index\s+(if\s+not\s+exists\s+)?session_behaviors_owner_idx\s+on\s+public\.session_behaviors\s*\(\s*owner_id\s*\)/i);
+    expect(allSql).toMatch(/create\s+index\s+(if\s+not\s+exists\s+)?session_behaviors_workspace_owner_idx\s+on\s+public\.session_behaviors\s*\(\s*workspace_id,\s*owner_id\s*\)/i);
+  });
+
+  it('indexes owner_id across all other user-scoped relational tables', () => {
+    const tables = [
+      'classes',
+      'students',
+      'sessions',
+      'timetable_slots',
+      'lesson_progress',
+      'lesson_plans',
+      'custom_units',
+      'curriculum_units',
+      'memoranda_files',
+      'app_settings',
+      'sync_tombstones',
+      'sync_conflicts',
+    ];
+    for (const table of tables) {
+      const pattern = new RegExp(`create\\s+index\\s+(if\\s+not\\s+exists\\s+)?${table}_owner_idx\\s+on\\s+public\\.${table}\\s*\\(\\s*owner_id\\s*\\)`, 'i');
+      expect(allSql).toMatch(pattern);
+    }
   });
 });

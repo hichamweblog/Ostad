@@ -151,6 +151,11 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
   المستبعد بطلب المستخدم.
 - حالة المزامنة تعرض الآن في `TopHeaderSanad` مع إجراء إعادة المحاولة، إضافة إلى
   مؤشر التفاصيل السفلي.
+- تم تفعيل **فهارس المفاتيح الخارجية وحقول المالك (Covering Indexes for Unindexed Foreign Keys)** عبر الهجرة `20260925020000_owner_fk_performance_indexes.sql`:
+  - إضافة فهارس B-tree مباشرة على `owner_id` في الجداول ذات الكثافة والنشاط العالي (`grades`، `attendance`، `session_behaviors`، `students`، `sessions`) وسائر الجداول العلائقية المرتبطة بالمستخدم.
+  - إضافة الفهارس المركبة الناقصة `(workspace_id, owner_id)` لجدولي `attendance` و`session_behaviors` وباقي الجداول التابعة.
+  - إضافة فهارس تغطية لحقول التدقيق `updated_by` المرتبطة بـ `auth.users(id)`.
+  - معالجة تنبيه مستشار الأداء في Supabase (`unindexed_foreign_keys`)، وتسريع استعلامات RLS المبنية على `owner_id = auth.uid()`، وتفادي الفحص التتابعي الكامل (Full Table Scan) وضمان تنفيذ عمليات الشلال العلائقي (`ON DELETE CASCADE`) بسرعة فائقة O(log N) حتى عند بلوغ آلاف أو عشرات آلاف السجلات.
 
 ## قاعدة التغيير
 
