@@ -102,30 +102,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // Day calculations (Algerian week: Sunday=0 ... Thursday=4)
+  // Day calculations (Algerian week: Sunday=0 ... Thursday=4, Friday=5 & Saturday=6 are weekend)
   const now = new Date();
   const rawDay = now.getDay();
-  const currentDayOfWeek = rawDay <= 4 ? rawDay : 0;
+  const isFriday = rawDay === 5;
+  const isSaturday = rawDay === 6;
+  const isWeekend = isFriday || isSaturday;
   const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const monthNames = [
     'جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان',
     'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر' ];
   const dateFormatted = `${dayNames[now.getDay()]}، ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
-  // Today's slots
-  const todaySlots = state.timetable
-    .filter(slot => slot.dayOfWeek === currentDayOfWeek)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  // Today's slots (only on school days Sunday..Thursday)
+  const todaySlots = isWeekend
+    ? []
+    : state.timetable
+        .filter(slot => slot.dayOfWeek === rawDay)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
     now.getMinutes()
   ).padStart(2, '0')}`;
 
-  const activeSlot =
-    todaySlots.find(s => s.startTime <= currentTimeStr && currentTimeStr < s.endTime) ??
-    todaySlots.find(s => s.startTime > currentTimeStr) ??
-    null;
+  const activeSlot = isWeekend
+    ? null
+    : (todaySlots.find(s => s.startTime <= currentTimeStr && currentTimeStr < s.endTime) ??
+       todaySlots.find(s => s.startTime > currentTimeStr) ??
+       null);
   const activeSlotClass = activeSlot ? state.classes.find(c => c.id === activeSlot.classId) : null;
+
+  // Next upcoming slot (for weekend or when today's classes finish)
+  const nextUpcoming = (() => {
+    if (state.timetable.length === 0) return null;
+    for (let offset = 1; offset <= 7; offset++) {
+      const targetDay = (rawDay + offset) % 7;
+      if (targetDay === 5 || targetDay === 6) continue; // Skip weekend
+      const daySlots = state.timetable
+        .filter(s => s.dayOfWeek === targetDay)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (daySlots.length > 0) {
+        const slot = daySlots[0];
+        const cls = state.classes.find(c => c.id === slot.classId);
+        return {
+          slot,
+          classRoom: cls,
+          dayName: dayNames[targetDay],
+          isTomorrow: offset === 1,
+        };
+      }
+    }
+    return null;
+  })();
+
+  const teacherTitle = (state.profile.name || 'أستاذ المادة').includes('أستاذ')
+    ? (state.profile.name || 'أستاذ المادة')
+    : `الأستاذ(ة) ${state.profile.name}`;
   const activeClass = selectActiveClass(state);
   const activeClassStudents = selectStudentsByClass(state, activeClass?.id ?? null);
   const activeClassSessions = selectSessionsByClass(state, activeClass?.id ?? null)
@@ -288,40 +320,80 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div>
               <h2 id="dashboard-today-title" className="text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
-                {activeSlot ? 'جاهز لحصة اليوم؟' : `أهلاً بك، ${(state.profile.name || 'أستاذ المادة').includes('أستاذ') ? (state.profile.name || 'أستاذ المادة') : `الأستاذ(ة) ${state.profile.name}`}`}
+                {isFriday ? `جمعة مباركة، ${teacherTitle}` :
+                 isSaturday ? `عطلة نهاية أسبوع طيبة، ${teacherTitle}` :
+                 activeSlot ? 'جاهز لحصة اليوم؟' :
+                 `أهلاً بك، ${teacherTitle}`}
               </h2>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-[var(--text-secondary)]">
-                {activeSlot
-                  ? `الحصة ${activeSlotClass?.name || 'القادمة'} من ${activeSlot.startTime} إلى ${activeSlot.endTime}. يمكنك بدء الحضور ثم متابعة دفتر النصوص مباشرة.`
-                  : nextAction.description}
+                {isFriday ? (
+                  nextUpcoming
+                    ? `عطلة نهاية أسبوع مباركة وطيبة. لا توجد حصص دراسية اليوم؛ أولى حصص الأسبوع القادم يوم ${nextUpcoming.dayName} مع قسم ${nextUpcoming.classRoom?.name || 'القسم'} (${nextUpcoming.slot.startTime} - ${nextUpcoming.slot.endTime}).`
+                    : 'عطلة نهاية أسبوع مباركة وطيبة. لا توجد حصص مبرمجة اليوم، يمكنك استغلال هذا الوقت للتحضير البيداغوجي وتجهيز المذكرات.'
+                ) : isSaturday ? (
+                  nextUpcoming
+                    ? `عطلة نهاية أسبوع مريحة. لا توجد حصص دراسية اليوم؛ تبدأ الدراسة غداً ${nextUpcoming.dayName} مع قسم ${nextUpcoming.classRoom?.name || 'القسم'} (${nextUpcoming.slot.startTime} - ${nextUpcoming.slot.endTime}).`
+                    : 'عطلة نهاية أسبوع مريحة. لا توجد حصص مبرمجة اليوم، استعد للأسبوع القادم بمراجعة التحاضير والمذكرات.'
+                ) : activeSlot ? (
+                  `الحصة ${activeSlotClass?.name || 'القادمة'} من ${activeSlot.startTime} إلى ${activeSlot.endTime}. يمكنك بدء الحضور ثم متابعة دفتر النصوص مباشرة.`
+                ) : (
+                  nextAction.description
+                )}
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <button
-                type="button"
-                onClick={handleStartTodayFlow}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 text-sm font-black text-white shadow-lg shadow-[var(--primary)]/20 transition-transform active:scale-[0.98]"
-              >
-                <PlayCircle className="h-5 w-5" aria-hidden="true" />
-                {activeSlot ? 'ابدأ الحصة الآن' : state.classes.length ? 'فتح الحضور' : 'إعداد مساحة العمل'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsTodaySessionsModalOpen(true)}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
-              >
-                <Edit3 className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
-                حصص اليوم
-              </button>
+              {isWeekend ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('prep')}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 text-sm font-black text-white shadow-lg shadow-[var(--primary)]/20 transition-transform active:scale-[0.98]"
+                  >
+                    <BookOpen className="h-5 w-5" aria-hidden="true" />
+                    التحضير البيداغوجي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('timetable')}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+                  >
+                    <CalendarDays className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
+                    {nextUpcoming ? `حصص ${nextUpcoming.dayName}` : 'جدول التوقيت'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStartTodayFlow}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 text-sm font-black text-white shadow-lg shadow-[var(--primary)]/20 transition-transform active:scale-[0.98]"
+                  >
+                    <PlayCircle className="h-5 w-5" aria-hidden="true" />
+                    {activeSlot ? 'ابدأ الحصة الآن' : state.classes.length ? 'فتح الحضور' : 'إعداد مساحة العمل'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsTodaySessionsModalOpen(true)}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+                  >
+                    <Edit3 className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
+                    حصص اليوم
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           <div className="rounded-2xl border border-white/80 bg-white/85 p-4 shadow-xs backdrop-blur">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
               <div>
-                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">القسم/الحصة التالية</div>
+                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">
+                  {isWeekend ? 'الحصة القادمة' : 'القسم/الحصة التالية'}
+                </div>
                 <div className="mt-1 text-base font-black text-[var(--text-primary)]">
-                  {activeSlotClass?.name || activeClass?.name || 'لم يحدد قسم بعد'}
+                  {isWeekend
+                    ? (nextUpcoming ? `${nextUpcoming.dayName}: ${nextUpcoming.classRoom?.name || 'قسم مسند'}` : 'لا توجد حصص')
+                    : (activeSlotClass?.name || activeClass?.name || 'لم يحدد قسم بعد')}
                 </div>
               </div>
               <div className="rounded-xl bg-[var(--primary-soft)] p-3 text-[var(--primary)]">
@@ -330,16 +402,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div className="grid grid-cols-3 gap-2 pt-3 text-center text-xs">
               <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
-                <div className="font-mono text-sm font-black text-[var(--text-primary)]">{todaySlots.length}</div>
-                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">حصص اليوم</div>
+                <div className="font-mono text-sm font-black text-[var(--text-primary)]">
+                  {isWeekend ? 'عطلة' : todaySlots.length}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                  {isWeekend ? 'نهاية الأسبوع' : 'حصص اليوم'}
+                </div>
               </div>
               <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
                 <div className="font-mono text-sm font-black text-[var(--text-primary)]">{state.students.length}</div>
                 <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">تلاميذ</div>
               </div>
               <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
-                <div className="font-mono text-sm font-black text-[var(--text-primary)]">{activeSlot ? activeSlot.startTime : currentTimeStr}</div>
-                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">التوقيت</div>
+                <div className="font-mono text-sm font-black text-[var(--text-primary)]">
+                  {isWeekend && nextUpcoming
+                    ? nextUpcoming.slot.startTime
+                    : (activeSlot ? activeSlot.startTime : currentTimeStr)}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                  {isWeekend && nextUpcoming ? 'توقيت الحصة' : 'التوقيت'}
+                </div>
               </div>
             </div>
           </div>
@@ -362,11 +444,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="text-sm font-black text-slate-900 leading-none">{state.students.length}</div>
           </div>
         </button>
-        <button onClick={() => setIsTodaySessionsModalOpen(true)} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
+        <button
+          onClick={() => {
+            if (isWeekend) {
+              onNavigate('timetable');
+            } else {
+              setIsTodaySessionsModalOpen(true);
+            }
+          }}
+          className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group"
+        >
           <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">حصص اليوم</div>
-            <div className="text-sm font-black text-slate-900 leading-none">{todaySlots.length}</div>
+            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">
+              {isWeekend ? 'اليوم' : 'حصص اليوم'}
+            </div>
+            <div className="text-sm font-black text-slate-900 leading-none">
+              {isWeekend ? 'عطلة' : todaySlots.length}
+            </div>
           </div>
         </button>
         <button onClick={() => onNavigate('sessions')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
@@ -566,7 +661,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {todaySlots.length > 1 && (
             <div className="bg-white rounded-2xl border border-[var(--border-default)] p-6 shadow-xs space-y-4">
               <h4 className="font-black text-sm text-[var(--text-primary)] font-display flex items-center justify-between">
-                <span>باقي حصص اليوم ({dayNames[currentDayOfWeek]})</span>
+                <span>باقي حصص اليوم ({dayNames[rawDay]})</span>
                 <span className="text-xs text-[var(--text-secondary)] font-normal font-sans">
                   {todaySlots.length} حصص
                 </span>
@@ -759,7 +854,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-5 h-5 text-[var(--primary)]" />
                 <h3 className="text-base font-black text-slate-900">
-                  حصص اليوم المبرمجة ({dayNames[currentDayOfWeek]})
+                  حصص اليوم المبرمجة ({dayNames[now.getDay()]})
                 </h3>
               </div>
               <button
@@ -776,7 +871,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {todaySlots.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  لا توجد حصص مبرمجة ليوم {dayNames[currentDayOfWeek]} في جدول التوقيت الأسبوعي.
+                  {isWeekend
+                    ? `اليوم ${dayNames[now.getDay()]} عطلة نهاية الأسبوع؛ لا توجد حصص دراسية مبرمجة.`
+                    : `لا توجد حصص مبرمجة ليوم ${dayNames[now.getDay()]} في جدول التوقيت الأسبوعي.`}
                 </div>
               ) : (
                 todaySlots.map((slot, idx) => {

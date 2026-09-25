@@ -3,7 +3,7 @@
 import React from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { SanadTab } from './SidebarSanad';
-import { ClipboardList, Home, MoreHorizontal, PlayCircle, Users } from 'lucide-react';
+import { BookOpen, ClipboardList, Home, MoreHorizontal, PlayCircle, Users } from 'lucide-react';
 
 interface MobileNavigationProps {
   currentTab: SanadTab;
@@ -31,11 +31,15 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   const { state, updateState } = useAppState();
   const now = new Date();
   const rawDay = now.getDay();
-  const currentDayOfWeek = rawDay <= 4 ? rawDay : 0;
+  const isFriday = rawDay === 5;
+  const isSaturday = rawDay === 6;
+  const isWeekend = isFriday || isSaturday;
   const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const todaySlots = state.timetable
-    .filter(slot => slot.dayOfWeek === currentDayOfWeek)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const todaySlots = isWeekend
+    ? []
+    : state.timetable
+        .filter(slot => slot.dayOfWeek === rawDay)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const currentOrNextSlot =
     todaySlots.find(slot => slot.startTime <= currentTime && currentTime < slot.endTime) ??
     todaySlots.find(slot => slot.startTime > currentTime) ??
@@ -44,9 +48,15 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     ? state.classes.find(classRoom => classRoom.id === currentOrNextSlot.classId)
     : null;
   const fallbackClass = state.classes.find(classRoom => classRoom.id === state.activeClassId) ?? state.classes[0] ?? null;
-  const startLabel = slotClass ? `ابدأ ${slotClass.name}` : 'ابدأ الحصة';
+  const startLabel = isWeekend
+    ? 'التحضير البيداغوجي'
+    : (slotClass ? `ابدأ ${slotClass.name}` : 'ابدأ الحصة');
 
-  const handleStartClass = () => {
+  const handleCenterAction = () => {
+    if (isWeekend) {
+      onSelectTab('prep');
+      return;
+    }
     const targetClassId = currentOrNextSlot?.classId || fallbackClass?.id || null;
     if (targetClassId) {
       updateState(previous => ({ ...previous, activeClassId: targetClassId }));
@@ -82,19 +92,31 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
 
         <button
           type="button"
-          onClick={handleStartClass}
+          onClick={handleCenterAction}
           aria-label={startLabel}
           title={startLabel}
-          aria-current={currentTab === 'attendance' ? 'page' : undefined}
+          aria-current={
+            isWeekend
+              ? (currentTab === 'prep' ? 'page' : undefined)
+              : (currentTab === 'attendance' ? 'page' : undefined)
+          }
           className="relative -mt-5 flex min-h-[68px] flex-col items-center justify-start text-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-white bg-[var(--primary)] text-white shadow-lg shadow-[var(--primary)]/30 active:scale-95">
-            <PlayCircle className="h-6 w-6" />
+            {isWeekend ? (
+              <BookOpen className="h-6 w-6" />
+            ) : (
+              <PlayCircle className="h-6 w-6" />
+            )}
           </span>
-          <span className="mt-1 max-w-[5.5rem] truncate text-[10px] font-black leading-none">ابدأ الحصة</span>
-          {slotClass && (
+          <span className="mt-1 max-w-[5.5rem] truncate text-[10px] font-black leading-none">
+            {isWeekend ? 'التحضير' : 'ابدأ الحصة'}
+          </span>
+          {isWeekend ? (
+            <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">المذكرات</span>
+          ) : slotClass ? (
             <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">{slotClass.name}</span>
-          )}
+          ) : null}
         </button>
 
         {sideItems.slice(2).map(item => {
