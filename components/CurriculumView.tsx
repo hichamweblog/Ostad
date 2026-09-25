@@ -694,7 +694,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
               </button>
               <button
                 onClick={handleSaveUnit}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gold hover:bg-gold text-white text-xs font-bold shadow-xs cursor-pointer" >
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] text-xs font-bold shadow-xs cursor-pointer" >
                 <Save className="w-4 h-4" />
                 <span>حفظ التعديلات</span>
               </button>

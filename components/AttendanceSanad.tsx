@@ -65,6 +65,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     classSessions[0]?.id || '' );
   const [searchQuery, setSearchQuery] = useState('');
+  const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('detailed');
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
 
   const activeSession = classSessions.find(s => s.id === selectedSessionId) || classSessions[0];
@@ -509,7 +510,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 {/* Mark All Present */}
                 <button
                   onClick={handleMarkAllPresent}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary)] text-xs font-bold border border-[var(--primary)]/20 transition-colors cursor-pointer shrink-0" >
+                  className="w-full sm:w-auto min-h-11 px-4 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary)] text-xs font-bold border border-[var(--primary)]/20 transition-colors cursor-pointer shrink-0" >
                   تحديد الكل «حاضر»
                 </button>
               </div>
@@ -540,12 +541,28 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث عن تلميذ..." className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
               </div>
+              <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1 text-[11px] font-black">
+                <button
+                  type="button"
+                  onClick={() => setAttendanceMode('quick')}
+                  className={`min-h-9 rounded-lg px-3 ${attendanceMode === 'quick' ? 'bg-white text-[var(--primary)] shadow-xs' : 'text-slate-500'}`}
+                >
+                  سريع
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAttendanceMode('detailed')}
+                  className={`min-h-9 rounded-lg px-3 ${attendanceMode === 'detailed' ? 'bg-white text-[var(--primary)] shadow-xs' : 'text-slate-500'}`}
+                >
+                  مفصل
+                </button>
+              </div>
 
             </div>
 
             <button
               onClick={handleExportDoc}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs" >
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs" >
               <Printer className="w-3.5 h-3.5 text-slate-500" />
               <span>تصدير إلى ملف doc</span>
             </button>
@@ -553,7 +570,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigateToSessions(activeSession?.id)}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[var(--primary)] border border-[var(--primary)] rounded-xl text-xs font-bold text-white hover:bg-[var(--primary-hover)] cursor-pointer shadow-xs"
+                className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 bg-[var(--primary)] border border-[var(--primary)] rounded-xl text-xs font-bold text-white hover:bg-[var(--primary-hover)] cursor-pointer shadow-xs"
               >
                 متابعة في دفتر النصوص
               </button>
@@ -619,23 +636,25 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                       </div>
 
                       {/* Unified Attendance & Behavior Buttons (Mobile) */}
-                      <div className="grid grid-cols-4 gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-4' : 'grid-cols-1'} gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200`}>
                                 <button
                                   type="button"
                                   onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
                                   aria-pressed={status === 'ABSENT'}
-                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-transparent text-slate-500 hover:text-rose-600 hover:bg-white' }`}
                                   title="تسجيل غياب" >
                                   الغياب -
                                 </button>
+                                {attendanceMode === 'detailed' && (
+                                  <>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
                                   aria-pressed={Boolean(activeSession.unwrittenLessons?.includes(student.id))}
-                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-gold text-white border-gold shadow-xs' : 'border-transparent text-slate-500 hover:text-gold hover:bg-white' }`}
+                                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-transparent text-slate-500 hover:text-gold hover:bg-white' }`}
                                   title="لم يكتب الدرس / الكراس" >
                                   الكراس -
                                 </button>
@@ -643,7 +662,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
-                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
                                       ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-transparent text-slate-500 hover:text-[var(--text-primary)] hover:bg-white' }`}
                                   title="شغب وسلوك سيء" >
@@ -653,12 +672,14 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
                                   aria-pressed={Boolean(activeSession.goodParticipation?.includes(student.id))}
-                                  className={`py-1.5 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
                                     activeSession.goodParticipation?.includes(student.id)
                                       ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' : 'border-transparent text-slate-500 hover:text-[var(--primary)] hover:bg-white' }`}
                                   title="مشاركة إيجابية" >
                                   مشاركة +
                                 </button>
+                                  </>
+                                )}
                       </div>
                     </div>
                   );
@@ -702,23 +723,25 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             </td>
                             {/* Unified Attendance & Behavior Buttons */}
                             <td className="p-2 text-center">
-                              <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                              <div className={`inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 ${attendanceMode === 'quick' ? 'min-w-40' : ''}`}>
                                 <button
                                   type="button"
                                   onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
                                   aria-pressed={status === 'ABSENT'}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                  className={`min-h-10 px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-transparent text-slate-500 hover:text-rose-600 hover:bg-white' }`}
                                   title="تسجيل غياب" >
                                   الغياب -
                                 </button>
+                                {attendanceMode === 'detailed' && (
+                                  <>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
                                   aria-pressed={Boolean(activeSession.unwrittenLessons?.includes(student.id))}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                  className={`min-h-10 px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-gold text-white border-gold shadow-xs' : 'border-transparent text-slate-500 hover:text-gold hover:bg-white' }`}
+                                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-transparent text-slate-500 hover:text-gold hover:bg-white' }`}
                                   title="لم يكتب الدرس / الكراس" >
                                   الكراس -
                                 </button>
@@ -726,7 +749,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                  className={`min-h-10 px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
                                       ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-transparent text-slate-500 hover:text-[var(--text-primary)] hover:bg-white' }`}
                                   title="شغب وسلوك سيء" >
@@ -736,12 +759,14 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
                                   aria-pressed={Boolean(activeSession.goodParticipation?.includes(student.id))}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                                  className={`min-h-10 px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.goodParticipation?.includes(student.id)
                                       ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' : 'border-transparent text-slate-500 hover:text-[var(--primary)] hover:bg-white' }`}
                                   title="مشاركة إيجابية" >
                                   مشاركة +
                                 </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                             {/* Cumulative Absences */}

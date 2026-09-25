@@ -337,7 +337,7 @@ function AppContent({
       {/* 2. Main Content Wrapper (offset by sidebar width on desktop) */}
       <div
         className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-          isCollapsed ? "md:mr-20" : "md:mr-64"
+          isCollapsed ? "lg:mr-20" : "lg:mr-64"
         }`}>
         {/* Top Header Bar */}
         <TopHeaderSanad
@@ -354,7 +354,7 @@ function AppContent({
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-12">
+          className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-12">
           {currentTab === "dashboard" && (
             <Dashboard
               onNavigate={setCurrentTab}
@@ -429,8 +429,8 @@ function AppContent({
           {currentTab === "documents" && <DocumentsExport />}
         </main>
 
-        {/* Footer (Desktop & Tablet) */}
-        <footer className="border-[var(--border-default)] bg-white px-4 py-6 pb-24 text-center text-xs md:pb-6 print:hidden">
+        {/* Footer */}
+        <footer className="border-[var(--border-default)] bg-white px-4 py-6 pb-24 text-center text-xs lg:pb-6 print:hidden">
           <div className="max-w-7xl mx-auto flex flex-col items-center justify-center gap-1">
             <div className="mb-1 text-sm font-bold text-[var(--text-primary)]">
               معين
@@ -454,7 +454,7 @@ function AppContent({
         </footer>
       </div>
 
-      {/* 3. Mobile Navigation Bottom Bar (md:hidden) */}
+      {/* 3. Mobile/Tablet Navigation Bottom Bar (hidden when desktop sidebar is visible) */}
       <MobileNavigation
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
@@ -511,7 +511,7 @@ function AppContent({
       
       {/* 6. Onboarding for new users */}
       {showOnboarding && (
-        <Onboarding />
+        <Onboarding onOpenSetup={() => setCurrentTab("classes")} />
       )}
     </div>
     </AppStateProvider>

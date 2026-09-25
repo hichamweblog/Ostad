@@ -658,6 +658,18 @@ ${sessionNotes}
                 <span>توثيق الحصة وما تم إنجازه:</span>
                 <span className="text-slate-400 font-normal text-[10px]">ملاحظة واحدة مختصرة تكفي</span>
               </label>
+              <div className="flex flex-wrap gap-2 pb-1">
+                {['تم إنجاز عناصر الدرس المبرمجة.', 'نشاط تطبيقي ومناقشة جماعية.', 'تحتاج الحصة القادمة إلى مراجعة قصيرة.'].map(template => (
+                  <button
+                    key={template}
+                    type="button"
+                    onClick={() => setAccomplishments(prev => prev ? `${prev}\n${template}` : template)}
+                    className="min-h-9 rounded-full border border-[var(--border-default)] bg-white px-3 text-[11px] font-bold text-[var(--text-secondary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+                  >
+                    {template}
+                  </button>
+                ))}
+              </div>
               <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
                 <FormattingBar val={accomplishments} setter={setAccomplishments} />
                 <textarea
@@ -673,6 +685,18 @@ ${sessionNotes}
               <label className="font-bold text-slate-700">
                 التوجيهات والواجبات للحصة القادمة:
               </label>
+              <div className="flex flex-wrap gap-2 pb-1">
+                {['واجب منزلي قصير.', 'مراجعة مكتسبات الحصة.', 'إحضار الكراس والكتاب.'].map(template => (
+                  <button
+                    key={template}
+                    type="button"
+                    onClick={() => setNextSteps(prev => prev ? `${prev}\n${template}` : template)}
+                    className="min-h-9 rounded-full border border-[var(--border-default)] bg-white px-3 text-[11px] font-bold text-[var(--text-secondary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+                  >
+                    {template}
+                  </button>
+                ))}
+              </div>
               <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
                 <FormattingBar val={nextSteps} setter={setNextSteps} />
                 <textarea
