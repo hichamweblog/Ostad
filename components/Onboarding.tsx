@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AccessibleDialog } from './AccessibleDialog';
 import { X, ArrowLeft, Users, School, Sparkles } from 'lucide-react';
@@ -69,7 +69,7 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
     if (saved) onOpenSetup?.();
   };
 
-  const handleSkip = async () => {
+  const handleSkip = useCallback(async () => {
     setIsSaving(true);
     try {
       await updateStateAndWait(prev => ({ ...prev, onboardingDismissed: true }));
@@ -77,7 +77,7 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [updateStateAndWait, onComplete]);
 
   const currentStep = steps[step];
   const Icon = currentStep.icon;
@@ -149,8 +149,9 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="مثال: أحمد بن محمد"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all text-base"
                   dir="rtl"
+                  autoComplete="name"
                 />
               </div>
 
@@ -164,8 +165,9 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   placeholder="مثال: ثانوية ابن خلدون"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all text-base"
                   dir="rtl"
+                  autoComplete="organization"
                 />
               </div>
 
@@ -179,8 +181,9 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
                   value={stateName}
                   onChange={(e) => setStateName(e.target.value)}
                   placeholder="مثال: تلمسان"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent outline-none transition-all text-base"
                   dir="rtl"
+                  autoComplete="address-level1"
                 />
               </div>
             </div>

@@ -30,6 +30,11 @@ export function AccessibleDialog({
 }: AccessibleDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -38,13 +43,17 @@ export function AccessibleDialog({
     document.body.style.overflow = 'hidden';
 
     const focusFirst = () => {
+      // Do not steal focus if an element inside the dialog is already focused (e.g. active input or autoFocus)
+      if (dialogRef.current && dialogRef.current.contains(document.activeElement)) {
+        return;
+      }
       const first = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
       first?.focus();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -61,21 +70,23 @@ export function AccessibleDialog({
       }
     };
 
-    requestAnimationFrame(focusFirst);
+    const frameId = requestAnimationFrame(focusFirst);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      cancelAnimationFrame(frameId);
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleKeyDown);
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={event => {
-        if (event.target === event.currentTarget) onClose();
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onCloseRef.current?.();
       }}
       role="presentation" >
       <div
