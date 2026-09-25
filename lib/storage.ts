@@ -840,18 +840,19 @@ export function getEmptyState(): AppState {
 }
 
 export function isDemoState(state: AppState): boolean {
-  // Check if the state contains the specific seed data IDs, not just any IDs starting with 'cls-' or 'std-'
-  const seedClassIds = INITIAL_CLASSES.map(c => c.id);
-  const seedStudentIds = INITIAL_STUDENTS.map(s => s.id);
+  // Check if the state contains demo-like IDs (starts with 'cls-' or 'std-' or matches seed IDs)
+  // This protects against accidentally overwriting real user data with demo/seed data
+  const seedClassIds = new Set(INITIAL_CLASSES.map(c => c.id));
+  const seedStudentIds = new Set(INITIAL_STUDENTS.map(s => s.id));
   
-  const hasSeedClasses = seedClassIds.some(seedId => 
-    state.classes.some(c => c.id === seedId)
+  const hasDemoClasses = state.classes.some(c => 
+    c.id.startsWith('cls-') || seedClassIds.has(c.id)
   );
-  const hasSeedStudents = seedStudentIds.some(seedId => 
-    state.students.some(s => s.id === seedId)
+  const hasDemoStudents = state.students.some(s => 
+    s.id.startsWith('std-') || seedStudentIds.has(s.id)
   );
   
-  return hasSeedClasses && hasSeedStudents;
+  return hasDemoClasses && hasDemoStudents;
 }
 
 export function exportBackupJSON(state: AppState): string {
