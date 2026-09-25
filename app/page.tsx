@@ -18,6 +18,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { restoreProgressMessage } from "@/lib/sync-status";
 import { ComingSoon } from "@/components/ComingSoon";
 import { CurriculumUnit } from "@/lib/types";
+import { Onboarding } from "@/components/Onboarding";
 
 const MAINTENANCE_MODE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
@@ -163,6 +164,12 @@ function AppContent({
   const [selectedSessionForCahier, setSelectedSessionForCahier] = useState<string | null>(null);
   const [signOutRequest, setSignOutRequest] = useState<{ pending: number } | null>(null);
 
+  // Derive onboarding state from app state (no need for separate state + effect)
+  const showOnboarding = isMounted && cloudReady && 
+                         !state.onboardingDismissed && 
+                         state.classes.length === 0 && 
+                         state.students.length === 0;
+
   /**
    * Sign-out is only "clean" when everything is acknowledged: otherwise we show the
    * pending-work dialog instead of silently dropping local changes.
@@ -246,7 +253,7 @@ function AppContent({
   };
 
   const isCollapsed = state.sidebarCollapsed || false;
-  const hasLoadedData = state.classes.length > 0 || state.students.length > 0 || Boolean(state.profile?.name && state.profile.name !== 'أستاذ المادة');
+  const hasLoadedData = state.classes.length > 0 || state.students.length > 0;
   if (!isMounted || (!cloudReady && !hasLoadedData)) {
     return (
       <div
@@ -501,6 +508,11 @@ function AppContent({
         onCancel={() => setSignOutRequest(null)}
       />
       {conflictError && <div role="alert" className="fixed bottom-4 left-4 z-[10001] rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white">{conflictError}</div>}
+      
+      {/* 6. Onboarding for new users */}
+      {showOnboarding && (
+        <Onboarding />
+      )}
     </div>
     </AppStateProvider>
   );

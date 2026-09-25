@@ -1,11 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AppState } from '@/lib/storage';
 import { calculateContinuousEvaluation, calculateStudentAverage } from '@/lib/grade-calculator';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
+
+/**
+ * Normalize Arabic-Indic and Eastern-Arabic numerals to Western-Arabic (0-9).
+ * "١٥" → "15", "۳" → "3", etc.
+ */
+function normalizeNumerals(value: string): string {
+  // Eastern Arabic (Arabic): ٠١٢٣٤٥٦٧٨٩ → U+0660-U+0669
+  // Western Arabic (Persian/Urdu): ۰۱۲۳۴۵۶۷۸۹ → U+06F0-U+06F9
+  return value
+    .replace(/[\u0660-\u0669]/g, (ch) => String(ch.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (ch) => String(ch.charCodeAt(0) - 0x06F0));
+}
 import {
   PEDAGOGICAL_TIERS,
   getScoreTier,
@@ -303,9 +315,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     prevGradesRef.current = state.grades;
   }, [state.activeClassId, state.activeTrimester, selectedClassId, selectedTrimester, state.students, state.grades]);
 
-  const handleSelectClass = (newClassId: string) => {
+  const handleSelectClass = async (newClassId: string) => {
+    // CRITICAL FIX: await persist before switching context to prevent data loss
     if (isDirtyRef.current) {
-      void persistDraftGrades();
+      try {
+        await persistDraftGrades();
+      } catch (error) {
+        console.error('Failed to persist grades before class switch:', error);
+        setToastMessage('تعذر حفظ النقاط قبل تغيير القسم. يرجى المحاولة مرة أخرى.');
+        setSaveToast(true);
+        setTimeout(() => setSaveToast(false), 4000);
+        return; // Don't switch if persist failed
+      }
     }
     setSelectedClassId(newClassId);
     isDirtyRef.current = false;
@@ -313,9 +334,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(buildDraft(state.students, state.grades, newClassId, selectedTrimester));
   };
 
-  const handleSelectTrimester = (newTri: 1 | 2 | 3) => {
+  const handleSelectTrimester = async (newTri: 1 | 2 | 3) => {
+    // CRITICAL FIX: await persist before switching context to prevent data loss
     if (isDirtyRef.current) {
-      void persistDraftGrades();
+      try {
+        await persistDraftGrades();
+      } catch (error) {
+        console.error('Failed to persist grades before trimester switch:', error);
+        setToastMessage('تعذر حفظ النقاط قبل تغيير الفصل. يرجى المحاولة مرة أخرى.');
+        setSaveToast(true);
+        setTimeout(() => setSaveToast(false), 4000);
+        return; // Don't switch if persist failed
+      }
     }
     setSelectedTrimester(newTri);
     isDirtyRef.current = false;
@@ -437,8 +467,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     field: 'continuousEval' | 'quiz' | 'exam',
     value: string
   ) => {
+    // Normalize Arabic/Persian numerals to Western
+    const normalized = normalizeNumerals(value);
     // allow empty, or number between 0 and 20
-    if (value !== '' && (isNaN(Number(value)) || Number(value) < 0 || Number(value) > 20)) {
+    if (normalized !== '' && (isNaN(Number(normalized)) || Number(normalized) < 0 || Number(normalized) > 20)) {
       setToastMessage('تنبيه: يجب أن تكون العلامة محصورة بين 0 و 20.');
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 3500);
@@ -449,7 +481,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       ...prev,
       [studentId]: {
         ...(prev[studentId] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' }),
-        [field]: value
+        [field]: normalized
       }
     }));
   };
@@ -564,28 +596,42 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           if (!isMounted) return;
           console.error('Grades sync failed:', error);
           setSaveStatus('pending');
-          setToastMessage('تعذر حفظ النقاط في السحابة.');
+          setToastMessage('تعذر حفظ النقاط في السحابة. التغييرات لم تُفقد — ستتم إعادة المحاولة تلقائيًا.');
           setSaveToast(true);
         });
-    }, 900);
+    }, 500); // Reduced from 900ms to minimize data-loss window
     return () => {
       isMounted = false;
       window.clearTimeout(timer);
     };
   }, [gradesDraft]);
 
+  // CRITICAL FIX: Immediately persist when tab becomes hidden (prevents data loss on tab close)
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isDirtyRef.current) {
+        // Fire-and-forget but the outbox (IndexedDB) guarantees durability:
+        // the debounced save effect already wrote to the outbox, and
+        // useCloudAppState's pagehide handler will flush it.
+        void persistDraftGradesRef.current().catch(() => { /* outbox will retry */ });
+      }
+    };
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirtyRef.current) {
-        void persistDraftGradesRef.current();
+        // Immediately persist to the durable outbox before the page dies
+        void persistDraftGradesRef.current().catch(() => { /* outbox will retry */ });
+        // Show the browser's native "are you sure?" dialog
         e.preventDefault();
       }
     };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Cleanup: attempt one last persist if still dirty
       if (isDirtyRef.current) {
-        void persistDraftGradesRef.current();
+        void persistDraftGradesRef.current().catch(() => { /* best effort */ });
       }
     };
   }, []);
@@ -838,7 +884,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               }`}
               aria-live="polite"
             >
-              {saveStatus === 'saved' ? 'محفوظ تلقائياً' : saveStatus === 'saving' ? 'جارٍ الحفظ...' : 'تغييرات تنتظر الحفظ'}
+              {saveStatus === 'saved' ? '✓ محفوظ' : saveStatus === 'saving' ? '⟳ جارٍ الحفظ...' : '⏳ تغييرات غير محفوظة'}
             </span>
           </div>
         </div>

@@ -840,9 +840,19 @@ export function getEmptyState(): AppState {
 }
 
 export function isDemoState(state: AppState): boolean {
-  return state.profile.name === 'أستاذ المادة' &&
-    state.classes.some((item) => item.id.startsWith('cls-')) &&
-    state.students.some((item) => item.id.startsWith('std-'));
+  // Check if the state contains demo-like IDs (starts with 'cls-' or 'std-' or matches seed IDs)
+  // This protects against accidentally overwriting real user data with demo/seed data
+  const seedClassIds = new Set(INITIAL_CLASSES.map(c => c.id));
+  const seedStudentIds = new Set(INITIAL_STUDENTS.map(s => s.id));
+  
+  const hasDemoClasses = state.classes.some(c => 
+    c.id.startsWith('cls-') || seedClassIds.has(c.id)
+  );
+  const hasDemoStudents = state.students.some(s => 
+    s.id.startsWith('std-') || seedStudentIds.has(s.id)
+  );
+  
+  return hasDemoClasses && hasDemoStudents;
 }
 
 export function exportBackupJSON(state: AppState): string {
