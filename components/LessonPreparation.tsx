@@ -333,16 +333,16 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
 
         {/* Level Selector Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+        <div className="flex items-center gap-2 flex-wrap">
           {OFFICIAL_LEVELS.map(lvl => {
             const isSelected = selectedLevel === lvl.id;
             return (
               <button
                 key={lvl.id}
                 onClick={() => handleSelectLevel(lvl.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`min-h-9 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-[var(--text-primary)] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' }`}
+                    ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
               >
                 <span>{lvl.id === '1AS_ARTS' ? '1AS آداب (2 سا)' : lvl.id === '1AS_SCIENCE' ? '1AS علوم (1 سا)' : lvl.id === '2AS' ? '2AS ثانية (2 سا)' : '3AS بكالوريا (2 سا)'}</span>
               </button>
@@ -394,12 +394,12 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
           {/* Tab Navigation: Official Card vs Embedded PDF vs Bank */}
           <div className="flex items-center gap-2 flex-wrap shrink-0 w-full sm:w-auto">
-            <div role="tablist" className="flex flex-col sm:flex-row items-stretch sm:items-center w-full sm:w-auto bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1">
+            <div role="tablist" className="flex flex-col sm:flex-row items-stretch sm:items-center w-full sm:w-auto gap-2">
               <button
                 role="tab" aria-selected={activeTab === 'card'}
                 onClick={() => setActiveTab('card')}
-                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'card' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900' }`}
+                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'card' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-[var(--primary)]/40 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
               >
                 <FileText className="w-3.5 h-3.5 text-[var(--primary)]" />
                 <span>البطاقة</span>
@@ -408,8 +408,8 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
               <button
                 role="tab" aria-selected={activeTab === 'pdf'}
                 onClick={() => setActiveTab('pdf')}
-                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
-                  activeTab === 'pdf' ? 'bg-white text-[var(--text-primary)] shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900' }`}
+                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer relative ${
+                  activeTab === 'pdf' ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
               >
                 <Upload className="w-3.5 h-3.5 text-blue-600" />
                 <span>المذكرة</span>
@@ -421,8 +421,8 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
               <button
                 role="tab" aria-selected={activeTab === 'bank'}
                 onClick={() => setActiveTab('bank')}
-                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'bank' ? 'bg-white text-amber-900 shadow-xs border border-slate-200' : 'text-slate-600 hover:text-slate-900' }`}
+                className={`flex items-center justify-center w-full sm:w-auto gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'bank' ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
               >
                 <BookMarked className="w-3.5 h-3.5 text-gold" />
                 <span>الفهرس</span>

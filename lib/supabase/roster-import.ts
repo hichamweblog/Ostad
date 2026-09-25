@@ -3,12 +3,15 @@ import type { GradeLevel, Student } from '@/lib/types';
 import { normalizeDateToIso } from '@/lib/date-utils';
 import { getCloudRecordId } from './core-sync';
 import { getWeeklyHours } from '@/lib/curriculum-data';
+import { DEFAULT_CLASS_COLOR, pickClassColor } from '@/lib/class-colors';
 
 export interface RosterImportClass {
   id: string;
   name: string;
   level: GradeLevel;
   stream: string;
+  /** لون تمييز القسم (يُختار تلقائياً إن لم يرفقه المستورد) */
+  color?: string;
 }
 
 export interface RosterImportStudent extends Omit<Student, 'classId'> {
@@ -36,13 +39,21 @@ export async function commitRosterImportBatch(
     throw new Error('يجب تسجيل الدخول لتأكيد استيراد القوائم في السحابة.');
   }
 
-  const mappedClasses = classes.map((c) => ({
-    id: getCloudRecordId(userId, 'class', c.id),
-    name: c.name.trim(),
-    level: c.level,
-    stream: c.stream || '',
-    section: c.stream || '',
-  }));
+  // كل قسم يحصل على لون مختلف عن بقية الأقسام في نفس الاستيراد
+  const usedColors: string[] = [];
+  const mappedClasses = classes.map((c) => {
+    const requested = typeof c.color === 'string' ? c.color.trim() : '';
+    const color = requested || pickClassColor(usedColors);
+    usedColors.push(color);
+    return {
+      id: getCloudRecordId(userId, 'class', c.id),
+      name: c.name.trim(),
+      level: c.level,
+      stream: c.stream || '',
+      section: c.stream || '',
+      color,
+    };
+  });
 
   const mappedStudents = students.map((s) => ({
     id: getCloudRecordId(userId, 'student', s.id),
@@ -172,6 +183,7 @@ export async function commitRosterImportBatch(
     section: c.section || null,
     weekly_hours: getWeeklyHours(c.level),
     academic_year: null,
+    color: c.color || DEFAULT_CLASS_COLOR,
     updated_by: userId,
   }));
 
@@ -253,6 +265,7 @@ export async function commitRosterImportBatch(
       name: c.name,
       level: c.level,
       stream: c.stream,
+      color: c.color,
     })),
     students: mappedStudents.map((s) => ({
       id: s.id,

@@ -18,6 +18,7 @@ import {
   Calendar,
   Sparkles,
   Download,
+  Share2,
   AlertCircle
 } from 'lucide-react';
 
@@ -90,10 +91,6 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const handleShare = async () => {
     const title = getDocTitle();
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -103,7 +100,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       });
       return;
     }
-    showToast('المشاركة غير متاحة على هذا الجهاز. استخدم الطباعة أو التنزيل.', 'warning');
+    showToast('المشاركة غير متاحة على هذا الجهاز. استخدم تصدير الوثيقة إلى doc.', 'warning');
   };
 
   // Export to Microsoft Word document (.doc)
@@ -427,25 +424,17 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--primary)] text-[var(--primary)] text-xs font-bold hover:bg-[var(--primary-soft)] transition-colors cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-            <span>طباعة A4</span>
-          </button>
-          <button
-            type="button"
             onClick={() => void handleShare()}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border-default)] text-[var(--text-primary)] text-xs font-bold hover:bg-[var(--bg-surface-subtle)] transition-colors cursor-pointer"
           >
-            <Download className="w-4 h-4" />
+            <Share2 className="w-4 h-4" />
             <span>مشاركة</span>
           </button>
           <button
             type="button" onClick={handleExportDoc}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer" title="تصدير الوثيقة" id="btn-export-doc-word" >
             <Download className="w-4 h-4" />
-            <span>تنزيل الوثيقة</span>
+            <span>تصدير إلى doc</span>
           </button>
         </div>
       </div>

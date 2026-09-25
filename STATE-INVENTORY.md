@@ -59,7 +59,7 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
 | --- | --- | --- |
 | `profile` | `profiles` (الأسماء العربية/الإنجليزية، البريد، الهاتف، بيانات التعيين/الميلاد/الأسرة/الجنس) | metadata للمراجعة؛ الصورة تحتاج Storage/outbox؛ trigger لتحديث `sync_updated_at` |
 | `calendarSettings`, `theme`, `dashboardStyle`, `sidebarCollapsed`, `onboardingDismissed`, `activeClassId`, `activeTrimester` | `app_settings` | revision وconflict؛ trigger خادمي موحد |
-| `classes` | `classes` (`color` persisted) | tombstone |
+| `classes` | `classes` (`color` persisted — لون تمييز مختلف لكل قسم يُسند تلقائياً عند الإنشاء أو الاستيراد) | tombstone |
 | `students` | `students` | tombstone؛ الاستيراد الجماعي يمر عبر `import_roster_batch` مع outbox كضمان لاحق |
 | `timetable` | `timetable_slots` | tombstone؛ تغيير القسم النشط يغيّر العرض/الاختيار فقط ولا يحذف أو يعيد كتابة صفوف التوقيت |
 | `sessions` | `sessions` (`summary` و`assignments` لعقد محرر الحصة المختصر) | tombstone؛ يرتبط بالحضور والسلوك؛ التعديل يمر عبر نفس revision/outbox/conflict |
@@ -340,6 +340,16 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
 | تحصين Excel | حدود على عدد الأوراق والأسطر والزمن أثناء تحليل ملف غير موثوق | `lib/excel-sync.ts` | `__tests__/acceptance.test.ts` |
 | الهجرات | إزالة التكرار في هجرتَي استيراد القوائم (الأولى هي المرجع والثانية no-op) | `supabase/migrations/` | `__tests__/acceptance.test.ts` |
 | CI | `npm ci` + `tsc --noEmit` + lint + tests + build مع concurrency | `.github/workflows/ci.yml` | `__tests__/acceptance.test.ts` |
+
+### ألوان تمييز الأقسام (2026-09-25)
+
+| البند | القرار | الملفات | الاختبار |
+| --- | --- | --- | --- |
+| مصدر لوحة الألوان | لوحة واحدة مشتركة (`CLASS_COLORS`) ودالة اختيار تعيد أول لون غير مستخدم، ولا تكرر لوناً بين الأقسام | `lib/class-colors.ts` | `__tests__/class-colors.test.ts` |
+| الإنشاء اليدوي | نافذة إضافة/تعديل القسم تعرض اللوحة كأزرار مستقلة + لون مخصص، واللون الافتراضي للقسم الجديد هو أول لون غير مستخدم | `components/ClassesManager.tsx` | — (سلوك واجهة) |
+| الاستيراد (رقمنة/ممتاز) | كل قسم جديد أو «قسم جديد» معاد تسميته يحصل على لون مختلف عن بقية الأقسام، ويُمرَّر داخل `commitRosterImport` | `components/ClassesManager.tsx` | — (سلوك واجهة) |
+| الاستيراد الذري السحابي | `commitRosterImportBatch` يكتب عمود `classes.color` ويعيده في النتيجة، ويُوفَّق مع الحالة المحلية (المعرّف + اللون) في `commitRosterImport` | `lib/supabase/roster-import.ts`, `hooks/useCloudAppState.ts` | — (مسار مزامنة قائم) |
+| المزامنة التفاضلية | أي تغيير على `color` يُنتج عملية `class` upsert (لأن `recordsShallowEqual` يرى الفرق) ويُقرأ عائداً عبر `fromRow('class')` | `lib/sync-outbox.ts`, `lib/supabase/core-sync.ts` | `__tests__/sync.test.ts` |
 
 ### قرارات ما بعد المرحلة الرابعة (2026-09-24)
 
