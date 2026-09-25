@@ -18,6 +18,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { restoreProgressMessage } from "@/lib/sync-status";
 import { ComingSoon } from "@/components/ComingSoon";
 import { CurriculumUnit } from "@/lib/types";
+import { Onboarding } from "@/components/Onboarding";
 
 const MAINTENANCE_MODE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
@@ -162,6 +163,16 @@ function AppContent({
   const [prepTab, setPrepTab] = useState<"card" | "pdf" | "bank">("card");
   const [selectedSessionForCahier, setSelectedSessionForCahier] = useState<string | null>(null);
   const [signOutRequest, setSignOutRequest] = useState<{ pending: number } | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Determine if we should show onboarding
+  useEffect(() => {
+    if (!isMounted || !cloudReady) return;
+    const isNewUser = !state.onboardingDismissed && 
+                      state.classes.length === 0 && 
+                      state.students.length === 0;
+    setShowOnboarding(isNewUser);
+  }, [isMounted, cloudReady, state.onboardingDismissed, state.classes.length, state.students.length]);
 
   /**
    * Sign-out is only "clean" when everything is acknowledged: otherwise we show the
@@ -246,7 +257,7 @@ function AppContent({
   };
 
   const isCollapsed = state.sidebarCollapsed || false;
-  const hasLoadedData = state.classes.length > 0 || state.students.length > 0 || Boolean(state.profile?.name && state.profile.name !== 'أستاذ المادة');
+  const hasLoadedData = state.classes.length > 0 || state.students.length > 0;
   if (!isMounted || (!cloudReady && !hasLoadedData)) {
     return (
       <div
@@ -501,6 +512,11 @@ function AppContent({
         onCancel={() => setSignOutRequest(null)}
       />
       {conflictError && <div role="alert" className="fixed bottom-4 left-4 z-[10001] rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white">{conflictError}</div>}
+      
+      {/* 6. Onboarding for new users */}
+      {showOnboarding && (
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
     </AppStateProvider>
   );

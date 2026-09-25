@@ -105,6 +105,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const [selectedMoumtazeClassIds, setSelectedMoumtazeClassIds] = useState<string[]>([]);
   const [isParsingMoumtaze, setIsParsingMoumtaze] = useState(false);
   const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
   const activeClassObj = state.classes.find(c => c.id === selectedClassId);
@@ -377,14 +378,14 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
   const handleSaveClass = async () => {
     if (!editingClass || !editingClass.name) return;
+    if (isSaving) return; // Prevent double-submit
     
     // Unify class name on manual save
     const canonicalName = getCanonicalClassName(editingClass.name);
     const classId = editingClass.id || uuidv4();
     const classToSave = { ...editingClass, id: classId, name: canonicalName };
 
-    setIsClassModalOpen(false);
-    setEditingClass(null);
+    setIsSaving(true);
 
     try {
       await updateStateAndWait(prev => {
@@ -399,9 +400,15 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         };
       });
       showToast('تم حفظ القسم ومزامنته مع السحابة.', 'success');
+      // Only close modal after successful save
+      setIsClassModalOpen(false);
+      setEditingClass(null);
     } catch (error: unknown) {
       console.error('Class sync failed:', error);
-      showToast(error instanceof Error ? error.message : 'تعذر مزامنة القسم.', 'error');
+      showToast(error instanceof Error ? error.message : 'تعذر مزامنة القسم. يمكنك إعادة المحاولة.', 'error');
+      // Keep modal open so user can retry
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -967,12 +974,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
   const handleSaveStudent = async () => {
     if (!editingStudent || !editingStudent.fullName || !selectedClassId) return;
+    if (isSaving) return; // Prevent double-submit
     const studentToSave = {
       ...editingStudent,
       id: editingStudent.id || uuidv4(),
     };
-    setIsStudentModalOpen(false);
-    setEditingStudent(null);
+    setIsSaving(true);
     try {
       await updateStateAndWait(prev => {
       const idx = prev.students.findIndex(s => s.id === studentToSave.id);
@@ -1007,9 +1014,15 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       return { ...prev, students: renumbered };
       });
       showToast('تم حفظ التلميذ ومزامنته مع السحابة.', 'success');
+      // Only close modal after successful save
+      setIsStudentModalOpen(false);
+      setEditingStudent(null);
     } catch (error: unknown) {
       console.error('Student sync failed:', error);
-      showToast(error instanceof Error ? error.message : 'تعذر مزامنة التلميذ.', 'error');
+      showToast(error instanceof Error ? error.message : 'تعذر مزامنة التلميذ. يمكنك إعادة المحاولة.', 'error');
+      // Keep modal open so user can retry
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1867,8 +1880,9 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               </button>
               <button
                 onClick={handleSaveClass}
-                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 text-white text-xs font-bold" >
-                حفظ القسم
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold" >
+                {isSaving ? 'جارٍ الحفظ...' : 'حفظ القسم'}
               </button>
             </div>
           </div>
@@ -2074,8 +2088,9 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               </button>
               <button
                 onClick={handleSaveStudent}
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold" >
-                حفظ
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold" >
+                {isSaving ? 'جارٍ الحفظ...' : 'حفظ'}
               </button>
             </div>
           </div>

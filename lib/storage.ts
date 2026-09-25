@@ -840,9 +840,18 @@ export function getEmptyState(): AppState {
 }
 
 export function isDemoState(state: AppState): boolean {
-  return state.profile.name === 'أستاذ المادة' &&
-    state.classes.some((item) => item.id.startsWith('cls-')) &&
-    state.students.some((item) => item.id.startsWith('std-'));
+  // Check if the state contains the specific seed data IDs, not just any IDs starting with 'cls-' or 'std-'
+  const seedClassIds = INITIAL_CLASSES.map(c => c.id);
+  const seedStudentIds = INITIAL_STUDENTS.map(s => s.id);
+  
+  const hasSeedClasses = seedClassIds.some(seedId => 
+    state.classes.some(c => c.id === seedId)
+  );
+  const hasSeedStudents = seedStudentIds.some(seedId => 
+    state.students.some(s => s.id === seedId)
+  );
+  
+  return hasSeedClasses && hasSeedStudents;
 }
 
 export function exportBackupJSON(state: AppState): string {
