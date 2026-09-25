@@ -11,13 +11,11 @@ export function usePWAInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsInstalled(
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true
     );
     const userAgent = window.navigator.userAgent.toLowerCase();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsIOS(/iphone|ipad|ipod/.test(userAgent));
   }, []);
 

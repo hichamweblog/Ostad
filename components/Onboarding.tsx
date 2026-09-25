@@ -5,7 +5,7 @@ import { useAppState } from '@/hooks/app-state-context';
 import { X, ArrowLeft, ArrowRight, Users, School, Sparkles } from 'lucide-react';
 
 interface OnboardingProps {
-  onComplete: () => void;
+  onComplete?: () => void;
 }
 
 export function Onboarding({ onComplete }: OnboardingProps) {
@@ -61,13 +61,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         // Just mark onboarding as dismissed
         await updateStateAndWait(prev => ({ ...prev, onboardingDismissed: true }));
       }
-      onComplete();
+      onComplete?.();
     }
   };
 
   const handleSkip = async () => {
     await updateStateAndWait(prev => ({ ...prev, onboardingDismissed: true }));
-    onComplete();
+    onComplete?.();
   };
 
   const currentStep = steps[step];

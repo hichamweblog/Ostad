@@ -163,16 +163,12 @@ function AppContent({
   const [prepTab, setPrepTab] = useState<"card" | "pdf" | "bank">("card");
   const [selectedSessionForCahier, setSelectedSessionForCahier] = useState<string | null>(null);
   const [signOutRequest, setSignOutRequest] = useState<{ pending: number } | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Determine if we should show onboarding
-  useEffect(() => {
-    if (!isMounted || !cloudReady) return;
-    const isNewUser = !state.onboardingDismissed && 
-                      state.classes.length === 0 && 
-                      state.students.length === 0;
-    setShowOnboarding(isNewUser);
-  }, [isMounted, cloudReady, state.onboardingDismissed, state.classes.length, state.students.length]);
+  // Derive onboarding state from app state (no need for separate state + effect)
+  const showOnboarding = isMounted && cloudReady && 
+                         !state.onboardingDismissed && 
+                         state.classes.length === 0 && 
+                         state.students.length === 0;
 
   /**
    * Sign-out is only "clean" when everything is acknowledged: otherwise we show the
@@ -515,7 +511,7 @@ function AppContent({
       
       {/* 6. Onboarding for new users */}
       {showOnboarding && (
-        <Onboarding onComplete={() => setShowOnboarding(false)} />
+        <Onboarding />
       )}
     </div>
     </AppStateProvider>
