@@ -929,23 +929,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         </div>
       )}
 
-      <div className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 md:hidden print:hidden">
-        <div className="mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl border border-[var(--border-default)] bg-white/95 p-2.5 shadow-xl backdrop-blur">
-          <div className="min-w-0 text-right">
-            <div className="text-[10px] font-bold text-[var(--text-tertiary)]">دفتر النقاط</div>
-            <div className={`text-xs font-black ${saveStatus === 'saved' ? 'text-[var(--success)]' : saveStatus === 'saving' ? 'text-[var(--warning)]' : 'text-[var(--text-primary)]'}`} aria-live="polite">
-              {saveStatus === 'saved' ? 'كل التغييرات محفوظة' : saveStatus === 'saving' ? 'جارٍ الحفظ...' : 'توجد تغييرات غير محفوظة'}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleSaveAllGrades}
-            className="min-h-11 shrink-0 rounded-xl bg-[var(--accent-gold)] px-4 text-xs font-black text-[var(--accent-navy)] shadow-xs active:scale-[0.98]"
-          >
-            حفظ العلامات
-          </button>
-        </div>
-      </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="ملخص دفتر النقاط">
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">

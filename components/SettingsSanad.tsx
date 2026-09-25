@@ -995,11 +995,26 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           <span>إعادة التحميل من السحابة</span>
         </button>
       </div>
-        </section>
-      )}
 
-      
-        
+      {/* Section: Danger Zone (منطقة العمليات الحساسة) */}
+      <div className="border border-rose-200 bg-rose-50/70 rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2 text-xs font-bold text-rose-900">
+          <AlertTriangle className="w-4 h-4 text-rose-600" />
+          <span>منطقة العمليات الحساسة (Danger Zone)</span>
+        </div>
+        <p className="text-xs text-rose-700 leading-relaxed font-medium">
+          هذا الإجراء يقوم بحذف جميع بيانات الأقسام، والتلاميذ، والغيابات، والعلامات بشكل نهائي، مع الإبقاء على ملفك المهني وجدول التوقيت والمذكرات البيداغوجية.
+        </p>
+        <button
+          onClick={handleClearClassesData}
+          className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs"
+          title="يحذف فقط ما يتعلق بالأقسام، التلاميذ، الغيابات والعلامات مع الاحتفاظ بحسابك وجدول التوقيت">
+          <RotateCcw className="w-4 h-4" />
+          <span>إعادة تعيين الأقسام والتلاميذ...</span>
+        </button>
+      </div>
+    </section>
+  )}
 
       {/* Add Holiday Modal */}
       {isAddHolidayOpen && (
