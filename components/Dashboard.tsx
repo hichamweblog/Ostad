@@ -495,7 +495,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Sections hub: keep the most frequent class actions one click away. */}
       <section className="order-5 grid grid-cols-1 gap-4" aria-labelledby="dashboard-classes-title">
         <div className="bg-white rounded-2xl border border-[var(--border-default)] p-5 shadow-xs">
-          <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div>
               <h2 id="dashboard-classes-title" className="font-black text-sm text-[var(--text-primary)]">
                 القسم النشط
@@ -504,13 +504,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 الإجراءات اليومية للقسم الذي تعمل عليه الآن
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigate('classes')}
-              className="text-xs font-bold text-[var(--primary)] hover:underline cursor-pointer"
-            >
-              إدارة الأقسام
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {state.classes.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="dashboard-active-class-select" className="sr-only">تغيير القسم النشط</label>
+                  <select
+                    id="dashboard-active-class-select"
+                    value={activeClass?.id || ''}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      onUpdateState(prev => ({ ...prev, activeClassId: newId }));
+                      const targetClass = state.classes.find(c => c.id === newId);
+                      if (targetClass) {
+                        showToast(`تم تفعيل قسم ${targetClass.name} كقسم نشط`, 'success');
+                      }
+                    }}
+                    className="min-h-9 px-2.5 py-1 rounded-xl border border-[var(--primary)]/30 bg-white font-bold text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer shadow-2xs"
+                  >
+                    {state.classes.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.stream})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => onNavigate('classes')}
+                className="text-xs font-bold text-[var(--primary)] hover:underline cursor-pointer"
+              >
+                إدارة الأقسام
+              </button>
+            </div>
           </div>
 
           {activeClass ? (
@@ -709,23 +735,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="divide-y divide-[var(--border-subtle)] text-xs">
-              {state.sessions.slice(0, 3).map(ses => {
-                const cls = state.classes.find(c => c.id === ses.classId);
-                return (
-                  <div key={ses.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
-                    <div>
-                      <div className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
-                      <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
-                    </div>
-                    <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full shrink-0">
-                      موثقة
-                    </span>
-                  </div>
+              {(() => {
+                const documentedSessions = state.sessions.filter(ses =>
+                  Boolean(ses.unitId || ses.customTopic?.trim() || ses.accomplishments?.trim() || ses.notes?.trim() || ses.summary?.trim())
                 );
-              })}
-              {state.sessions.length === 0 && (
-                <p className="text-xs text-[var(--text-secondary)] py-4 text-center">لم يتم تسجيل حصص بعد في الدفتر اليومي.</p>
-              )}
+                if (documentedSessions.length === 0) {
+                  return (
+                    <p className="text-xs text-[var(--text-secondary)] py-4 text-center">لم يتم تسجيل حصص بعد في الدفتر اليومي.</p>
+                  );
+                }
+                return documentedSessions.slice(0, 3).map(ses => {
+                  const cls = state.classes.find(c => c.id === ses.classId);
+                  return (
+                    <div key={ses.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
+                      <div>
+                        <div className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
+                        <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
+                      </div>
+                      <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full shrink-0">
+                        موثقة
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>

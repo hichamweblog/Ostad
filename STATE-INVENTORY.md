@@ -62,7 +62,7 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
 | `classes` | `classes` (`color` persisted — لون تمييز مختلف لكل قسم يُسند تلقائياً عند الإنشاء أو الاستيراد) | tombstone |
 | `students` | `students` | tombstone؛ الاستيراد الجماعي يمر عبر `import_roster_batch` مع outbox كضمان لاحق |
 | `timetable` | `timetable_slots` | tombstone؛ تغيير القسم النشط يغيّر العرض/الاختيار فقط ولا يحذف أو يعيد كتابة صفوف التوقيت |
-| `sessions` | `sessions` (`summary` و`assignments` لعقد محرر الحصة المختصر) | tombstone؛ يرتبط بالحضور والسلوك؛ التعديل يمر عبر نفس revision/outbox/conflict |
+| `sessions` | `sessions` (حقل تدوين موحد يجمع المنجز والواجبات والملاحظات مع دعم `customTopic` لترقيم حصص الوحدة مثل (1) و(2)؛ `summary` و`assignments` لعقد المحرر) | tombstone؛ يرتبط بالحضور والسلوك؛ التعديل يمر عبر نفس revision/outbox/conflict |
 | `attendance` | `attendance` | tombstone علائقي مستقل |
 | `session behaviors` | `session_behaviors` | tombstone علائقي مستقل |
 
@@ -71,9 +71,9 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
 مسار `/classes` يعرض الأقسام المسندة فقط، ومسار `/students` يملك واجهة
 قوائم التلاميذ والاستيراد. أما استعمال الزمن الأسبوعي فمملوك لمسار `/timetable`
 وواجهة جدول التوقيت الموحدة؛ لا توجد نسخة ثانية من الجدول في القائمة الجانبية.
-تغيير المسار أو `activeClassId` لا يغيّر مصدر الحقيقة ولا يحذف بيانات أي قسم.
+تغيير المسار أو `activeClassId` (من لوحة التحكم أو إدارة الأقسام أو دفتر النصوص) لا يغيّر مصدر الحقيقة ولا يحذف بيانات أي قسم.
 | `grades` | `grades` | revision؛ الحسابات المشتقة لا تصبح مصدراً ثانياً |
-| `lessonProgress` | `lesson_progress` | tombstone؛ حالة الإنجاز في المنهاج والتوزيع السنوي تُشتق تلقائياً من `lesson_progress` أو من جلسات `sessions` الموثقة دون إنشاء مخزن ثانوي |
+| `lessonProgress` | `lesson_progress` | tombstone؛ حالة الإنجاز في المنهاج والتوزيع السنوي تُسجل كـ `IN_PROGRESS` للحصص الجارية، ولا تُسجل كـ `COMPLETED` إلا بعد تأكيد إنهاء الوحدة كاملة |
 | `customUnits` | `custom_units` | tombstone |
 | `lessonPlans` | `lesson_plans` | tombstone |
 | `dashboardTasks` | `dashboard_tasks` | tombstone |

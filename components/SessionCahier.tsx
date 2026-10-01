@@ -3,7 +3,7 @@
 import { ConfirmDialog } from './ConfirmDialog';
 import { useAppState } from '@/hooks/app-state-context';
 import { showToast } from "@/components/Toast";
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { AppState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
 import { CurriculumUnit, SessionRecord } from '@/lib/types';
@@ -27,6 +27,7 @@ import {
   History,
   FileText,
   FileEdit,
+  Edit3,
   Search,
   Bold,
   List,
@@ -151,11 +152,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const [endTime, setEndTime] = useState('09:00');
   const [selectedUnitId, setSelectedUnitId] = useState<string>('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(initialSessionId || null);
-  const [accomplishments, setAccomplishments] = useState('');
-  const [nextSteps, setNextSteps] = useState('');
-  // The notebook uses one unified text area. Legacy fields are read through
-  // getSessionNotes so existing records remain visible after the migration.
-  const [notes, setNotes] = useState('');
+  const [partNumber, setPartNumber] = useState<number>(1);
+  const [isUnitCompleted, setIsUnitCompleted] = useState<boolean>(false);
+  const [unifiedNotes, setUnifiedNotes] = useState<string>('');
 
   // Curriculum Extraction Modal State
   const [curriculumSearch, setCurriculumSearch] = useState('');
@@ -178,12 +177,30 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
         if (ses.unitId) {
           setSelectedUnitId(ses.unitId);
         }
-        setAccomplishments(ses.accomplishments || '');
-        setNextSteps(ses.nextSteps || '');
-        setNotes(getSessionNotes(ses) || '');
+        const partMatch = ses.customTopic?.match(/\((\d+)\)/);
+        if (partMatch) {
+          setPartNumber(parseInt(partMatch[1], 10));
+        } else {
+          setPartNumber(1);
+        }
+        const prog = state.lessonProgress.find(p => p.classId === ses.classId && p.unitId === ses.unitId);
+        setIsUnitCompleted(prog?.status === 'COMPLETED');
+
+        const parts: string[] = [];
+        if (ses.accomplishments?.trim()) {
+          parts.push(ses.accomplishments.trim());
+        }
+        if (ses.nextSteps?.trim() && !ses.accomplishments?.includes(ses.nextSteps.trim())) {
+          parts.push(`• التوجيهات والواجبات:\n${ses.nextSteps.trim()}`);
+        }
+        const legacyNotes = getSessionNotes(ses);
+        if (legacyNotes?.trim() && !ses.accomplishments?.includes(legacyNotes.trim())) {
+          parts.push(`• دفتر الملاحظات:\n${legacyNotes.trim()}`);
+        }
+        setUnifiedNotes(parts.join('\n\n'));
       }
     }
-  }, [initialSessionId, editingSessionId, state.sessions]);
+  }, [initialSessionId, editingSessionId, state.sessions, state.lessonProgress]);
 
   // Pre-select next uncompleted unit when no unit is selected
   const nextSuggestedUnitId = React.useMemo(() => {
@@ -203,27 +220,31 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const selectedUnitObj = availableUnits.find(u => u.id === effectiveSelectedUnitId);
   const sessionGoals = selectedUnitObj ? getObjectivesFromUnit(selectedUnitObj) : '';
 
+  // Auto-suggest part number and unit completion status when creating a new session
+  useEffect(() => {
+    if (editingSessionId) return;
+    if (!effectiveSelectedUnitId || !state.activeClassId) return;
+
+    const priorSessions = state.sessions.filter(
+      s => s.classId === state.activeClassId && s.unitId === effectiveSelectedUnitId
+    );
+    const nextPart = priorSessions.length + 1;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPartNumber(nextPart);
+
+    const totalHours = selectedUnitObj?.hourlyVolume || 2;
+    setIsUnitCompleted(nextPart >= totalHours);
+  }, [effectiveSelectedUnitId, state.activeClassId, editingSessionId, state.sessions, selectedUnitObj?.hourlyVolume]);
+
   const handleCancelEdit = () => {
     setEditingSessionId(null);
     onClearInitialSession?.();
     setSessionDate(todayStr);
     setStartTime('08:00');
     setEndTime('09:00');
-    setAccomplishments('');
-    setNextSteps('');
-    setNotes('');
-  };
-
-  // Helper for applying markdown or symbols into a specific state field
-  const applyFormat = (
-    getter: string,
-    setter: React.Dispatch<React.SetStateAction<string>>,
-    prefix: string,
-    suffix: string = '' ) => {
-    setter(prev => {
-      if (!prev) return `${prefix}${suffix}`;
-      return `${prev}\n${prefix}${suffix}`;
-    });
+    setUnifiedNotes('');
+    setPartNumber(1);
+    setIsUnitCompleted(false);
   };
 
   // When selected unit changes, fill objectives automatically from curriculum DB
@@ -265,6 +286,10 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
           s => s.classId === state.activeClassId && s.date === sessionDate && s.startTime === startTime
         );
 
+    const sessionTitle = selectedUnitObj
+      ? `${selectedUnitObj.title} (${partNumber})`
+      : `حصة تعليمية (${partNumber})`;
+
     try {
       await updateStateAndWait(prev => {
         let newSessions: SessionRecord[];
@@ -274,14 +299,16 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
               return {
                 ...s,
                 unitId: effectiveSelectedUnitId,
+                customTopic: sessionTitle,
                 date: sessionDate,
                 startTime,
                 endTime,
                 sessionGoals,
-                accomplishments,
-                nextSteps,
-                teacherNotes: notes,
-                notes
+                accomplishments: unifiedNotes,
+                nextSteps: '',
+                teacherNotes: unifiedNotes,
+                notes: unifiedNotes,
+                summary: unifiedNotes.slice(0, 200),
               };
             }
             return s;
@@ -291,14 +318,16 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
             id: uuidv4(),
             classId: prev.activeClassId!,
             unitId: effectiveSelectedUnitId,
+            customTopic: sessionTitle,
             date: sessionDate,
             startTime,
             endTime,
             sessionGoals,
-            accomplishments,
-            nextSteps,
-            teacherNotes: notes,
-            notes,
+            accomplishments: unifiedNotes,
+            nextSteps: '',
+            teacherNotes: unifiedNotes,
+            notes: unifiedNotes,
+            summary: unifiedNotes.slice(0, 200),
             attendance: {}
           };
           newSessions = [newSession, ...prev.sessions];
@@ -309,20 +338,39 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
         );
         let newProg = [...prev.lessonProgress];
         if (effectiveSelectedUnitId) {
-          if (existingProgIdx >= 0) {
-            newProg[existingProgIdx] = {
-              ...newProg[existingProgIdx],
-              status: 'COMPLETED',
-              completedAt: sessionDate
-            };
+          if (isUnitCompleted) {
+            if (existingProgIdx >= 0) {
+              newProg[existingProgIdx] = {
+                ...newProg[existingProgIdx],
+                status: 'COMPLETED',
+                completedAt: sessionDate
+              };
+            } else {
+              newProg.push({
+                id: uuidv4(),
+                classId: prev.activeClassId!,
+                unitId: effectiveSelectedUnitId,
+                status: 'COMPLETED',
+                completedAt: sessionDate
+              });
+            }
           } else {
-            newProg.push({
-              id: uuidv4(),
-              classId: prev.activeClassId!,
-              unitId: effectiveSelectedUnitId,
-              status: 'COMPLETED',
-              completedAt: sessionDate
-            });
+            // Unit is in progress, do NOT mark completed!
+            if (existingProgIdx >= 0) {
+              newProg[existingProgIdx] = {
+                ...newProg[existingProgIdx],
+                status: 'IN_PROGRESS',
+                startedAt: newProg[existingProgIdx].startedAt || sessionDate
+              };
+            } else {
+              newProg.push({
+                id: uuidv4(),
+                classId: prev.activeClassId!,
+                unitId: effectiveSelectedUnitId,
+                status: 'IN_PROGRESS',
+                startedAt: sessionDate
+              });
+            }
           }
         }
 
@@ -337,9 +385,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       setTimeout(() => setSavedSuccessMsg(false), 3500);
       setEditingSessionId(null);
       onClearInitialSession?.();
-      setAccomplishments('');
-      setNextSteps('');
-      setNotes('');
+      setUnifiedNotes('');
+      showToast('تم توثيق الحصة وتحديث دفتر النصوص بنجاح', 'success');
     } catch (error) {
       console.error('Session save failed:', error);
       showToast('تعذر حفظ الحصة في السحابة.', 'error');
@@ -359,45 +406,54 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     }
   };
 
-  const classPastSessions = state.sessions.filter(
-    s => s.classId === state.activeClassId
-  );
+  const isSessionDocumented = (s: SessionRecord): boolean => {
+    return Boolean(
+      s.unitId ||
+      s.customTopic?.trim() ||
+      s.accomplishments?.trim() ||
+      s.notes?.trim() ||
+      s.summary?.trim()
+    );
+  };
+
+  // Only past sessions (date <= todayStr) for the active class
+  const classPastSessions = useMemo(() => {
+    return state.sessions
+      .filter(s => s.classId === state.activeClassId && s.date <= todayStr)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  }, [state.sessions, state.activeClassId, todayStr]);
+
+  // Only documented past sessions for official export
+  const classDocumentedSessions = useMemo(() => {
+    return classPastSessions.filter(isSessionDocumented);
+  }, [classPastSessions]);
 
   // Export Cahier de texte to Word (.doc)
 
   const handleExportMarkdown = () => {
-    let mdContent = `# دفتر النصوص - قسم ${activeClass?.name}
+    let mdContent = `# دفتر النصوص - قسم ${activeClass?.name || 'القسم'}
 
 `;
-    classPastSessions.forEach((s, idx) => {
+    classDocumentedSessions.forEach((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = unitObj?.title || s.customTopic || 'حصة تعلمية';
+      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
 
-      mdContent += `## الحصة رقم ${classPastSessions.length - idx}: ${title} (${s.date})
+      mdContent += `## الحصة رقم ${classDocumentedSessions.length - idx}: ${title} (${s.date})
 `;
       mdContent += `- التوقيت: ${timeSlot}
 `;
       mdContent += `- الميدان: ${domain}
 `;
-      
+
       if (s.sessionGoals) mdContent += `
 ### أهداف الحصة
 ${s.sessionGoals}
 `;
       if (s.accomplishments) mdContent += `
-### ما تم إنجازه وبناؤه في الحصة
+### توثيق وملاحظات الحصة
 ${s.accomplishments}
-`;
-      if (s.nextSteps) mdContent += `
-### المعالجة والواجبات
-${s.nextSteps}
-`;
-      const sessionNotes = getSessionNotes(s);
-      if (sessionNotes) mdContent += `
-### دفتر الملاحظات
-${sessionNotes}
 `;
       mdContent += `
 ---
@@ -417,14 +473,14 @@ ${sessionNotes}
   };
 
   const handleExportCahierDoc = () => {
-    const rowsHtml = classPastSessions.map((s, idx) => {
+    const rowsHtml = classDocumentedSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = unitObj?.title || s.customTopic || 'حصة تعلمية';
+      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
         <tr>
-          <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${classPastSessions.length - idx}</td>
+          <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${classDocumentedSessions.length - idx}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${s.date}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${timeSlot}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: right;"><strong>${title}</strong></td>
@@ -433,19 +489,17 @@ ${sessionNotes}
       `;
     }).join('');
 
-    const detailsHtml = classPastSessions.map((s, idx) => {
+    const detailsHtml = classDocumentedSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = unitObj?.title || s.customTopic || 'حصة تعلمية';
+      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
         <div style="margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">
-          <h3 style="color: #0d2c3b;">الحصة رقم ${classPastSessions.length - idx}: ${title} (${s.date})</h3>
+          <h3 style="color: #0d2c3b;">الحصة رقم ${classDocumentedSessions.length - idx}: ${title} (${s.date})</h3>
           <p><strong>التوقيت:</strong> ${timeSlot} | <strong>الميدان:</strong> ${domain}</p>
           ${s.sessionGoals ? `<h4>أهداف الحصة:</h4><p style="white-space: pre-wrap;">${s.sessionGoals}</p>` : ''}
-          ${s.accomplishments ? `<h4>ما تم إنجازه وبناؤه في الحصة:</h4><p style="white-space: pre-wrap;">${s.accomplishments}</p>` : ''}
-          ${s.nextSteps ? `<h4>المعالجة والواجبات:</h4><p style="white-space: pre-wrap;">${s.nextSteps}</p>` : ''}
-          ${getSessionNotes(s) ? `<h4>دفتر الملاحظات:</h4><p style="white-space: pre-wrap;">${getSessionNotes(s)}</p>` : ''}
+          ${s.accomplishments ? `<h4>توثيق وملاحظات الحصة:</h4><p style="white-space: pre-wrap;">${s.accomplishments}</p>` : ''}
         </div>
       `;
     }).join('');
@@ -454,7 +508,7 @@ ${sessionNotes}
       <div dir="rtl" style="text-align: center; margin-bottom: 10px;">
         <div style="color: var(--primary);">دفتر النصوص وسجل الحصص اليومي — مادة العلوم الإسلامية</div>
         <p><strong>المؤسسة:</strong> ${state.profile?.schoolName || 'ثانوية التعليم الثانوي'} | <strong>الأستاذ(ة):</strong> ${state.profile?.name || 'أستاذ المادة'} | <strong>السنة الدراسية:</strong> ${state.profile?.academicYear || '2026/2027'}</p>
-        <p><strong>الفوج التربوي:</strong> ${activeClass?.name || 'القسم'} (${activeClass?.stream || ''}) | <strong>عدد الحصص الموثقة:</strong> ${classPastSessions.length}</p>
+        <p><strong>الفوج التربوي:</strong> ${activeClass?.name || 'القسم'} (${activeClass?.stream || ''}) | <strong>عدد الحصص الموثقة:</strong> ${classDocumentedSessions.length}</p>
       </div>
       <h3 style="margin: 8px 0 4px;">جدول الحصص المنجزة زمنياً:</h3>
       <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 4px;">
@@ -480,21 +534,59 @@ ${sessionNotes}
 
   return (
     <div className="space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6" id="session-cahier-view">
-      {/* Actions bar — no redundant h2 title */}
-      {(classPastSessions.length > 0) && (
+      {/* Top action bar: Active class selector & Document Export */}
+      <div className="flex items-center justify-between gap-3 flex-wrap bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleExportCahierDoc}
-            className="px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" title="تصدير دفتر النصوص كاملاً إلى ملف Word (.doc)" >
-            <FileDown className="w-3.5 h-3.5 text-white/70" />
-            <span>تصدير (.doc)</span>
-          </button>
-          <div className="px-3.5 py-1.5 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <label htmlFor="session-cahier-active-class" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <Users className="w-4 h-4 text-[var(--primary)]" />
-            <span>{activeClass?.name || 'لم يحدد قسم'}</span>
-          </div>
+            <span>القسم:</span>
+          </label>
+          <select
+            id="session-cahier-active-class"
+            value={state.activeClassId || ''}
+            onChange={(e) => {
+              const newId = e.target.value;
+              void updateStateAndWait(prev => ({ ...prev, activeClassId: newId }));
+              const cls = state.classes.find(c => c.id === newId);
+              if (cls) {
+                showToast(`تم تفعيل قسم ${cls.name} كقسم نشط`, 'success');
+              }
+            }}
+            className="min-h-9 px-3 py-1 rounded-xl border border-[var(--primary)]/30 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
+          >
+            {state.classes.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.stream})
+              </option>
+            ))}
+          </select>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            القسم النشط
+          </span>
         </div>
-      )}
+
+        {classDocumentedSessions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCahierDoc}
+              className="min-h-9 px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="تصدير دفتر النصوص كاملاً إلى ملف Word (.doc)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-white/70" />
+              <span>تصدير Word (.doc)</span>
+            </button>
+            <button
+              onClick={handleExportMarkdown}
+              className="min-h-9 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer hidden sm:flex items-center gap-1.5"
+              title="تصدير دفتر النصوص إلى ملف Markdown (.md)"
+            >
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              <span>Markdown</span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {savedSuccessMsg && (
         <div className="p-3 bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-[var(--primary)] text-xs rounded-xl flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
@@ -586,6 +678,59 @@ ${sessionNotes}
               </select>
             </div>
 
+            {/* Part selector & Unit completion toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                  رقم الحصة من الوحدة (الجزء):
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[1, 2, 3, 4].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        setPartNumber(num);
+                        const totalHours = selectedUnitObj?.hourlyVolume || 2;
+                        setIsUnitCompleted(num >= totalHours);
+                      }}
+                      className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                        partNumber === num
+                          ? 'bg-[var(--primary)] text-white shadow-xs'
+                          : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
+                      }`}
+                    >
+                      حصة ({num})
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  عنوان التدوين بالدفتر: <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'} ({partNumber})</span>
+                </p>
+              </div>
+
+              <div className="flex flex-col justify-center">
+                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-[var(--primary)]/20 bg-white hover:bg-[var(--primary-soft)]/20 transition-colors cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isUnitCompleted}
+                    onChange={e => setIsUnitCompleted(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-[var(--primary)] focus:ring-[var(--primary)] cursor-pointer"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-slate-900 block">
+                      تم إتمام الوحدة كاملة (تسجيل الإنجاز في المنهاج)
+                    </span>
+                    <span className="text-[11px] text-slate-500 block leading-tight">
+                      {isUnitCompleted
+                        ? '✓ سيتم احتساب الوحدة كمنجزة بالكامل في المنهاج والتوزيع السنوي.'
+                        : '⏳ الوحدة جارية (حصة جزئية) ولن تُسجل كمكتملة في المنهاج حتى إتمامها.'}
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Show the latest note for this unit as a writing aid */}
             {previousMemoryForThisUnit && (
               <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs space-y-1">
@@ -619,86 +764,54 @@ ${sessionNotes}
               </div>
             </div>
 
-            {/* Quick session record */}
-            <div className="space-y-1 text-sm">
-              <label className="font-bold text-slate-700 flex items-center justify-between">
-                <span>توثيق الحصة وما تم إنجازه:</span>
-                <span className="text-slate-400 font-normal text-[10px]">ملاحظة واحدة مختصرة تكفي</span>
+            {/* ONE UNIFIED TEXT AREA: توثيق الحصة وما تم إنجازه + التوجيهات والواجبات + دفتر الملاحظات */}
+            <div className="space-y-2 text-sm">
+              <label className="font-bold text-slate-800 flex items-center justify-between flex-wrap gap-2">
+                <span className="flex items-center gap-1.5">
+                  <Edit3 className="w-4 h-4 text-[var(--primary)]" />
+                  <span>توثيق وملاحظات الحصة (خانة كتابة موحدة):</span>
+                </span>
+                <span className="text-slate-400 font-normal text-[10px]">
+                  ما تم إنجازه + التوجيهات والواجبات + دفتر الملاحظات في خانة واحدة
+                </span>
               </label>
-              <div className="flex flex-wrap gap-2 pb-1">
-                {['تم إنجاز عناصر الدرس المبرمجة.', 'نشاط تطبيقي ومناقشة جماعية.', 'تحتاج الحصة القادمة إلى مراجعة قصيرة.'].map(template => (
-                  <button
-                    key={template}
-                    type="button"
-                    onClick={() => setAccomplishments(prev => prev ? `${prev}\n${template}` : template)}
-                    className="min-h-9 rounded-full border border-[var(--border-default)] bg-white px-3 text-[11px] font-bold text-[var(--text-secondary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
-                  >
-                    {template}
-                  </button>
-                ))}
-              </div>
-              <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
-                <FormattingBar val={accomplishments} setter={setAccomplishments} />
-                <textarea
-                  rows={4}
-                  value={accomplishments}
-                  onChange={e => setAccomplishments(e.target.value)}
-                  placeholder="اكتب باختصار ما أنجزته في الحصة، أهم المناقشات، والواجب أو التوجيه للحصة القادمة..." className="w-full px-3 py-2 text-sm leading-7 text-slate-900 border-0 focus:outline-none resize-y" />
-              </div>
-            </div>
 
-            {/* Official journal follow-up field */}
-            <div className="space-y-1 text-sm">
-              <label className="font-bold text-slate-700">
-                التوجيهات والواجبات للحصة القادمة:
-              </label>
-              <div className="flex flex-wrap gap-2 pb-1">
-                {['واجب منزلي قصير.', 'مراجعة مكتسبات الحصة.', 'إحضار الكراس والكتاب.'].map(template => (
+              {/* Quick Template Chips */}
+              <div className="flex flex-wrap gap-1.5 pb-1">
+                {[
+                  { label: '+ ما تم إنجازه:', text: '• ما تم إنجازه: ' },
+                  { label: '+ التوجيهات والواجبات:', text: '• التوجيهات والواجبات: ' },
+                  { label: '+ ملاحظة:', text: '• ملاحظة: ' },
+                  { label: 'إنجاز عناصر الدرس', text: 'تم إنجاز عناصر الدرس المبرمجة مع التلاميذ.' },
+                  { label: 'نشاط تطبيقي ومناقشة', text: 'نشاط تطبيقي ومناقشة جماعية وحل وضعيات تقويمية.' },
+                  { label: 'واجب منزلي قصير', text: 'واجب منزلي قصير: مراجعة العناصر وتلخيص المكتسبات.' },
+                ].map(chip => (
                   <button
-                    key={template}
+                    key={chip.label}
                     type="button"
-                    onClick={() => setNextSteps(prev => prev ? `${prev}\n${template}` : template)}
-                    className="min-h-9 rounded-full border border-[var(--border-default)] bg-white px-3 text-[11px] font-bold text-[var(--text-secondary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+                    onClick={() => {
+                      setUnifiedNotes(prev => {
+                        if (!prev.trim()) return chip.text;
+                        return `${prev}\n${chip.text}`;
+                      });
+                    }}
+                    className="min-h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-bold text-slate-700 hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] transition-colors cursor-pointer"
                   >
-                    {template}
+                    {chip.label}
                   </button>
                 ))}
               </div>
-              <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
-                <FormattingBar val={nextSteps} setter={setNextSteps} />
+
+              {/* Unified Formatting Bar & Textarea */}
+              <div className="rounded-xl border border-slate-300 overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)] focus-within:border-[var(--primary)] shadow-2xs">
+                <FormattingBar val={unifiedNotes} setter={setUnifiedNotes} />
                 <textarea
-                  rows={2}
-                  value={nextSteps}
-                  onChange={e => setNextSteps(e.target.value)}
-                  placeholder="اكتب الواجب أو المعالجة أو التوجيه الذي سيُعرض في الدفتر اليومي..."
-                  className="w-full px-3 py-2 text-sm leading-7 text-slate-900 border-0 focus:outline-none resize-y"
+                  rows={6}
+                  value={unifiedNotes}
+                  onChange={e => setUnifiedNotes(e.target.value)}
+                  placeholder="دوّن هنا ما تم إنجازه، التوجيهات والواجبات للحصة القادمة، وملاحظاتك البيداغوجية بكل حرية..."
+                  className="w-full px-3.5 py-3 text-sm leading-7 text-slate-900 border-0 focus:outline-none resize-y bg-white font-medium"
                 />
-              </div>
-            </div>
-
-            {/* Unified notebook input */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 text-xs font-black text-slate-900">
-                  <Lightbulb className="w-4 h-4 text-amber-600" />
-                  <span>دفتر الملاحظات</span>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                مساحة واحدة لتسجيل ما حدث في الحصة، وما يحتاج متابعة، وأي توجيه للحصة القادمة.
-              </p>
-
-              <div className="space-y-1 text-xs">
-                <label className="font-semibold text-[var(--primary)]">ملاحظاتك عن الحصة</label>
-                <div className="rounded-xl border border-slate-300 bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[var(--primary)]">
-                  <FormattingBar val={notes} setter={setNotes} />
-                  <textarea
-                    rows={4}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="دوّن ما نجح، الصعوبات، تفاعل التلاميذ، وما تريد تغييره أو متابعته في الحصة القادمة..."
-                    className="w-full px-3 py-3 text-sm leading-7 border-0 focus:outline-none text-slate-900 resize-y" />
-                </div>
               </div>
             </div>
 
@@ -715,69 +828,99 @@ ${sessionNotes}
 
       {/* Historical Sessions Log */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <History className="w-4 h-4 text-slate-700" />
             <span>سجل الحصص السابقة لقسم {activeClass?.name} ({classPastSessions.length} حصة)</span>
           </h3>
+          {classPastSessions.length > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                {classDocumentedSessions.length} موثقة
+              </span>
+              {classPastSessions.length - classDocumentedSessions.length > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 font-bold">
+                  {classPastSessions.length - classDocumentedSessions.length} غير موثقة
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {classPastSessions.length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-400">
-            لم تسجل بعد أي حصة لهذا القسم. استخدم النموذج أعلاه لتدوين أول حصة.
+            لم تسجل بعد أي حصة سابقة لهذا القسم. استخدم النموذج أعلاه لتدوين أول حصة.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="space-y-3">
             {classPastSessions.map(ses => {
               const unit = availableUnits.find(u => u.id === ses.unitId);
-              const isDocumented = Boolean(ses.unitId || ses.accomplishments);
+              const isDocumented = isSessionDocumented(ses);
               const isEditingThis = ses.id === editingSessionId;
+              const title = ses.customTopic || unit?.title || (ses.sessionGoals ? ses.sessionGoals.slice(0, 40) : 'حصة غير محددة');
 
               return (
                 <div
                   key={ses.id}
-                  className={`py-3 flex items-start justify-between gap-4 text-sm rounded-xl px-2 transition-colors ${
-                    isEditingThis ? 'bg-amber-50/70 border border-amber-300' : ''
+                  className={`p-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-4 text-sm rounded-xl transition-all ${
+                    isEditingThis
+                      ? 'bg-amber-50/80 border-2 border-amber-400 shadow-xs'
+                      : !isDocumented
+                      ? 'bg-amber-50/40 border border-amber-200/90 hover:bg-amber-50/70'
+                      : 'bg-slate-50/60 hover:bg-slate-50 border border-slate-200/70'
                   }`}
                 >
-                  <div className="space-y-1 max-w-2xl">
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                      <span className="font-mono font-bold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded-lg text-xs shadow-2xs">
                         {ses.date}
                       </span>
                       <span className="text-slate-500 font-mono text-xs">
                         {ses.startTime} – {ses.endTime}
                       </span>
                       <span className="font-bold text-slate-900">
-                        {unit ? unit.title : (ses.sessionGoals ? ses.sessionGoals.slice(0, 30) : 'حصة غير محددة')}
+                        {title}
                       </span>
-                      {!isDocumented && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
-                          بانتظار التوثيق في الدفتر
+                      {isDocumented ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>موثقة</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-300 inline-flex items-center gap-1">
+                          <span>غير موثقة</span>
                         </span>
                       )}
                     </div>
-                    {ses.accomplishments && (
-                      <p className="text-sm leading-7 text-slate-600 whitespace-pre-line">
-                        <span className="font-semibold text-slate-700">ما تم إنجازه: </span>
-                        {ses.accomplishments}
-                      </p>
-                    )}
-                    {ses.nextSteps && (
-                      <p className="text-sm leading-7 text-slate-500 whitespace-pre-line">
-                        <span className="font-semibold text-slate-600">التوجيهات: </span>
-                        {ses.nextSteps}
-                      </p>
-                    )}
-                    {getSessionNotes(ses) && (
-                      <p className="text-sm leading-7 text-amber-800 whitespace-pre-line rounded-lg bg-amber-50 px-2 py-1.5">
-                        <span className="font-semibold text-amber-900">دفتر الملاحظات: </span>
-                        {getSessionNotes(ses)}
+
+                    {isDocumented ? (
+                      <>
+                        {ses.accomplishments && (
+                          <p className="text-sm leading-6 text-slate-700 whitespace-pre-line bg-white/80 rounded-lg p-2.5 border border-slate-100 mt-1">
+                            {ses.accomplishments}
+                          </p>
+                        )}
+                        {ses.nextSteps && !ses.accomplishments?.includes(ses.nextSteps) && (
+                          <p className="text-xs leading-5 text-slate-500 whitespace-pre-line mt-0.5">
+                            <span className="font-semibold text-slate-600">التوجيهات: </span>
+                            {ses.nextSteps}
+                          </p>
+                        )}
+                        {getSessionNotes(ses) && !ses.accomplishments?.includes(getSessionNotes(ses)!) && (
+                          <p className="text-xs leading-5 text-amber-800 whitespace-pre-line rounded-lg bg-amber-50 px-2 py-1 mt-0.5">
+                            <span className="font-semibold text-amber-900">دفتر الملاحظات: </span>
+                            {getSessionNotes(ses)}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-amber-700 font-medium">
+                        هذه الحصة مرت وفق جدول الحصص ولم يتم توثيق محتواها في دفتر النصوص بعد.
                       </p>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
                     <button
                       type="button"
                       onClick={() => {
@@ -789,11 +932,15 @@ ${sessionNotes}
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[var(--primary-soft)] text-slate-700 hover:text-[var(--primary)] text-xs font-bold transition-colors cursor-pointer"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        !isDocumented
+                          ? 'bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-xs'
+                          : 'bg-white hover:bg-[var(--primary-soft)] text-slate-700 hover:text-[var(--primary)] border border-slate-200'
+                      }`}
                       title="توثيق / تعديل الحصة"
                     >
                       <FileEdit className="w-3.5 h-3.5" />
-                      <span>{isDocumented ? 'تعديل' : 'توثيق الحصة'}</span>
+                      <span>{isDocumented ? 'تعديل' : 'توثيق الآن'}</span>
                     </button>
                     <button
                       type="button"

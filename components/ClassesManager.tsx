@@ -1451,7 +1451,31 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-2">
+                  <div className="pt-2 border-t border-slate-100">
+                    {cls.id === state.activeClassId ? (
+                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200/80 px-3 py-1.5 rounded-xl text-emerald-800 text-xs font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          القسم النشط حالياً
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
+                          showToast(`تم تفعيل ${cls.name} كقسم نشط`, 'success');
+                        }}
+                        className="w-full min-h-10 py-1.5 px-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary-soft)] hover:bg-[var(--primary)] text-[var(--primary)] hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>تفعيل كقسم نشط</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2">
                     <button
                       onClick={() => {
                         onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
@@ -1625,7 +1649,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         <div className="space-y-4">
           {/* Class selector & actions bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-slate-700">اختر القسم:</span>
               <select
                 value={selectedClassId}
@@ -1637,6 +1661,24 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                   </option>
                 ))}
               </select>
+              {selectedClassId === state.activeClassId ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  القسم النشط
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateState(prev => ({ ...prev, activeClassId: selectedClassId }));
+                    showToast('تم تفعيل هذا القسم كقسم نشط', 'success');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-bold hover:bg-[var(--primary-hover)] transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>تفعيل كقسم نشط</span>
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">

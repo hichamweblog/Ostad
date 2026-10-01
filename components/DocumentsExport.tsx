@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { showToast } from '@/components/Toast';
 import { AppState } from '@/lib/storage';
@@ -44,9 +44,21 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
 
-  const classPastSessions = state.sessions.filter(
-    s => s.classId === selectedClassId
-  );
+  const isSessionDocumented = (session: SessionRecord): boolean => {
+    return Boolean(
+      session.unitId ||
+      session.customTopic?.trim() ||
+      session.accomplishments?.trim() ||
+      session.notes?.trim() ||
+      session.summary?.trim()
+    );
+  };
+
+  const classPastSessions = useMemo(() => {
+    return state.sessions
+      .filter(s => s.classId === selectedClassId && isSessionDocumented(s))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  }, [state.sessions, selectedClassId]);
 
   const getSessionNotes = (session: SessionRecord): string => {
     if (session.notes) return session.notes;
@@ -120,23 +132,20 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
         <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 10pt;">
           <thead>
             <tr style="background-color: #f1f5f9; font-weight: bold;">
-              <th style="border: 1px solid #000; padding: 6px; width: 12%; text-align: center;">التاريخ والتوقيت</th>
-              <th style="border: 1px solid #000; padding: 6px; width: 20%; text-align: right;">موضوع الدرس / الوحدة</th>
-              <th style="border: 1px solid #000; padding: 6px; width: 28%; text-align: right;">ما تم إنجازه في الحصة</th>
-              <th style="border: 1px solid #000; padding: 6px; width: 17%; text-align: right;">التوجيهات والواجبات</th>
-              <th style="border: 1px solid #000; padding: 6px; width: 18%; text-align: right;">دفتر الملاحظات</th>
-              <th style="border: 1px solid #000; padding: 6px; width: 6%; text-align: center;">الغياب</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 14%; text-align: center;">التاريخ والتوقيت</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 26%; text-align: right;">موضوع الدرس / الوحدة</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 32%; text-align: right;">ما تم إنجازه في الحصة</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 14%; text-align: right;">التوجيهات والواجبات</th>
+              <th style="border: 1px solid #000; padding: 6px; width: 14%; text-align: right;">دفتر الملاحظات</th>
             </tr>
           </thead>
           <tbody>
             ${
               classPastSessions.length === 0
-                ? '<tr><td colspan="6" style="border: 1px solid #000; padding: 12px; text-align: center; color: #64748b;">لا توجد حصص مسجلة بعد لهذا القسم.</td></tr>' : classPastSessions
+                ? '<tr><td colspan="5" style="border: 1px solid #000; padding: 12px; text-align: center; color: #64748b;">لا توجد حصص موثقة مسجلة بعد لهذا القسم.</td></tr>' : classPastSessions
                     .map(ses => {
                       const allUnits = getMergedCurriculumUnits(state.customUnits);
                       const unit = allUnits.find(u => u.id === ses.unitId);
-                      const absents = Object.values(ses.attendance || {}).filter(
-                        st => st === 'ABSENT' || st === 'EXCUSED' ).length;
                       return `
                         <tr>
                           <td style="border: 1px solid #000; padding: 5px; text-align: center;">
@@ -147,7 +156,6 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.accomplishments || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.nextSteps || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right; white-space: pre-wrap;">${getSessionNotes(ses) || '-'}</td>
-                          <td style="border: 1px solid #000; padding: 5px; text-align: center;">${absents}</td>
                         </tr>
                       `;
                     })
@@ -578,13 +586,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             <div className="space-y-2 sm:hidden">
               {classPastSessions.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[var(--border-default)] p-5 text-center text-xs text-[var(--text-tertiary)]">
-                  لا توجد حصص مسجلة بعد لهذا القسم.
+                  لا توجد حصص موثقة مسجلة بعد لهذا القسم.
                 </div>
               ) : classPastSessions.map((session) => {
                 const unit = getMergedCurriculumUnits(state.customUnits).find((item) => item.id === session.unitId);
-                const absents = Object.values(session.attendance || {}).filter(
-                  (status) => status === 'ABSENT' || status === 'EXCUSED',
-                ).length;
                 return (
                   <article key={session.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-xs">
                     <div className="flex items-start justify-between gap-3">
@@ -592,7 +597,6 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                         <div className="text-xs font-black text-[var(--text-primary)]">{unit?.title || session.customTopic || 'حصة عادية'}</div>
                         <div className="mt-1 text-[11px] font-semibold text-[var(--text-tertiary)]">{session.date} • {session.startTime} - {session.endTime}</div>
                       </div>
-                      <span className="rounded-full bg-[var(--danger-soft)] px-2 py-1 text-[10px] font-bold text-[var(--danger)]">غياب: {absents}</span>
                     </div>
                     <div className="mt-2 space-y-1 text-xs leading-6 text-[var(--text-secondary)]">
                       <p><strong>المنجز:</strong> {session.accomplishments || '—'}</p>
@@ -607,26 +611,23 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                 <thead className="bg-slate-100 border-b border-slate-900 font-bold">
                   <tr>
                     <th className="border border-slate-900 p-1.5 text-center w-24">التاريخ والتوقيت</th>
-                    <th className="border border-slate-900 p-1.5 w-44">موضوع الدرس / الوحدة</th>
+                    <th className="border border-slate-900 p-1.5 w-48">موضوع الدرس / الوحدة</th>
                     <th className="border border-slate-900 p-1.5">ما تم إنجازه في الحصة</th>
-                    <th className="border border-slate-900 p-1.5 w-32">التوجيهات والواجبات</th>
-                    <th className="border border-slate-900 p-1.5 w-40">دفتر الملاحظات</th>
-                    <th className="border border-slate-900 p-1.5 text-center w-12">الغياب</th>
+                    <th className="border border-slate-900 p-1.5 w-36">التوجيهات والواجبات</th>
+                    <th className="border border-slate-900 p-1.5 w-44">دفتر الملاحظات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {classPastSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="border border-slate-900 p-6 text-center text-slate-400">
-                        لا توجد حصص مسجلة بعد لهذا القسم في الدفتر اليومي.
+                      <td colSpan={5} className="border border-slate-900 p-6 text-center text-slate-400">
+                        لا توجد حصص موثقة مسجلة بعد لهذا القسم في الدفتر اليومي.
                       </td>
                     </tr>
                   ) : (
                     classPastSessions.map(ses => {
                       const allCurriculumUnits = getMergedCurriculumUnits(state.customUnits);
                       const unit = allCurriculumUnits.find(u => u.id === ses.unitId);
-                      const absents = Object.values(ses.attendance || {}).filter(
-                        st => st === 'ABSENT' || st === 'EXCUSED' ).length;
 
                       return (
                         <tr key={ses.id} className="break-inside-avoid">
@@ -645,9 +646,6 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                           </td>
                           <td className={`border border-slate-900 whitespace-pre-line ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
                             {getSessionNotes(ses) || '-'}
-                          </td>
-                          <td className={`border border-slate-900 text-center font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5'}`}>
-                            {absents > 0 ? absents : '0'}
                           </td>
                         </tr>
                       );
