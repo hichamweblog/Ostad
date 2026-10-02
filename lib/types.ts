@@ -163,6 +163,7 @@ export interface SessionRecord {
   date: string; // YYYY-MM-DD
   startTime: string; // "08:00"
   endTime: string; // "09:00"
+  room?: string;
   sessionGoals: string; // أهداف الحصة
   accomplishments: string; // ما تم إنجازه
   nextSteps: string; // ما يحتاج معالجة في الحصة القادمة
@@ -183,6 +184,8 @@ export interface SessionRecord {
   unwrittenLessons?: string[]; // Array of studentIds who didn't write the lesson (بدون كراس)
   poorParticipation?: string[]; // Array of studentIds with poor participation
   goodParticipation?: string[]; // Array of studentIds with exceptional participation
+  /** Set when the teacher explicitly finishes documenting the class. */
+  completedAt?: string;
 }
 
 export interface StudentGrade {

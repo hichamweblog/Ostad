@@ -2,6 +2,9 @@
 
 import React from 'react';
 import { useAppState } from '@/hooks/app-state-context';
+import { getLocalDateString } from '@/lib/date-utils';
+import { resolveOrCreateSession } from '@/lib/session-flow';
+import { compactClassName } from '@/lib/class-display';
 import { SanadTab } from './SidebarSanad';
 import { BookOpen, ClipboardList, Home, MoreHorizontal, PlayCircle, Users } from 'lucide-react';
 
@@ -52,14 +55,24 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     ? 'التحضير البيداغوجي'
     : (slotClass ? `ابدأ ${slotClass.name}` : 'ابدأ الحصة');
 
-  const handleCenterAction = () => {
+  const handleCenterAction = async () => {
     if (isWeekend) {
       onSelectTab('prep');
       return;
     }
-    const targetClassId = currentOrNextSlot?.classId || fallbackClass?.id || null;
-    if (targetClassId) {
-      updateState(previous => ({ ...previous, activeClassId: targetClassId }));
+
+    if (currentOrNextSlot) {
+      // Never block the classroom flow on network confirmation. The app-state
+      // update is cached/outboxed and synchronization continues in background.
+      updateState(previous =>
+        resolveOrCreateSession(previous, currentOrNextSlot, getLocalDateString()).state
+      );
+      onSelectTab('attendance');
+      return;
+    }
+
+    if (fallbackClass) {
+      updateState(previous => ({ ...previous, activeClassId: fallbackClass.id }));
     }
     onSelectTab('attendance');
   };
@@ -115,7 +128,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
           {isWeekend ? (
             <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">المذكرات</span>
           ) : slotClass ? (
-            <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">{slotClass.name}</span>
+            <span className="max-w-[6.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]" title={slotClass.name}>{compactClassName(slotClass.name)}</span>
           ) : null}
         </button>
 

@@ -13,6 +13,14 @@ import {
   TimetableSlot,
 } from "./types";
 
+export interface LastWorkspace {
+  route: 'attendance' | 'sessions' | 'grades';
+  classId: string | null;
+  sessionId?: string;
+  gradeColumn?: 'continuousEval' | 'quiz' | 'exam';
+  updatedAt: string;
+}
+
 export interface AppState {
   profile: TeacherProfile;
   classes: ClassRoom[];
@@ -41,6 +49,7 @@ export interface AppState {
   dashboardStyle?: DashboardStyle;
   sidebarCollapsed?: boolean;
   onboardingDismissed?: boolean;
+  lastWorkspace?: LastWorkspace;
   deletedRecordIds?: string[];
   cloudRevision?: number;
 }

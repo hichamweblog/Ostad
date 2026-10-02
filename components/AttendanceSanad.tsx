@@ -66,9 +66,13 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     classSessions[0]?.id || '' );
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('detailed');
+  const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('quick');
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [bulkUndo, setBulkUndo] = useState<{
+    sessionId: string;
+    attendance: Record<string, AttendanceStatus>;
+  } | null>(null);
 
   const activeSession = classSessions.find(s => s.id === selectedSessionId) || classSessions[0];
   const activeAttendance = activeSession?.attendance || {};
@@ -170,6 +174,10 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   // Mark all students present in active session
   const handleMarkAllPresent = async () => {
     if (!activeSession) return;
+    setBulkUndo({
+      sessionId: activeSession.id,
+      attendance: { ...(activeSession.attendance || {}) },
+    });
     const allPresentMap: Record<string, AttendanceStatus> = {};
     for (const s of classStudents) {
       allPresentMap[s.id] = 'PRESENT';
@@ -194,8 +202,28 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     }
   };
 
-  // Save every attendance status and behaviour mark of the active session at once
-  const handleSaveAll = async () => {
+  const handleUndoBulkAttendance = async () => {
+    if (!bulkUndo) return;
+    const snapshot = bulkUndo;
+    setBulkUndo(null);
+    try {
+      await updateStateAndWait(previous => ({
+        ...previous,
+        sessions: previous.sessions.map(session =>
+          session.id === snapshot.sessionId
+            ? { ...session, attendance: { ...snapshot.attendance } }
+            : session
+        ),
+      }));
+      showToast('تم التراجع عن تحديد الحضور الجماعي.', 'success');
+    } catch (error) {
+      console.error('Undo bulk attendance failed:', error);
+      showToast('تعذر التراجع عن العملية.', 'error');
+    }
+  };
+
+  // Finish attendance and continue the same session in the lesson log.
+  const handleFinishAttendance = async () => {
     if (!activeSession) return;
     setIsSavingAll(true);
     try {
@@ -212,7 +240,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             }
           : ses)
       }));
-      showToast('تم حفظ كامل بيانات الحصة (الحضور والمتابعة) بنجاح.', 'success');
+      showToast(`تم إنهاء الحضور: ${absentCount} غائب، ${presentCount} حاضر.`, 'success');
+      onNavigateToSessions?.(activeSession.id);
     } catch (error) {
       console.error('Save all attendance sync failed:', error);
       showToast('تعذر حفظ كامل بيانات الحصة في السحابة.', 'error');
@@ -221,15 +250,35 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     }
   };
 
-  // Create new session for today
+  // Create a session for today, deriving its time from the timetable whenever possible.
   const handleCreateTodaySession = async () => {
-    const todayStr = getLocalDateString();
+    const today = new Date();
+    const todayStr = getLocalDateString(today);
+    const currentTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
+    const todayClassSlots = state.timetable
+      .filter(slot => slot.classId === selectedClassId && slot.dayOfWeek === today.getDay())
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const inferredSlot =
+      todayClassSlots.find(slot => slot.startTime <= currentTime && currentTime < slot.endTime) ??
+      todayClassSlots.find(slot => slot.startTime > currentTime) ??
+      todayClassSlots[0];
+    const inferredStartTime = inferredSlot?.startTime ?? '08:00';
+    const existingSession = state.sessions.find(session =>
+      session.classId === selectedClassId &&
+      session.date === todayStr &&
+      session.startTime === inferredStartTime
+    );
+    if (existingSession) {
+      setSelectedSessionId(existingSession.id);
+      return;
+    }
+
     const newSession: SessionRecord = {
       id: uuidv4(),
       classId: selectedClassId,
       date: todayStr,
-      startTime: '08:00',
-      endTime: '09:00',
+      startTime: inferredStartTime,
+      endTime: inferredSlot?.endTime ?? '09:00',
       sessionGoals: 'تسجيل الحضور والمتابعة اليومية',
       accomplishments: '',
       nextSteps: '',
@@ -543,13 +592,13 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   تحديد الكل «حاضر»
                 </button>
 
-                {/* Save everything recorded for this session */}
+                {/* Attendance is already auto-saved; this action advances the session workflow. */}
                 <button
-                  onClick={() => void handleSaveAll()}
+                  onClick={() => void handleFinishAttendance()}
                   disabled={isSavingAll}
                   className="w-full sm:w-auto min-h-11 px-4 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5" >
                   <Save className="w-3.5 h-3.5" />
-                  {isSavingAll ? 'جارٍ الحفظ...' : 'حفظ الكل'}
+                  {isSavingAll ? 'جارٍ الإنهاء...' : 'إنهاء الحضور'}
                 </button>
               </div>
             </div>
@@ -568,6 +617,22 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               </div>
             </div>
           </div>
+
+          {bulkUndo?.sessionId === activeSession.id && (
+            <div
+              role="status"
+              className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary-soft)] px-4 py-2 text-xs font-bold text-[var(--text-primary)]"
+            >
+              <span>تم تحديد كل التلاميذ حاضرين.</span>
+              <button
+                type="button"
+                onClick={() => void handleUndoBulkAttendance()}
+                className="min-h-11 rounded-lg bg-white px-4 text-[var(--primary)] shadow-xs"
+              >
+                تراجع
+              </button>
+            </div>
+          )}
 
           {/* Search bar and View Mode Switcher */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

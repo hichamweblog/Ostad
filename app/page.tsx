@@ -216,6 +216,33 @@ function AppContent({
     router.push(TAB_ROUTES[tab]);
   };
 
+  // Remember only meaningful workspaces. This is synchronized with app settings,
+  // so reopening the PWA can resume work without storing user data in localStorage.
+  useEffect(() => {
+    if (currentTab !== 'attendance' && currentTab !== 'sessions' && currentTab !== 'grades') return;
+    const sessionId = currentTab === 'sessions'
+      ? (selectedSessionForCahier || undefined)
+      : currentTab === 'attendance'
+        ? state.sessions.find(session => session.classId === state.activeClassId)?.id
+        : undefined;
+    const previous = state.lastWorkspace;
+    if (
+      previous?.route === currentTab &&
+      previous.classId === state.activeClassId &&
+      previous.sessionId === sessionId
+    ) return;
+    handleUpdateState(current => ({
+      ...current,
+      lastWorkspace: {
+        route: currentTab,
+        classId: current.activeClassId,
+        sessionId,
+        gradeColumn: currentTab === 'grades' ? current.lastWorkspace?.gradeColumn : undefined,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  }, [currentTab, selectedSessionForCahier, state.activeClassId, state.sessions, state.lastWorkspace, handleUpdateState]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -394,8 +421,9 @@ function AppContent({
 
           {currentTab === "sessions" && (
             <SessionCahier
-              initialSessionId={selectedSessionForCahier || undefined}
+              initialSessionId={selectedSessionForCahier || (state.lastWorkspace?.route === 'sessions' ? state.lastWorkspace.sessionId : undefined)}
               onClearInitialSession={() => setSelectedSessionForCahier(null)}
+              onNavigate={target => setCurrentTab(target)}
             />
           )}
 

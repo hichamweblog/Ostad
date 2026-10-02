@@ -123,6 +123,23 @@ async function supabaseSignOut() {
 function AuthLanding() {
   const [showLogin, setShowLogin] = useState(false);
 
+  useEffect(() => {
+    if (!showLogin) return;
+    const overlayId = 'login-sheet';
+    window.history.pushState({ ...window.history.state, overlay: overlayId }, '');
+    const handlePopState = () => setShowLogin(false);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showLogin]);
+
+  const closeLogin = () => {
+    if (window.history.state?.overlay === 'login-sheet') {
+      window.history.back();
+    } else {
+      setShowLogin(false);
+    }
+  };
+
   return (
     <main className="min-h-[100dvh] bg-[var(--bg-page)] flex flex-col" dir="rtl">
       <div className="flex-1 flex flex-col justify-center px-4 py-8 pb-32">
@@ -154,22 +171,35 @@ function AuthLanding() {
       {showLogin && (
         <div 
           className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-          onClick={() => setShowLogin(false)}
+          onClick={closeLogin}
         />
       )}
       
       {/* Bottom Sheet Modal */}
       <div 
         className={`fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 ease-out ${showLogin ? 'translate-y-0' : 'translate-y-full'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="تسجيل الدخول"
       >
-        <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full my-3" />
-        <LoginPanel onBack={() => setShowLogin(false)} />
+        <div className="relative mx-auto max-w-md">
+          <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full my-3" />
+          <button
+            type="button"
+            onClick={closeLogin}
+            className="absolute left-4 -top-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            aria-label="إغلاق نافذة تسجيل الدخول"
+          >
+            ×
+          </button>
+        </div>
+        <LoginPanel />
       </div>
     </main>
   );
 }
 
-function LoginPanel({ onBack }: { onBack: () => void }) {
+function LoginPanel() {
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('auth') === 'error'
@@ -261,17 +291,20 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="أدخل بريدك الإلكتروني"
+          placeholder="بريدك الإلكتروني"
           className="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 px-4 text-center text-sm outline-none focus:border-[var(--primary)] focus:bg-white transition-all dir-ltr"
           dir="ltr"
         />
+        <p className="text-center text-xs text-[var(--text-secondary)]">
+          سنرسل لك رابطاً آمناً للدخول دون كلمة مرور.
+        </p>
         <button
           type="button"
           disabled={working || !email.trim()}
           onClick={() => void signInWithEmail()}
           className="w-full h-14 rounded-2xl bg-[var(--primary)] text-white font-bold shadow-lg shadow-[var(--primary)]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
         >
-          {emailSent ? 'تم الإرسال (راجع بريدك)' : working ? 'جارٍ الإرسال...' : 'إرسال رابط الدخول السحري'}
+          {emailSent ? 'تم الإرسال (راجع بريدك)' : working ? 'جارٍ الإرسال...' : email.trim() ? 'إرسال رابط الدخول' : 'أدخل بريدك أولاً'}
         </button>
       </div>
     </div>
