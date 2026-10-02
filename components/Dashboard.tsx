@@ -4,9 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AppState, exportBackupJSON, isDemoState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
+import { resolveOrCreateSession } from '@/lib/session-flow';
 import { SanadTab } from './SidebarSanad';
 import { OFFICIAL_CURRICULUM } from '@/lib/curriculum-data';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ResponsiveOverlay } from './ResponsiveOverlay';
 import { showToast } from './Toast';
 import { v4 as uuidv4 } from 'uuid';
 import { type UrgentTask } from '@/lib/dashboard-tasks';
@@ -37,8 +39,7 @@ import {
   Square,
   Download,
   ExternalLink,
-  ShieldCheck,
-  X
+  ShieldCheck
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -237,11 +238,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             };
 
   const handleStartTodayFlow = () => {
-    const targetClassId = activeSlot?.classId || activeClass?.id || state.classes[0]?.id || null;
+    if (activeSlot) {
+      // Starting a class is optimistic and offline-first: create locally, open
+      // attendance immediately, and let the regular outbox sync in background.
+      onUpdateState(previous =>
+        resolveOrCreateSession(previous, activeSlot, getLocalDateString()).state
+      );
+      onNavigate('attendance');
+      return;
+    }
+
+    const targetClassId = activeClass?.id || state.classes[0]?.id || null;
     if (targetClassId) {
       onUpdateState(prev => ({ ...prev, activeClassId: targetClassId }));
+      onNavigate('attendance');
+      return;
     }
-    onNavigate(activeSlot || state.classes.length > 0 ? 'attendance' : nextAction.tab);
+    onNavigate(nextAction.tab);
   };
 
   const handleRunNextAction = () => {
@@ -427,6 +440,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </section>
+
+      {state.lastWorkspace && state.classes.some(item => item.id === state.lastWorkspace?.classId) && (
+        <section className="order-3 rounded-2xl border border-[var(--primary)]/25 bg-white p-4 shadow-xs" aria-labelledby="resume-work-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div id="resume-work-title" className="text-[11px] font-bold text-[var(--text-tertiary)]">متابعة آخر عمل</div>
+              <div className="mt-1 text-sm font-black text-[var(--text-primary)]">
+                {state.lastWorkspace.route === 'grades' ? 'دفتر النقاط' : state.lastWorkspace.route === 'sessions' ? 'دفتر النصوص' : 'الحضور'}
+                {' — '}
+                {state.classes.find(item => item.id === state.lastWorkspace?.classId)?.name}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const workspace = state.lastWorkspace;
+                if (!workspace) return;
+                onUpdateState(previous => ({ ...previous, activeClassId: workspace.classId }));
+                onNavigate(workspace.route);
+              }}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-5 text-xs font-black text-white"
+            >
+              متابعة
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 3. Compact Stat Cards — الأقسام | التلاميذ | حصص اليوم | الدفتر */}
       <div className="order-3 mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
@@ -879,24 +920,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Modal: إدخال حصص اليوم المبرمجة */}
-      {isTodaySessionsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200" dir="rtl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-[var(--primary)]" />
-                <h3 className="text-base font-black text-slate-900">
-                  حصص اليوم المبرمجة ({dayNames[now.getDay()]})
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsTodaySessionsModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer" >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+      {/* Unified phone bottom-sheet / desktop dialog for today's sessions. */}
+      <ResponsiveOverlay
+        open={isTodaySessionsModalOpen}
+        title={`حصص اليوم المبرمجة (${dayNames[now.getDay()]})`}
+        overlayId="today-sessions"
+        onClose={() => setIsTodaySessionsModalOpen(false)}
+      >
+        <div className="space-y-4 p-5" dir="rtl">
             <p className="text-xs text-slate-600">
               حدد الحصة التي ترغب في توثيقها بالدفتر اليومي أو رصد حضور تلامذتها:
             </p>
@@ -976,9 +1007,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 إغلاق
               </button>
             </div>
-          </div>
         </div>
-      )}
+      </ResponsiveOverlay>
 
       <ConfirmDialog
         isOpen={Boolean(taskToDeleteId)}

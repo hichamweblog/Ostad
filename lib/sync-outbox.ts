@@ -125,6 +125,7 @@ export function getSyncOperationsForState(state: AppState): SyncOperation[] {
       calendarSettings: state.calendarSettings, theme: state.theme, dashboardStyle: state.dashboardStyle,
       sidebarCollapsed: state.sidebarCollapsed, onboardingDismissed: state.onboardingDismissed,
       activeClassId: state.activeClassId, activeTrimester: state.activeTrimester,
+      lastWorkspace: state.lastWorkspace,
     },
   });
   for (const tombstone of state.deletedRecordIds || []) {
@@ -295,6 +296,7 @@ export function getSyncOperationsDelta(
     onboardingDismissed: previousState.onboardingDismissed,
     activeClassId: previousState.activeClassId,
     activeTrimester: previousState.activeTrimester,
+    lastWorkspace: previousState.lastWorkspace,
   };
   const nextSettings = {
     calendarSettings: nextState.calendarSettings,
@@ -304,6 +306,7 @@ export function getSyncOperationsDelta(
     onboardingDismissed: nextState.onboardingDismissed,
     activeClassId: nextState.activeClassId,
     activeTrimester: nextState.activeTrimester,
+    lastWorkspace: nextState.lastWorkspace,
   };
   if (!recordsShallowEqual(prevSettings, nextSettings)) {
     operations.push({ id: 'settings:settings', entity: 'settings', action: 'upsert', recordId: 'settings', payload: nextSettings });

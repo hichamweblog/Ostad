@@ -42,6 +42,7 @@ import { exportToDoc } from '@/lib/utils';
 interface SessionCahierProps {
   initialSessionId?: string;
   onClearInitialSession?: () => void;
+  onNavigate?: (target: 'dashboard' | 'grades') => void;
 }
 
 interface FormattingBarProps {
@@ -132,7 +133,8 @@ function getSessionNotes(session: SessionRecord): string {
 
 export const SessionCahier: React.FC<SessionCahierProps> = ({
   initialSessionId,
-  onClearInitialSession
+  onClearInitialSession,
+  onNavigate,
 }) => {
   const { state, updateStateAndWait } = useAppState();
   const activeClass = state.classes.find(c => c.id === state.activeClassId);
@@ -309,6 +311,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
                 teacherNotes: unifiedNotes,
                 notes: unifiedNotes,
                 summary: unifiedNotes.slice(0, 200),
+                completedAt: new Date().toISOString(),
               };
             }
             return s;
@@ -328,7 +331,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
             teacherNotes: unifiedNotes,
             notes: unifiedNotes,
             summary: unifiedNotes.slice(0, 200),
-            attendance: {}
+            attendance: {},
+            completedAt: new Date().toISOString(),
           };
           newSessions = [newSession, ...prev.sessions];
         }
@@ -382,7 +386,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       });
 
       setSavedSuccessMsg(true);
-      setTimeout(() => setSavedSuccessMsg(false), 3500);
+      setTimeout(() => setSavedSuccessMsg(false), 12000);
       setEditingSessionId(null);
       onClearInitialSession?.();
       setUnifiedNotes('');
@@ -589,14 +593,43 @@ ${s.accomplishments}
       </div>
 
       {savedSuccessMsg && (
-        <div className="p-3 bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-[var(--primary)] text-xs rounded-xl flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
-          <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
-          <span className="font-bold">تم توثيق الحصة وتحديث حالة الإنجاز في المنهاج بنجاح.</span>
+        <div className="rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary-soft)] p-4 text-[var(--primary)] shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-sm font-black">
+            <CheckCircle2 className="h-5 w-5" />
+            <span>اكتملت الحصة وتم توثيقها بنجاح.</span>
+          </div>
+          <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">
+            حُفظ دفتر النصوص وتقدم المنهاج، ويمكنك العودة إلى اليوم أو تحديث نقاط القسم.
+          </p>
+          {onNavigate && (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={() => onNavigate('dashboard')} className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-black text-white">
+                العودة إلى اليوم
+              </button>
+              <button type="button" onClick={() => onNavigate('grades')} className="min-h-11 rounded-xl border border-[var(--primary)]/30 bg-white px-5 text-xs font-black text-[var(--primary)]">
+                فتح النقاط
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Session Entry Form */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4" id="session-entry-form-card">
+            {!editingSessionId && selectedUnitObj && !selectedUnitId && (
+              <div className="rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)] p-4">
+                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">الدرس التالي المقترح وفق تقدم المنهاج</div>
+                <div className="mt-1 text-sm font-black text-[var(--text-primary)]">{selectedUnitObj.title}</div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUnitId(selectedUnitObj.id)}
+                  className="mt-3 min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-black text-white"
+                >
+                  اعتماد الدرس المقترح
+                </button>
+              </div>
+            )}
+
             {editingSessionId && (
               <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl flex items-center justify-between gap-2 shadow-xs">
                 <div className="flex items-center gap-2 text-xs font-bold">
@@ -821,7 +854,7 @@ ${s.accomplishments}
                 onClick={handleSaveSession}
                 className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-black shadow-md cursor-pointer transition-all" id="btn-save-session-record" >
                 <Save className="w-4 h-4" />
-                <span>{editingSessionId ? 'تأكيد تعديل وتوثيق الحصة في السحابة' : 'حفظ الحصة في الدفتر اليومي وتأكيد الإنجاز'}</span>
+                <span>{editingSessionId ? 'إنهاء الحصة وتأكيد التوثيق' : 'إنهاء الحصة وحفظها في الدفتر اليومي'}</span>
               </button>
             </div>
       </div>

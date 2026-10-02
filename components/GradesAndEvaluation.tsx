@@ -6,18 +6,7 @@ import { AppState } from '@/lib/storage';
 import { calculateContinuousEvaluation, calculateStudentAverage } from '@/lib/grade-calculator';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
-
-/**
- * Normalize Arabic-Indic and Eastern-Arabic numerals to Western-Arabic (0-9).
- * "١٥" → "15", "۳" → "3", etc.
- */
-function normalizeNumerals(value: string): string {
-  // Eastern Arabic (Arabic): ٠١٢٣٤٥٦٧٨٩ → U+0660-U+0669
-  // Western Arabic (Persian/Urdu): ۰۱۲۳۴۵۶۷۸۹ → U+06F0-U+06F9
-  return value
-    .replace(/[\u0660-\u0669]/g, (ch) => String(ch.charCodeAt(0) - 0x0660))
-    .replace(/[\u06F0-\u06F9]/g, (ch) => String(ch.charCodeAt(0) - 0x06F0));
-}
+import { normalizeGradeInput as normalizeNumerals } from '@/lib/grade-input';
 import {
   PEDAGOGICAL_TIERS,
   getScoreTier,
@@ -26,7 +15,6 @@ import {
 } from '@/lib/pedagogical-evaluations';
 import {
   GraduationCap,
-  Save,
   FileSpreadsheet,
   Download,
   Upload,
@@ -269,9 +257,12 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   const [saveToast, setSaveToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'pending'>('saved');
-  const [mobileActiveTab, setMobileActiveTab] = useState<'continuousEval' | 'quiz' | 'exam'>('continuousEval');
+  const [mobileActiveTab, setMobileActiveTab] = useState<'continuousEval' | 'quiz' | 'exam'>(
+    state.lastWorkspace?.route === 'grades' ? (state.lastWorkspace.gradeColumn || 'continuousEval') : 'continuousEval'
+  );
   const [searchStudent, setSearchStudent] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const gradeInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   const [isExporting, setIsExporting] = useState(false);
   const isDirtyRef = React.useRef(false);
 
@@ -279,6 +270,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   const classStudents = state.students
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
+
+  const focusNextGradeInput = (studentId: string) => {
+    const visibleStudents = classStudents.filter(student =>
+      student.fullName.toLowerCase().includes(searchStudent.toLowerCase())
+    );
+    const currentIndex = visibleStudents.findIndex(student => student.id === studentId);
+    const nextStudent = visibleStudents[currentIndex + 1];
+    if (!nextStudent) return;
+    const nextInput = gradeInputRefs.current[`${mobileActiveTab}:${nextStudent.id}`];
+    nextInput?.focus();
+    nextInput?.select();
+  };
 
   // Local editable grades map for smooth typing without lag
   const [gradesDraft, setGradesDraft] = useState(() =>
@@ -314,6 +317,19 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     }
     prevGradesRef.current = state.grades;
   }, [state.activeClassId, state.activeTrimester, selectedClassId, selectedTrimester, state.students, state.grades]);
+
+  const handleMobileGradeTab = (column: 'continuousEval' | 'quiz' | 'exam') => {
+    setMobileActiveTab(column);
+    onUpdateState(previous => ({
+      ...previous,
+      lastWorkspace: {
+        route: 'grades',
+        classId: selectedClassId,
+        gradeColumn: column,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
 
   const handleSelectClass = async (newClassId: string) => {
     // CRITICAL FIX: await persist before switching context to prevent data loss
@@ -833,7 +849,12 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             accept=".xlsx, .xls" onChange={handleDigitizationUpload}
             className="hidden" />
 
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+          <details className="group rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-bold text-slate-700">
+              <span>المزيد: شرح واستيراد وتصدير</span>
+              <span className="transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="grid grid-cols-2 items-center gap-2 border-t border-slate-200 p-2 sm:flex sm:flex-wrap">
             <button
               onClick={() => setShowFormulaModal(true)}
               className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors" >
@@ -855,7 +876,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               <FileSpreadsheet className="w-4 h-4 text-[var(--primary)] shrink-0" />
               <span>استخراج كشف النقاط</span>
             </button>
-          </div>
+            </div>
+          </details>
 
           <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
             <button
@@ -872,12 +894,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               <span>تطبيق التقديرات آلياً</span>
             </button>
 
-            <button
-              onClick={handleSaveAllGrades}
-              className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[var(--accent-navy)] text-xs font-bold shadow-xs cursor-pointer transition-colors" id="btn-save-all-grades" >
-              <Save className="w-4 h-4 shrink-0" />
-              <span>حفظ كل العلامات</span>
-            </button>
             <span
               className={`text-[11px] font-bold ${
                 saveStatus === 'saved' ? 'text-[var(--primary)]' : saveStatus === 'saving' ? 'text-amber-700' : 'text-slate-500'
@@ -1002,21 +1018,21 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         {/* Mobile Segmented Control */}
         <div className="md:hidden flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs w-full mt-3 sm:mt-0">
           <button
-            type="button" onClick={() => setMobileActiveTab('continuousEval')}
+            type="button" onClick={() => handleMobileGradeTab('continuousEval')}
             className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
               mobileActiveTab === 'continuousEval' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
             التقويم
           </button>
           <button
-            type="button" onClick={() => setMobileActiveTab('quiz')}
+            type="button" onClick={() => handleMobileGradeTab('quiz')}
             className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
               mobileActiveTab === 'quiz' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
             الفرض
           </button>
           <button
-            type="button" onClick={() => setMobileActiveTab('exam')}
+            type="button" onClick={() => handleMobileGradeTab('exam')}
             className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
               mobileActiveTab === 'exam' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
@@ -1076,8 +1092,17 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                           {mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'}
                         </span>
                         <input
-                          type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft[mobileActiveTab]}
+                          ref={element => { gradeInputRefs.current[`${mobileActiveTab}:${student.id}`] = element; }}
+                          type="text" inputMode="decimal" pattern="[0-9٠-٩۰-۹.,٫]*" placeholder="-" value={draft[mobileActiveTab]}
+                          onFocus={event => event.currentTarget.select()}
                           onChange={e => handleGradeChange(student.id, mobileActiveTab, e.target.value)}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              focusNextGradeInput(student.id);
+                            }
+                          }}
+                          enterKeyHint="next"
                           aria-label={`${mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'} - ${student.fullName}`}
                           className="w-24 text-center px-2 rounded-lg border border-slate-300 bg-slate-50 font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-gold focus:outline-none focus:bg-white transition-colors min-h-[44px]" />
                       </div>
