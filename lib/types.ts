@@ -155,6 +155,8 @@ export interface ClassLessonProgress {
   remedialNotes?: string;
 }
 
+export type SessionStatus = 'COMPLETED' | 'CANCELLED';
+
 export interface SessionRecord {
   id: string;
   classId: string;
@@ -172,6 +174,12 @@ export interface SessionRecord {
   assignments?: string;
   teacherNotes: string; // ملاحظات الأستاذ
   notes?: string; // دفتر الملاحظات الموحد
+  /** Session part number within the unit (1..5). */
+  partNumber?: number;
+  /** Whether the session was completed normally or cancelled for a reason. */
+  sessionStatus?: SessionStatus;
+  /** Reason when sessionStatus === 'CANCELLED' (e.g. الغياب, اجتماع, عطلة...). */
+  cancellationReason?: string;
   // Legacy notebook fields kept for backward compatibility with older backups.
   memoryWhatWorked?: string; // ماذا نجح؟
   memoryWhatFailed?: string; // ماذا لم ينجح؟

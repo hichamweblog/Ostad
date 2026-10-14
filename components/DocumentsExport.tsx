@@ -8,6 +8,7 @@ import { SessionRecord } from '@/lib/types';
 import { getMergedCurriculumUnits } from '@/lib/curriculum-data';
 import { calculateCouncilStatistics, calculateStudentAverage } from '@/lib/grade-calculator';
 import { getDefaultEstimation } from '@/lib/pedagogical-evaluations';
+import { isSessionDocumented } from '@/lib/session-flow';
 import Link from 'next/link';
 import {
   FileText,
@@ -44,14 +45,15 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
 
-  const isSessionDocumented = (session: SessionRecord): boolean => {
-    return Boolean(
-      session.unitId ||
-      session.customTopic?.trim() ||
-      session.accomplishments?.trim() ||
-      session.notes?.trim() ||
-      session.summary?.trim()
-    );
+  const isSessionCancelled = (session: SessionRecord): boolean =>
+    session.sessionStatus === 'CANCELLED';
+
+  /** A cancelled session keeps its scheduled topic but is labelled as cancelled in the export. */
+  const sessionTitleForDoc = (session: SessionRecord, unitTitle?: string): string => {
+    if (!isSessionCancelled(session)) return unitTitle || session.customTopic || 'حصة عادية';
+    const reason = session.cancellationReason?.trim();
+    if (unitTitle) return `حصة ملغاة${reason ? ` (${reason})` : ''} — ${unitTitle}`;
+    return session.customTopic?.trim() || `حصة ملغاة${reason ? ` (${reason})` : ''}`;
   };
 
   const classPastSessions = useMemo(() => {
@@ -152,7 +154,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                             <b>${ses.date}</b><br/>
                             <small>${ses.startTime} - ${ses.endTime}</small>
                           </td>
-                          <td style="border: 1px solid #000; padding: 5px; text-align: right;"><b>${unit ? unit.title : ses.customTopic || 'حصة عادية'}</b></td>
+                          <td style="border: 1px solid #000; padding: 5px; text-align: right;"><b>${sessionTitleForDoc(ses, unit?.title)}</b></td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.accomplishments || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.nextSteps || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right; white-space: pre-wrap;">${getSessionNotes(ses) || '-'}</td>
@@ -594,9 +596,14 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                   <article key={session.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-xs">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs font-black text-[var(--text-primary)]">{unit?.title || session.customTopic || 'حصة عادية'}</div>
+                        <div className="text-xs font-black text-[var(--text-primary)]">{sessionTitleForDoc(session, unit?.title)}</div>
                         <div className="mt-1 text-[11px] font-semibold text-[var(--text-tertiary)]">{session.date} • {session.startTime} - {session.endTime}</div>
                       </div>
+                      {isSessionCancelled(session) && (
+                        <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                          ملغاة
+                        </span>
+                      )}
                     </div>
                     <div className="mt-2 space-y-1 text-xs leading-6 text-[var(--text-secondary)]">
                       <p><strong>المنجز:</strong> {session.accomplishments || '—'}</p>
@@ -636,7 +643,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                             <div className="text-[9px] text-slate-600">{ses.startTime} – {ses.endTime}</div>
                           </td>
                           <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-xs'}`}>
-                            {unit ? unit.title : ses.customTopic || 'حصة عادية'}
+                            {sessionTitleForDoc(ses, unit?.title)}
                           </td>
                           <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
                             {ses.accomplishments || '-'}

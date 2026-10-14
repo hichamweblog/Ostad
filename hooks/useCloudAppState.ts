@@ -30,6 +30,8 @@ import {
   markSyncOutboxFailure,
   enqueueSyncOperations,
   listPendingRecordIds,
+  compactSyncOutbox,
+  replayOutboxEntriesOnState,
   type SyncConflictDescriptor,
 } from '@/lib/sync-outbox';
 import { clearMemorandaOutbox } from '@/lib/supabase/memoranda-outbox';
@@ -74,6 +76,10 @@ function isLocalOnlyCloudError(error: unknown): boolean {
     .filter((part): part is string => Boolean(part))
     .join(' ')
     .toLowerCase();
+
+  if (candidate.code === 'PGRST204' || candidate.code === '42703' || /could not find the '[^']+' column|column "[^"]+" .* does not exist/i.test(text)) {
+    return false;
+  }
 
   return candidate.code === 'LOCAL_ONLY_CLOUD' || /schema is unavailable|remaining in local-only mode|could not find the table|schema cache/i.test(text);
 }
@@ -167,6 +173,23 @@ async function hasAuthenticatedOwner(
   return ok;
 }
 
+/**
+ * Drains the durable outbox.
+ *
+ * Head-of-line blocking was the single worst failure mode of the previous version: the loop
+ * always took `entries[0]`, and a single rejected entry (a revision conflict, a tombstone from
+ * another device, a column the deployed schema does not have yet) threw out of the loop and
+ * froze *every* queued operation behind it. A teacher who documented 200 sessions offline would
+ * then see the queue stuck at "N عمليات بانتظار الرفع" forever while the screen showed the stale
+ * cloud copy.
+ *
+ * Now an entry that cannot be applied is parked for this pass and the flush continues with the
+ * next one, so acknowledged work always reaches the server. Every parked error is still reported
+ * (so conflicts surface in the dialog and the status pill is honest), and the retry timer uses
+ * the earliest `nextAttemptAt` still in the queue.
+ *
+ * @returns true only when the queue is completely empty afterwards.
+ */
 export async function flushSyncOutbox(
   client: ReturnType<typeof createSupabaseBrowserClient>,
   ownerId: string,
@@ -179,55 +202,78 @@ export async function flushSyncOutbox(
   if (!(await hasAuthenticatedOwner(client, ownerId))) return false;
 
   syncingRef.current = true;
-  let completed = false;
-  let retryAt: number | null = null;
+  const parkedIds = new Set<string>();
+  const reported = new Set<string>();
+  let drained = false;
+
+  const report = (error: unknown) => {
+    const key = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+    if (reported.has(key)) return;
+    reported.add(key);
+    onError(error);
+  };
+
   try {
     await flushAvatarOutbox(ownerId);
     await flushMemorandaOutbox(ownerId);
-    while (true) {
+
+    while (!signal?.aborted) {
       const entries = await listSyncOutbox(ownerId);
-      const entry = entries[0];
+      const entry = entries.find((item) => !parkedIds.has(item.id));
       if (!entry) {
-        completed = true;
-        return true;
+        drained = entries.length === 0;
+        break;
       }
+
       const waitUntil = Date.parse(entry.nextAttemptAt || '');
       if (!force && Number.isFinite(waitUntil) && waitUntil > Date.now()) {
-        retryAt = waitUntil;
-        return false;
+        // Still inside its exponential backoff window: park it and try the next entry
+        // instead of stalling the whole queue until the timer fires.
+        parkedIds.add(entry.id);
+        continue;
       }
+
       try {
         await applySyncOutboxEntry(client, ownerId, entry, getSyncDeviceId());
         await removeSyncOutboxEntry(entry.id);
       } catch (error) {
         await markSyncOutboxFailure(entry.id, error);
-        throw error;
+        parkedIds.add(entry.id);
+        report(error);
       }
     }
   } catch (error) {
-    onError(error);
-    return false;
+    report(error);
   } finally {
     syncingRef.current = false;
-    if (completed) {
-      void listSyncOutbox(ownerId)
-        .then((entries) => {
-          if (entries.length > 0 && client && !syncingRef.current && !signal?.aborted) {
+  }
+
+  if (!drained) {
+    // Something is still queued: schedule exactly one retry for the earliest attempt time so
+    // the queue keeps moving on its own without the user having to press "retry".
+    try {
+      const remaining = await listSyncOutbox(ownerId);
+      const nextAttempt = remaining.reduce<number | null>((earliest, entry) => {
+        const at = Date.parse(entry.nextAttemptAt || '');
+        if (!Number.isFinite(at)) return earliest;
+        return earliest === null ? at : Math.min(earliest, at);
+      }, null);
+      if (nextAttempt !== null && !signal?.aborted) {
+        const timer = window.setTimeout(() => {
+          if (!syncingRef.current && !signal?.aborted) {
             void flushSyncOutbox(client, ownerId, syncingRef, onError, false, signal);
           }
-        })
-        .catch(onError);
-    } else if (retryAt !== null) {
-      const timer = window.setTimeout(() => {
-        if (!syncingRef.current && !signal?.aborted) {
-          void flushSyncOutbox(client, ownerId, syncingRef, onError, false, signal);
+        }, Math.max(1_000, nextAttempt - Date.now()));
+        if (signal) {
+          signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true });
         }
-      }, Math.max(0, retryAt - Date.now()));
-      if (signal) {
-        signal.addEventListener('abort', () => window.clearTimeout(timer), { once: true });
       }
+    } catch (error) {
+      report(error);
     }
   }
+
+  return drained;
 }
 
 export function useCloudAppState(user: User | null) {
@@ -261,6 +307,7 @@ export function useCloudAppState(user: User | null) {
   const saveGenerationRef = useRef(0);
   const latestStateRef = useRef(state);
   const lastSyncedStateRef = useRef<AppState | null>(null);
+  const lastEnqueuedStateRef = useRef<AppState | null>(null);
   const revisionRef = useRef(0);
   const updatedAtRef = useRef(new Date(0).toISOString());
   // Incremented synchronously on every user edit. A Realtime refresh captures it before its
@@ -328,19 +375,35 @@ export function useCloudAppState(user: User | null) {
     let active = true;
 
     const initializeState = async () => {
-      // 1. Load user-scoped local cache first
+      // 1. Load user-scoped local cache and compact/replay any pending outbox entries first
       let currentLocal: AppState | null = null;
+      let outboxEntries: Awaited<ReturnType<typeof compactSyncOutbox>> = [];
+      try {
+        if (user?.id) outboxEntries = await compactSyncOutbox(user.id);
+      } catch (compactErr) {
+        console.warn('Outbox compaction skipped:', compactErr);
+      }
       try {
         const cachedState = await loadAppStateCache(user?.id);
-        if (cachedState && !isDemoState(cachedState)) {
-          currentLocal = cachedState;
-          // Start the revision clock where the last successful sync left it. Without this an
-          // offline start would publish revision 1 writes and silently overwrite rows that
-          // changed on the server meanwhile (SYNC-REVIEW.md 3.7).
-          revisionRef.current = nextRevisionFloor(revisionRef.current, cachedState.cloudRevision);
+        const hasValidCache = Boolean(cachedState && !isDemoState(cachedState));
+        if (hasValidCache || outboxEntries.length > 0) {
+          const baseLocal = hasValidCache && cachedState ? cachedState : getEmptyState();
+          const localWithOutbox = replayOutboxEntriesOnState(baseLocal, outboxEntries);
+          currentLocal = localWithOutbox;
+          // Start the revision clock where the last successful sync or queued entry left it.
+          revisionRef.current = nextRevisionFloor(
+            revisionRef.current,
+            localWithOutbox.cloudRevision,
+            ...outboxEntries.map((entry) => entry.revision),
+          );
+          lastSyncedStateRef.current = baseLocal;
+          lastEnqueuedStateRef.current = localWithOutbox;
           if (active) {
-            latestStateRef.current = cachedState;
-            setState(cachedState);
+            latestStateRef.current = localWithOutbox;
+            setState(localWithOutbox);
+          }
+          if (user?.id && outboxEntries.length > 0) {
+            void saveAppStateCache(localWithOutbox, user.id);
           }
         }
       } catch (cacheErr) {
@@ -369,8 +432,12 @@ export function useCloudAppState(user: User | null) {
         // Read the outbox *before* loading so genuinely unsynced local work survives
         // the authoritative merge, while stale cache entries are dropped.
         let pendingRecordIds = await listPendingRecordIds(user.id);
+        outboxEntries = await listSyncOutbox(user.id);
 
-        let remoteState = await loadCoreState(client, currentLocal || latestStateRef.current, { pendingRecordIds });
+        let remoteState = await loadCoreState(client, currentLocal || latestStateRef.current, {
+          pendingRecordIds,
+          outboxEntries,
+        });
         if (!active) return;
 
         // Flush any pending outbox entries for this user
@@ -382,15 +449,21 @@ export function useCloudAppState(user: User | null) {
           // Recompute instead of assuming the flush drained everything: a partially
           // failed flush must keep its local records, or the refresh would hide them.
           pendingRecordIds = await listPendingRecordIds(user.id);
+          outboxEntries = await listSyncOutbox(user.id);
           if (pendingRecordIds.size === 0) {
             // Everything acknowledged: the cloud is now the only truth for this load.
             const refreshed = await loadCoreState(client, remoteState, { pendingRecordIds });
             remoteState = refreshed;
+          } else {
+            remoteState = replayOutboxEntriesOnState(remoteState, outboxEntries);
           }
         }
 
         latestStateRef.current = remoteState;
-        lastSyncedStateRef.current = remoteState;
+        lastEnqueuedStateRef.current = remoteState;
+        if (outboxEntries.length === 0) {
+          lastSyncedStateRef.current = remoteState;
+        }
 
         if (typeof remoteState.cloudRevision === 'number' && remoteState.cloudRevision > revisionRef.current) {
           revisionRef.current = remoteState.cloudRevision;
@@ -398,7 +471,7 @@ export function useCloudAppState(user: User | null) {
 
         setState(remoteState);
         void saveAppStateCache(remoteState, user.id);
-        setCloudStatus('ready');
+        setCloudStatus(outboxEntries.length > 0 ? 'sync-pending' : 'ready');
         void refreshSyncStatus();
       } catch (error) {
         if (!active) return;
@@ -460,6 +533,7 @@ export function useCloudAppState(user: User | null) {
       }
       revisionRef.current = 0;
       lastSyncedStateRef.current = null;
+      lastEnqueuedStateRef.current = null;
       setCloudStatus('ready');
       setSyncError(null);
       setConflicts([]);
@@ -500,6 +574,7 @@ export function useCloudAppState(user: User | null) {
 
       latestStateRef.current = remoteState;
       lastSyncedStateRef.current = remoteState;
+      lastEnqueuedStateRef.current = remoteState;
       revisionRef.current = nextRevisionFloor(revisionRef.current, remoteState.cloudRevision);
       setState(remoteState);
       void saveAppStateCache(remoteState, user.id);
@@ -542,8 +617,8 @@ export function useCloudAppState(user: User | null) {
     // `local-only` no longer blocks queueing: offline edits are persisted to the outbox
     // and retried automatically instead of living only in memory.
     if (cloudStatus === 'conflict') return;
-    // Guard: do NOT trigger save if state is identical to last synced state
-    if (state === lastSyncedStateRef.current) return;
+    // Guard: do NOT trigger save if state is already enqueued or synced
+    if (state === lastEnqueuedStateRef.current || state === lastSyncedStateRef.current) return;
 
     revisionRef.current += 1;
     updatedAtRef.current = new Date().toISOString();
@@ -558,11 +633,9 @@ export function useCloudAppState(user: User | null) {
       }
       const client = createSupabaseBrowserClient();
       const syncedDeletedIds = new Set(state.deletedRecordIds || []);
-      void hasAuthenticatedOwner(client, user.id)
-        .then((authenticated) => {
-          if (!authenticated || saveGeneration !== saveGenerationRef.current) return null;
-          return enqueueSyncDelta(user.id, lastSyncedStateRef.current, state, revision, updatedAt);
-        })
+      const baseline = lastEnqueuedStateRef.current ?? lastSyncedStateRef.current;
+      lastEnqueuedStateRef.current = state;
+      void enqueueSyncDelta(user.id, baseline, state, revision, updatedAt)
         .then(async (enqueued) => {
           if (saveGeneration !== saveGenerationRef.current) return false;
           const pending = await listSyncOutbox(user.id);
@@ -582,6 +655,7 @@ export function useCloudAppState(user: User | null) {
         .then(async (flushed) => {
           if (!flushed || (await listSyncOutbox(user.id)).length > 0) return;
           lastSyncedStateRef.current = state;
+          lastEnqueuedStateRef.current = state;
           setSyncError(null);
           setCloudStatus('ready');
           setState((previous) => (
@@ -722,21 +796,19 @@ export function useCloudAppState(user: User | null) {
           if (scheduled) {
             window.clearTimeout(pendingSaveTimerRef.current as number);
             pendingSaveTimerRef.current = null;
-            const client = createSupabaseBrowserClient();
-            // Without a synced baseline there is no meaningful delta to queue; the initial
-            // load owns the state in that case, so only the flush below is attempted.
-            if (client && lastSyncedStateRef.current && (await hasAuthenticatedOwner(client, user.id))) {
-              // The cancelled timer will never run, so take over its job with the freshest
-              // state and invalidate any in-flight save that still holds an older snapshot.
+            const baseline = lastEnqueuedStateRef.current ?? lastSyncedStateRef.current;
+            // Always persist pending work to the local IndexedDB outbox even when offline.
+            if (baseline && latestStateRef.current !== baseline) {
               saveGenerationRef.current += 1;
               revisionRef.current = Math.max(
                 revisionRef.current + 1,
-                nextRevisionFloor(latestStateRef.current.cloudRevision, lastSyncedStateRef.current?.cloudRevision),
+                nextRevisionFloor(latestStateRef.current.cloudRevision, baseline.cloudRevision),
               );
               updatedAtRef.current = new Date().toISOString();
+              lastEnqueuedStateRef.current = latestStateRef.current;
               await enqueueSyncDelta(
                 user.id,
-                lastSyncedStateRef.current,
+                baseline,
                 latestStateRef.current,
                 revisionRef.current,
                 updatedAtRef.current,
@@ -790,6 +862,7 @@ export function useCloudAppState(user: User | null) {
       const remoteState = await loadCoreState(client, getEmptyState(), { pendingRecordIds: new Set() });
       latestStateRef.current = remoteState;
       lastSyncedStateRef.current = remoteState;
+      lastEnqueuedStateRef.current = remoteState;
 
       if (typeof remoteState.cloudRevision === 'number' && remoteState.cloudRevision > revisionRef.current) {
         revisionRef.current = remoteState.cloudRevision;
@@ -916,13 +989,16 @@ export function useCloudAppState(user: User | null) {
     const syncedDeletedIds = new Set(nextState.deletedRecordIds || []);
 
     const client = createSupabaseBrowserClient();
-    if (!client) {
-      setCloudStatus('local-only');
-      return;
-    }
+    const baseline = lastEnqueuedStateRef.current ?? lastSyncedStateRef.current;
+    lastEnqueuedStateRef.current = nextState;
 
     try {
-      await enqueueSyncDelta(user.id, lastSyncedStateRef.current, nextState, revision, updatedAt);
+      await enqueueSyncDelta(user.id, baseline, nextState, revision, updatedAt);
+      if (!client) {
+        setCloudStatus('local-only');
+        void refreshSyncStatus();
+        return;
+      }
       const flushed = await flushSyncOutbox(client, user.id, syncingRef, (error) => {
         if (isLocalOnlyCloudError(error)) {
           setCloudStatus('local-only');
@@ -937,6 +1013,7 @@ export function useCloudAppState(user: User | null) {
 
       if (flushed && (await listSyncOutbox(user.id)).length === 0) {
         lastSyncedStateRef.current = nextState;
+        lastEnqueuedStateRef.current = nextState;
         setSyncError(null);
         setCloudStatus('ready');
         setState((previous) => (
@@ -950,6 +1027,7 @@ export function useCloudAppState(user: User | null) {
             : previous
         ));
       }
+      void refreshSyncStatus();
     } catch (error) {
       const message = describeCloudError(error).message;
       setSyncError(message);
@@ -978,6 +1056,7 @@ export function useCloudAppState(user: User | null) {
     setState(normalizedState);
     latestStateRef.current = normalizedState;
     lastSyncedStateRef.current = null;
+    lastEnqueuedStateRef.current = null;
     await saveAppStateCache(normalizedState, user?.id);
     setLocalStorageError(null);
     if (user) await updateStateAndWait(() => normalizedState);
@@ -1026,6 +1105,7 @@ export function useCloudAppState(user: User | null) {
 
     latestStateRef.current = nextState;
     lastSyncedStateRef.current = nextState;
+    lastEnqueuedStateRef.current = nextState;
     setState(nextState);
     await saveAppStateCache(nextState, user?.id, { allowEmptyRoster: true });
 
@@ -1056,6 +1136,7 @@ export function useCloudAppState(user: User | null) {
     setState(emptyState);
     latestStateRef.current = emptyState;
     lastSyncedStateRef.current = emptyState;
+    lastEnqueuedStateRef.current = emptyState;
     revisionRef.current = 0;
   };
 
@@ -1150,6 +1231,7 @@ export function useCloudAppState(user: User | null) {
       }
 
       lastSyncedStateRef.current = reconciledState;
+      lastEnqueuedStateRef.current = reconciledState;
       setCloudStatus('ready');
       setSyncError(null);
     } catch (error) {

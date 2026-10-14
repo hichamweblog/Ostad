@@ -3,7 +3,7 @@ import { getEmptyState, isDemoState, type AppState } from '@/lib/storage';
 import type { ClassLessonProgress, ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
 import type { Database } from './database.types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
-import { enqueueSyncState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
+import { enqueueSyncState, replayOutboxEntriesOnState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
 import {
   BEHAVIOR_FIELDS,
   reconcileEntityList,
@@ -37,6 +37,7 @@ export type PendingRecordIds = ReadonlySet<string>;
 
 export interface LoadCoreStateOptions {
   pendingRecordIds?: PendingRecordIds;
+  outboxEntries?: readonly SyncOutboxEntry[];
 }
 
 export function isPendingRecord(pendingRecordIds: PendingRecordIds | undefined, entity: SyncEntity, recordId: string): boolean {
@@ -51,11 +52,91 @@ export class SyncConflictError extends Error {
   }
 }
 
+function extractMissingColumn(error: unknown): string | null {
+  const e = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  if (!e) return null;
+  const text = [e.message, e.details, e.hint].filter(Boolean).join(' ');
+  const postgrestMatch = text.match(/could not find the '([^']+)' column/i);
+  if (postgrestMatch?.[1]) return postgrestMatch[1];
+  const pgMatch = text.match(/column "([^"]+)" .* does not exist/i);
+  if (pgMatch?.[1]) return pgMatch[1];
+  return null;
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  if (!e) return false;
+  if (e.code === 'PGRST204' || e.code === '42703') return true;
+  return extractMissingColumn(error) !== null;
+}
+
 function schemaError(error: unknown): boolean {
   const e = error as { code?: string; message?: string; details?: string; hint?: string } | null;
-  const text = [e?.message, e?.details, e?.hint].filter(Boolean).join(' ');
-  return e?.code === 'PGRST205' || /schema cache|could not find the table|relation .* does not exist/i.test(text);
+  if (!e) return false;
+  if (isMissingColumnError(error)) return false;
+  const text = [e.message, e.details, e.hint].filter(Boolean).join(' ');
+  return e.code === 'PGRST205' || e.code === '42P01' || /schema cache|could not find the table|relation .* does not exist/i.test(text);
 }
+
+const OPTIONAL_FALLBACK_COLUMNS = [
+  'summary',
+  'assignments',
+  'color',
+  'hijri_year',
+  'first_name_ar',
+  'last_name_ar',
+  'first_name_en',
+  'last_name_en',
+  'avatar_storage_key',
+  'first_appointment_date',
+  'experience_years',
+  'birth_date',
+  'birth_place',
+  'family_status',
+  'gender',
+] as const;
+
+/**
+ * Upserts a row, and — only when the *deployed* schema is behind the client bundle — retries
+ * without the column Postgres/PostgREST says it does not know.
+ *
+ * Without this, one unknown column made the whole outbox entry fail forever, which (with the
+ * old head-of-line flush) froze every queued operation behind it and pushed the app into
+ * `local-only`. Losing one optional column is strictly better than losing the record.
+ *
+ * Each attempt gets a fresh object so a caller holding a reference to the payload never sees
+ * the columns this function decided to drop.
+ */
+async function upsertWithColumnFallback(
+  client: AnyClient,
+  table: string,
+  row: Record<string, any>,
+  onConflict: string,
+): Promise<{ data?: any; error?: any }> {
+  const dropped = new Set<string>();
+  const send = async (candidate: Record<string, any>) => {
+    const upsertCall = client.from(table).upsert(candidate, { onConflict });
+    return typeof upsertCall?.select === 'function'
+      ? await upsertCall.select('id').single()
+      : await upsertCall;
+  };
+
+  let lastResult = await send({ ...row });
+  for (let attempt = 0; attempt < 8 && lastResult?.error && isMissingColumnError(lastResult.error); attempt++) {
+    const named = extractMissingColumn(lastResult.error);
+    const column = named && named in row && !dropped.has(named)
+      ? named
+      : OPTIONAL_FALLBACK_COLUMNS.find((col) => col in row && !dropped.has(col));
+    if (!column) return lastResult;
+    dropped.add(column);
+
+    const candidate: Record<string, any> = { ...row };
+    for (const col of dropped) delete candidate[col];
+    lastResult = await send(candidate);
+  }
+  return lastResult;
+}
+
 function localOnly(): Error { return Object.assign(new Error('Supabase schema is unavailable. Remaining in local-only mode.'), { code: 'LOCAL_ONLY_CLOUD' }); }
 const tables: Record<SyncEntity, string> = {
   class: 'classes', student: 'students', grade: 'grades', session: 'sessions',
@@ -411,7 +492,12 @@ export async function loadCoreState(
     const remotePlans = by('lessonPlan').map((r: any) => fromRow('lessonPlan', r)).filter(Boolean);
     const lessonPlans = retainLocal('lessonPlan', remotePlans, localState.lessonPlans);
 
-    const preferredActiveClassId = localState.activeClassId || (supplementary as any)?.activeClassId;
+    const settingsPending = isPendingRecord(pendingRecordIds, 'settings', 'settings');
+    const profilePending = isPendingRecord(pendingRecordIds, 'profile', 'profile');
+
+    const preferredActiveClassId = settingsPending
+      ? (localState.activeClassId || (supplementary as any)?.activeClassId)
+      : ((supplementary as any)?.activeClassId || localState.activeClassId);
     const activeClassId = classes.some((item: ClassRoom) => item.id === preferredActiveClassId)
       ? preferredActiveClassId
       : (classes[0]?.id || null);
@@ -425,37 +511,51 @@ export async function loadCoreState(
       if (!classId) return false;
       return classIdSet.has(classId) || classIdSet.has(getCloudRecordId(userId, 'class', classId));
     };
+    /** No orphaned children: a record whose class is gone from the workspace is dropped. */
+    const filterByClass = <T extends { classId?: string }>(items: T[]): T[] =>
+      classes.length > 0 ? items.filter((item) => classMatches(item.classId)) : [];
 
-    return { ...localState, ...supplementary, profile: profile ? {
-        ...localState.profile,
-        name: profile.full_name || localState.profile.name,
-        title: profile.title || localState.profile.title,
-        schoolName: profile.school_name || localState.profile.schoolName,
-        stateName: profile.state_name || localState.profile.stateName,
-        academicYear: profile.academic_year || localState.profile.academicYear,
-        hijriYear: profile.hijri_year || localState.profile.hijriYear,
-        firstNameAr: profile.first_name_ar || undefined,
-        lastNameAr: profile.last_name_ar || undefined,
-        firstNameEn: profile.first_name_en || undefined,
-        lastNameEn: profile.last_name_en || undefined,
-        email: profile.email || undefined,
-        phoneNumber: profile.phone || undefined,
-        avatarUrl: remoteAvatarUrl || profile.avatar_url || undefined,
-        avatarStorageKey: profile.avatar_storage_key || undefined,
-        firstAppointmentDate: profile.first_appointment_date || undefined,
-        experienceYears: profile.experience_years ?? undefined,
-        birthDate: profile.birth_date || undefined,
-        birthPlace: profile.birth_place || undefined,
-        familyStatus: profile.family_status || undefined,
-        gender: profile.gender === 'M' || profile.gender === 'F' ? profile.gender : undefined,
-      } : localState.profile,
+    const resolvedProfile = profilePending
+      ? localState.profile
+      : profile
+        ? {
+            ...localState.profile,
+            name: profile.full_name || localState.profile.name,
+            title: profile.title || localState.profile.title,
+            schoolName: profile.school_name || localState.profile.schoolName,
+            stateName: profile.state_name || localState.profile.stateName,
+            academicYear: profile.academic_year || localState.profile.academicYear,
+            hijriYear: profile.hijri_year || localState.profile.hijriYear,
+            firstNameAr: profile.first_name_ar || undefined,
+            lastNameAr: profile.last_name_ar || undefined,
+            firstNameEn: profile.first_name_en || undefined,
+            lastNameEn: profile.last_name_en || undefined,
+            email: profile.email || undefined,
+            phoneNumber: profile.phone || undefined,
+            avatarUrl: remoteAvatarUrl || profile.avatar_url || undefined,
+            avatarStorageKey: profile.avatar_storage_key || undefined,
+            firstAppointmentDate: profile.first_appointment_date || undefined,
+            experienceYears: profile.experience_years ?? undefined,
+            birthDate: profile.birth_date || undefined,
+            birthPlace: profile.birth_place || undefined,
+            familyStatus: profile.family_status || undefined,
+            gender: profile.gender === 'M' || profile.gender === 'F' ? profile.gender : undefined,
+          }
+        : localState.profile;
+
+    const mergedState: AppState = {
+      ...localState,
+      ...(settingsPending ? {} : supplementary),
+      profile: resolvedProfile,
       classes,
-      students: classes.length > 0 ? students.filter((s: Student) => classMatches(s.classId)) : [],
-      grades: classes.length > 0 ? grades.filter((g: StudentGrade) => classMatches(g.classId)) : [],
-      sessions: classes.length > 0 ? sessions.filter((s: SessionRecord) => classMatches(s.classId)) : [],
-      timetable: classes.length > 0 ? timetable.filter((t: TimetableSlot) => classMatches(t.classId)) : [],
-      lessonProgress: classes.length > 0 ? lessonProgress.filter((p: ClassLessonProgress) => classMatches(p.classId)) : [],
-      customUnits, lessonPlans, dashboardTasks,
+      students: filterByClass(students),
+      grades: filterByClass(grades),
+      sessions: filterByClass(sessions),
+      timetable: filterByClass(timetable),
+      lessonProgress: filterByClass(lessonProgress),
+      customUnits,
+      lessonPlans,
+      dashboardTasks,
       unitPdfFiles: {
         // Keep a local-only attachment only while its binary is still on this device,
         // so a PDF cannot be shown as attached when its file is gone.
@@ -467,7 +567,40 @@ export async function loadCoreState(
         ...remoteUnitPdfFiles,
       },
       activeClassId,
-      cloudRevision: maxRevision };
+      cloudRevision: maxRevision,
+    };
+
+    if (!options.outboxEntries?.length) return mergedState;
+
+    /**
+     * Replay the durable queue over the merged snapshot: whatever is still unacknowledged is
+     * part of the teacher's workspace and must be on screen (and in the cache), not only in
+     * IndexedDB. This is what stopped a stale cloud copy from erasing offline work.
+     */
+    const replayed = replayOutboxEntriesOnState(mergedState, options.outboxEntries, tombstonedKeys);
+    const replayedClassIdSet = new Set<string>();
+    for (const c of replayed.classes) {
+      replayedClassIdSet.add(c.id);
+      replayedClassIdSet.add(getCloudRecordId(userId, 'class', c.id));
+    }
+    const replayedClassMatches = (value: string | undefined): boolean => {
+      if (!value) return false;
+      return replayedClassIdSet.has(value) || replayedClassIdSet.has(getCloudRecordId(userId, 'class', value));
+    };
+    const refilter = <T extends { classId?: string }>(items: T[]): T[] =>
+      replayed.classes.length > 0
+        ? items.filter((item) => replayedClassMatches(item.classId))
+        : [];
+
+    return {
+      ...replayed,
+      // Re-apply the relational filter: a replayed child must never outlive its class.
+      students: refilter(replayed.students),
+      grades: refilter(replayed.grades),
+      sessions: refilter(replayed.sessions),
+      timetable: refilter(replayed.timetable),
+      lessonProgress: refilter(replayed.lessonProgress),
+    };
   } catch (error) { if (schemaError(error)) throw localOnly(); throw error; }
 }
 
@@ -498,8 +631,7 @@ async function applyOperationOnce(client: AnyClient, ownerId: string, workspace:
     const existing = await client.from(table).select('sync_revision,sync_device_id').eq('id', ownerId).maybeSingle();
     if (existing.error) throw existing.error;
     await conflictIfStale(existing.data);
-    const profileQuery = client.from(table);
-    const profileUpsert = profileQuery.upsert({
+    const result = await upsertWithColumnFallback(client, table, {
       id: ownerId,
       sync_revision: metadata.revision,
       sync_updated_at: metadata.updatedAt,
@@ -524,31 +656,29 @@ async function applyOperationOnce(client: AnyClient, ownerId: string, workspace:
       birth_place: p.birthPlace || null,
       family_status: p.familyStatus || null,
       gender: p.gender || null,
-    }, { onConflict: 'id' });
-    const result = typeof profileUpsert?.select === 'function'
-      ? await profileUpsert.select('id').single()
-      : await profileUpsert;
+    }, 'id');
     if (result.error) throw result.error; return;
   }
 
   if (operation.entity === 'settings') {
-    const existing = await client.from(table).select('sync_revision,sync_device_id').eq('owner_id', ownerId).eq('workspace_id', workspace).maybeSingle();
+    const existing = await client.from(table).select('sync_revision,sync_device_id,settings').eq('owner_id', ownerId).eq('workspace_id', workspace).maybeSingle();
     if (existing.error) throw existing.error;
-    await conflictIfStale(existing.data);
-    const settingsQuery = client.from(table);
-    const settingsUpsert = settingsQuery.upsert({
+    // UI preferences (lastWorkspace, activeClassId, etc.) merge cleanly and must never
+    // throw a SyncConflictError that blocks pedagogical records in the outbox.
+    const nextRevision = Math.max(Number(existing.data?.sync_revision ?? 0), metadata.revision);
+    const mergedSettings = isObject(existing.data?.settings) && isObject(operation.payload)
+      ? { ...existing.data.settings, ...operation.payload }
+      : operation.payload;
+    const result = await upsertWithColumnFallback(client, table, {
       owner_id: ownerId,
       workspace_id: workspace,
-      settings: operation.payload,
-      revision: metadata.revision,
-      sync_revision: metadata.revision,
+      settings: mergedSettings,
+      revision: nextRevision,
+      sync_revision: nextRevision,
       sync_updated_at: metadata.updatedAt,
       sync_device_id: metadata.deviceId,
       updated_by: ownerId,
-    }, { onConflict: 'workspace_id' });
-    const result = typeof settingsUpsert?.select === 'function'
-      ? await settingsUpsert.select('id').single()
-      : await settingsUpsert;
+    }, 'workspace_id');
     if (result.error) throw result.error; return;
   }
   if (operation.action === 'upsert') {
@@ -672,11 +802,7 @@ async function applyOperationOnce(client: AnyClient, ownerId: string, workspace:
       throw new SyncConflictError(operation.entity, operation.recordId, Number(tombstone.data!.revision ?? 0), metadata.revision);
     }
 
-    const rowQuery = client.from(table);
-    const rowUpsert = rowQuery.upsert(row, { onConflict: 'id' });
-    const result = typeof rowUpsert?.select === 'function'
-      ? await rowUpsert.select('id').single()
-      : await rowUpsert;
+    const result = await upsertWithColumnFallback(client, table, row, 'id');
     if (result.error) throw result.error;
     if (tombstone.data) {
       const cleared = await client.from('sync_tombstones').delete()

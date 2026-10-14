@@ -6,7 +6,7 @@ import { showToast } from "@/components/Toast";
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { AppState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
-import { CurriculumUnit, SessionRecord } from '@/lib/types';
+import { CurriculumUnit, SessionRecord, SessionStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import {
@@ -35,9 +35,20 @@ import {
   Quote,
   Check,
   ChevronDown,
-  FileDown
+  FileDown,
+  Ban
 } from 'lucide-react';
 import { exportToDoc } from '@/lib/utils';
+import {
+  CANCELLATION_REASON_PRESETS,
+  DEFAULT_CANCELLATION_REASON,
+  SESSION_PART_NUMBERS,
+  buildCancellationNote,
+  buildSessionTitle,
+  isSessionDocumented,
+  normalizeSessionPart,
+  readSessionPart,
+} from '@/lib/session-flow';
 
 interface SessionCahierProps {
   initialSessionId?: string;
@@ -156,6 +167,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(initialSessionId || null);
   const [partNumber, setPartNumber] = useState<number>(1);
   const [isUnitCompleted, setIsUnitCompleted] = useState<boolean>(false);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('COMPLETED');
+  const [cancellationReason, setCancellationReason] = useState<string>('');
   const [unifiedNotes, setUnifiedNotes] = useState<string>('');
 
   // Curriculum Extraction Modal State
@@ -179,14 +192,17 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
         if (ses.unitId) {
           setSelectedUnitId(ses.unitId);
         }
-        const partMatch = ses.customTopic?.match(/\((\d+)\)/);
-        if (partMatch) {
-          setPartNumber(parseInt(partMatch[1], 10));
+        if (ses.sessionStatus === 'CANCELLED') {
+          setSessionStatus('CANCELLED');
+          setCancellationReason(ses.cancellationReason || '');
+          setIsUnitCompleted(false);
         } else {
-          setPartNumber(1);
+          setSessionStatus('COMPLETED');
+          setCancellationReason('');
+          setPartNumber(readSessionPart(ses));
+          const prog = state.lessonProgress.find(p => p.classId === ses.classId && p.unitId === ses.unitId);
+          setIsUnitCompleted(prog?.status === 'COMPLETED');
         }
-        const prog = state.lessonProgress.find(p => p.classId === ses.classId && p.unitId === ses.unitId);
-        setIsUnitCompleted(prog?.status === 'COMPLETED');
 
         const parts: string[] = [];
         if (ses.accomplishments?.trim()) {
@@ -228,9 +244,13 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     if (!effectiveSelectedUnitId || !state.activeClassId) return;
 
     const priorSessions = state.sessions.filter(
-      s => s.classId === state.activeClassId && s.unitId === effectiveSelectedUnitId
+      s =>
+        s.classId === state.activeClassId &&
+        s.unitId === effectiveSelectedUnitId &&
+        s.sessionStatus !== 'CANCELLED' &&
+        isSessionDocumented(s)
     );
-    const nextPart = priorSessions.length + 1;
+    const nextPart = normalizeSessionPart(priorSessions.length + 1);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPartNumber(nextPart);
 
@@ -247,6 +267,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     setUnifiedNotes('');
     setPartNumber(1);
     setIsUnitCompleted(false);
+    setSessionStatus('COMPLETED');
+    setCancellationReason('');
   };
 
   // When selected unit changes, fill objectives automatically from curriculum DB
@@ -282,15 +304,76 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       return;
     }
 
+    const isCancelled = sessionStatus === 'CANCELLED';
+    const effectiveReason = cancellationReason.trim() || DEFAULT_CANCELLATION_REASON;
+
     const existingSession = editingSessionId
       ? state.sessions.find(s => s.id === editingSessionId)
       : state.sessions.find(
-          s => s.classId === state.activeClassId && s.date === sessionDate && s.startTime === startTime
+          s =>
+            s.classId === state.activeClassId &&
+            s.date === sessionDate &&
+            s.startTime === startTime &&
+            !isSessionDocumented(s)
         );
 
-    const sessionTitle = selectedUnitObj
-      ? `${selectedUnitObj.title} (${partNumber})`
-      : `حصة تعليمية (${partNumber})`;
+    // A new session must never collide with an already-documented one on the cloud's unique key
+    // `(workspace, class, date, start_time)`: the reconcile step would fold them into one row and
+    // the earlier documentation would be overwritten. Pick a free slot instead and say so.
+    let effectiveStartTime = startTime;
+    let effectiveEndTime = endTime;
+    let timeWasShifted = false;
+    if (!existingSession) {
+      const occupiedStarts = new Set(
+        state.sessions
+          .filter(s => s.classId === state.activeClassId && s.date === sessionDate && isSessionDocumented(s))
+          .map(s => s.startTime)
+      );
+      if (occupiedStarts.has(effectiveStartTime)) {
+        timeWasShifted = true;
+        const dayOfWeek = new Date(`${sessionDate}T12:00:00`).getDay();
+        const timetableCandidates = state.timetable
+          .filter(slot => slot.classId === state.activeClassId && slot.dayOfWeek === dayOfWeek)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        const freeTimetableSlot = timetableCandidates.find(slot => !occupiedStarts.has(slot.startTime));
+        if (freeTimetableSlot) {
+          effectiveStartTime = freeTimetableSlot.startTime;
+          effectiveEndTime = freeTimetableSlot.endTime;
+        } else {
+          const standardSlots = [
+            ['08:00', '09:00'],
+            ['09:00', '10:00'],
+            ['10:00', '11:00'],
+            ['11:00', '12:00'],
+            ['13:00', '14:00'],
+            ['14:00', '15:00'],
+            ['15:00', '16:00'],
+            ['16:00', '17:00'],
+          ];
+          const freeStandard = standardSlots.find(([st]) => !occupiedStarts.has(st));
+          if (freeStandard) {
+            effectiveStartTime = freeStandard[0];
+            effectiveEndTime = freeStandard[1];
+          } else {
+            const [hhStr = '08', mmStr = '00'] = effectiveStartTime.split(':');
+            let totalMinutes = parseInt(hhStr, 10) * 60 + parseInt(mmStr, 10) + 1;
+            while (occupiedStarts.has(`${String(Math.floor(totalMinutes / 60) % 24).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`)) {
+              totalMinutes += 1;
+            }
+            effectiveStartTime = `${String(Math.floor(totalMinutes / 60) % 24).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+          }
+        }
+      }
+    }
+
+    const sessionTitle = buildSessionTitle(selectedUnitObj?.title, partNumber, {
+      cancelled: isCancelled,
+      reason: effectiveReason,
+    });
+
+    const accomplishmentsToSave = isCancelled
+      ? buildCancellationNote(effectiveReason, unifiedNotes)
+      : unifiedNotes;
 
     try {
       await updateStateAndWait(prev => {
@@ -302,15 +385,18 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
                 ...s,
                 unitId: effectiveSelectedUnitId,
                 customTopic: sessionTitle,
+                partNumber: isCancelled ? undefined : partNumber,
+                sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
+                cancellationReason: isCancelled ? effectiveReason : undefined,
                 date: sessionDate,
-                startTime,
-                endTime,
-                sessionGoals,
-                accomplishments: unifiedNotes,
+                startTime: effectiveStartTime,
+                endTime: effectiveEndTime,
+                sessionGoals: isCancelled ? '' : sessionGoals,
+                accomplishments: accomplishmentsToSave,
                 nextSteps: '',
-                teacherNotes: unifiedNotes,
-                notes: unifiedNotes,
-                summary: unifiedNotes.slice(0, 200),
+                teacherNotes: accomplishmentsToSave,
+                notes: accomplishmentsToSave,
+                summary: accomplishmentsToSave.slice(0, 200),
                 completedAt: new Date().toISOString(),
               };
             }
@@ -322,15 +408,18 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
             classId: prev.activeClassId!,
             unitId: effectiveSelectedUnitId,
             customTopic: sessionTitle,
+            partNumber: isCancelled ? undefined : partNumber,
+            sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
+            cancellationReason: isCancelled ? effectiveReason : undefined,
             date: sessionDate,
-            startTime,
-            endTime,
-            sessionGoals,
-            accomplishments: unifiedNotes,
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
+            sessionGoals: isCancelled ? '' : sessionGoals,
+            accomplishments: accomplishmentsToSave,
             nextSteps: '',
-            teacherNotes: unifiedNotes,
-            notes: unifiedNotes,
-            summary: unifiedNotes.slice(0, 200),
+            teacherNotes: accomplishmentsToSave,
+            notes: accomplishmentsToSave,
+            summary: accomplishmentsToSave.slice(0, 200),
             attendance: {},
             completedAt: new Date().toISOString(),
           };
@@ -340,8 +429,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
         const existingProgIdx = prev.lessonProgress.findIndex(
           p => p.classId === prev.activeClassId && p.unitId === effectiveSelectedUnitId
         );
-        let newProg = [...prev.lessonProgress];
-        if (effectiveSelectedUnitId) {
+        const newProg = [...prev.lessonProgress];
+        if (effectiveSelectedUnitId && !isCancelled) {
           if (isUnitCompleted) {
             if (existingProgIdx >= 0) {
               newProg[existingProgIdx] = {
@@ -390,7 +479,23 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       setEditingSessionId(null);
       onClearInitialSession?.();
       setUnifiedNotes('');
-      showToast('تم توثيق الحصة وتحديث دفتر النصوص بنجاح', 'success');
+      setSessionStatus('COMPLETED');
+      setCancellationReason('');
+      if (timeWasShifted) {
+        // Never silently move a session: the teacher must know the slot changed and why.
+        setStartTime(effectiveStartTime);
+        setEndTime(effectiveEndTime);
+        showToast(
+          `يوجد توثيق سابق في نفس التوقيت، فسُجلت هذه الحصة على ${effectiveStartTime} حفاظاً على التوثيق السابق.`,
+          'warning'
+        );
+      }
+      showToast(
+        isCancelled
+          ? 'تم توثيق الحصة الملغاة في دفتر النصوص بنجاح'
+          : 'تم توثيق الحصة وتحديث دفتر النصوص بنجاح',
+        'success'
+      );
     } catch (error) {
       console.error('Session save failed:', error);
       showToast('تعذر حفظ الحصة في السحابة.', 'error');
@@ -408,16 +513,6 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       console.error('Session delete failed:', error);
       showToast('تعذر حذف الحصة من السحابة.', 'error');
     }
-  };
-
-  const isSessionDocumented = (s: SessionRecord): boolean => {
-    return Boolean(
-      s.unitId ||
-      s.customTopic?.trim() ||
-      s.accomplishments?.trim() ||
-      s.notes?.trim() ||
-      s.summary?.trim()
-    );
   };
 
   // Only past sessions (date <= todayStr) for the active class
@@ -689,10 +784,86 @@ ${s.accomplishments}
               </div>
             </div>
 
+            {/* Session Status Toggle: Completed vs Cancelled */}
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 text-sm">
+              <label className="text-xs font-bold text-slate-700 block">
+                حالة الحصة:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSessionStatus('COMPLETED')}
+                  className={`min-h-10 px-3.5 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    sessionStatus === 'COMPLETED'
+                      ? 'bg-[var(--primary)] text-white shadow-xs'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>حصة منجزة (عادية)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionStatus('CANCELLED');
+                    setIsUnitCompleted(false);
+                  }}
+                  className={`min-h-10 px-3.5 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    sessionStatus === 'CANCELLED'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:border-rose-400 hover:text-rose-700'
+                  }`}
+                >
+                  <Ban className="w-4 h-4" />
+                  <span>حصة ملغاة (تعذّر إنجازها)</span>
+                </button>
+              </div>
+
+              {sessionStatus === 'CANCELLED' && (
+                <div className="mt-2.5 space-y-2.5 rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                  <div>
+                    <label className="text-xs font-bold text-rose-900 mb-1.5 block">
+                      سبب إلغاء الحصة (اختر سبباً سريعاً أو دوّن السبب):
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {CANCELLATION_REASON_PRESETS.map(reason => (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => setCancellationReason(reason)}
+                          className={`min-h-8 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            cancellationReason === reason
+                              ? 'bg-rose-600 text-white shadow-2xs'
+                              : 'bg-white border border-rose-200 text-rose-800 hover:border-rose-400 hover:bg-rose-100/60'
+                          }`}
+                        >
+                          {reason}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={cancellationReason}
+                      onChange={e => setCancellationReason(e.target.value)}
+                      placeholder="اكتب سبب عدم إنجاز الحصة (مثال: الغياب، اجتماع، ندوة تربوية...)"
+                      className="w-full px-3 py-2 rounded-xl border border-rose-300 bg-white text-xs font-bold text-slate-900 focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-rose-800 font-medium leading-relaxed">
+                    عند حفظ الحصة كملغاة، يتم توثيقها في الدفتر اليومي مع ذكر السبب، ولا تُحتسب الوحدة التعلمية كمنجزة في التدرج السنوي.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Lesson / Unit Picker */}
             <div className="space-y-1 text-sm">
               <label className="font-bold text-slate-700 flex items-center justify-between">
-                <span>موضوع الدرس / الوحدة التعلمية المقررة:</span>
+                <span>
+                  {sessionStatus === 'CANCELLED'
+                    ? 'موضوع الدرس المبرمج للحصة (اختياري):'
+                    : 'موضوع الدرس / الوحدة التعلمية المقررة:'}
+                </span>
                 {selectedUnitObj && (
                   <span className="text-[var(--primary)] font-semibold">
                     الميدان: {selectedUnitObj.domain} • الحجم: {selectedUnitObj.hourlyVolume} سا
@@ -712,57 +883,59 @@ ${s.accomplishments}
             </div>
 
             {/* Part selector & Unit completion toggle */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
-              <div>
-                <label className="text-xs font-bold text-slate-700 mb-1.5 block">
-                  رقم الحصة من الوحدة (الجزء):
-                </label>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {[1, 2, 3, 4].map(num => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => {
-                        setPartNumber(num);
-                        const totalHours = selectedUnitObj?.hourlyVolume || 2;
-                        setIsUnitCompleted(num >= totalHours);
-                      }}
-                      className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                        partNumber === num
-                          ? 'bg-[var(--primary)] text-white shadow-xs'
-                          : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
-                      }`}
-                    >
-                      حصة ({num})
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  عنوان التدوين بالدفتر: <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'} ({partNumber})</span>
-                </p>
-              </div>
-
-              <div className="flex flex-col justify-center">
-                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-[var(--primary)]/20 bg-white hover:bg-[var(--primary-soft)]/20 transition-colors cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={isUnitCompleted}
-                    onChange={e => setIsUnitCompleted(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded text-[var(--primary)] focus:ring-[var(--primary)] cursor-pointer"
-                  />
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-bold text-slate-900 block">
-                      تم إتمام الوحدة كاملة (تسجيل الإنجاز في المنهاج)
-                    </span>
-                    <span className="text-[11px] text-slate-500 block leading-tight">
-                      {isUnitCompleted
-                        ? '✓ سيتم احتساب الوحدة كمنجزة بالكامل في المنهاج والتوزيع السنوي.'
-                        : '⏳ الوحدة جارية (حصة جزئية) ولن تُسجل كمكتملة في المنهاج حتى إتمامها.'}
-                    </span>
+            {sessionStatus !== 'CANCELLED' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    رقم الحصة من الوحدة (الجزء):
+                  </label>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {SESSION_PART_NUMBERS.map(num => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          setPartNumber(num);
+                          const totalHours = selectedUnitObj?.hourlyVolume || 2;
+                          setIsUnitCompleted(num >= totalHours);
+                        }}
+                        className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                          partNumber === num
+                            ? 'bg-[var(--primary)] text-white shadow-xs'
+                            : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
+                        }`}
+                      >
+                        حصة ({num})
+                      </button>
+                    ))}
                   </div>
-                </label>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    عنوان التدوين بالدفتر: <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'} ({partNumber})</span>
+                  </p>
+                </div>
+
+                <div className="flex flex-col justify-center">
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-[var(--primary)]/20 bg-white hover:bg-[var(--primary-soft)]/20 transition-colors cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isUnitCompleted}
+                      onChange={e => setIsUnitCompleted(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-[var(--primary)] focus:ring-[var(--primary)] cursor-pointer"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-slate-900 block">
+                        تم إتمام الوحدة كاملة (تسجيل الإنجاز في المنهاج)
+                      </span>
+                      <span className="text-[11px] text-slate-500 block leading-tight">
+                        {isUnitCompleted
+                          ? '✓ سيتم احتساب الوحدة كمنجزة بالكامل في المنهاج والتوزيع السنوي.'
+                          : '⏳ الوحدة جارية (حصة جزئية) ولن تُسجل كمكتملة في المنهاج حتى إتمامها.'}
+                      </span>
+                    </div>
+                  </label>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Show the latest note for this unit as a writing aid */}
             {previousMemoryForThisUnit && (
@@ -914,7 +1087,12 @@ ${s.accomplishments}
                       <span className="font-bold text-slate-900">
                         {title}
                       </span>
-                      {isDocumented ? (
+                      {ses.sessionStatus === 'CANCELLED' ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200 inline-flex items-center gap-1">
+                          <Ban className="w-3 h-3 text-rose-600" />
+                          <span>ملغاة{ses.cancellationReason ? `: ${ses.cancellationReason}` : ''}</span>
+                        </span>
+                      ) : isDocumented ? (
                         <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 inline-flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>موثقة</span>

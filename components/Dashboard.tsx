@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AppState, exportBackupJSON, isDemoState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
-import { resolveOrCreateSession } from '@/lib/session-flow';
+import { resolveOrCreateSession, isSessionDocumented } from '@/lib/session-flow';
 import { SanadTab } from './SidebarSanad';
 import { OFFICIAL_CURRICULUM } from '@/lib/curriculum-data';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -777,9 +777,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <div className="divide-y divide-[var(--border-subtle)] text-xs">
               {(() => {
-                const documentedSessions = state.sessions.filter(ses =>
-                  Boolean(ses.unitId || ses.customTopic?.trim() || ses.accomplishments?.trim() || ses.notes?.trim() || ses.summary?.trim())
-                );
+                const documentedSessions = state.sessions.filter(isSessionDocumented);
                 if (documentedSessions.length === 0) {
                   return (
                     <p className="text-xs text-[var(--text-secondary)] py-4 text-center">لم يتم تسجيل حصص بعد في الدفتر اليومي.</p>
@@ -787,14 +785,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }
                 return documentedSessions.slice(0, 3).map(ses => {
                   const cls = state.classes.find(c => c.id === ses.classId);
+                  const isCancelled = ses.sessionStatus === 'CANCELLED';
                   return (
                     <div key={ses.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
                       <div>
                         <div className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
                         <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
                       </div>
-                      <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full shrink-0">
-                        موثقة
+                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                        isCancelled
+                          ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                          : 'text-[var(--primary)] bg-[var(--primary-soft)]'
+                      }`}>
+                        {isCancelled ? 'ملغاة' : 'موثقة'}
                       </span>
                     </div>
                   );

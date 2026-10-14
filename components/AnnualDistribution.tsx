@@ -529,20 +529,24 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                           unit,
                           originalIndex,
                         );
-                        const isUnitCompleted = Boolean(
-                          state.activeClassId && (
-                            state.lessonProgress.some(
+                        const unitProg = state.activeClassId
+                          ? state.lessonProgress.find(
                               (p) =>
                                 p.classId === state.activeClassId &&
-                                p.unitId === unit.id &&
-                                p.status === "COMPLETED",
-                            ) ||
-                            state.sessions.some(
-                              (s) =>
-                                s.classId === state.activeClassId &&
-                                s.unitId === unit.id &&
-                                (s.accomplishments || s.notes || s.sessionGoals),
+                                p.unitId === unit.id,
                             )
+                          : undefined;
+                        const isUnitCompleted = Boolean(
+                          state.activeClassId && (
+                            unitProg
+                              ? unitProg.status === "COMPLETED"
+                              : state.sessions.some(
+                                  (s) =>
+                                    s.classId === state.activeClassId &&
+                                    s.unitId === unit.id &&
+                                    s.sessionStatus !== "CANCELLED" &&
+                                    (s.accomplishments || s.notes || s.sessionGoals),
+                                )
                           ),
                         );
 
@@ -603,20 +607,24 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
               {/* Mobile Cards */}
               <div className="block lg:hidden space-y-3 mt-3">
                 {sec.units.map(({ unit, originalIndex, sched }) => {
-                  const isUnitCompleted = Boolean(
-                    state.activeClassId && (
-                      state.lessonProgress.some(
+                  const unitProg = state.activeClassId
+                    ? state.lessonProgress.find(
                         (p) =>
                           p.classId === state.activeClassId &&
-                          p.unitId === unit.id &&
-                          p.status === "COMPLETED",
-                      ) ||
-                      state.sessions.some(
-                        (s) =>
-                          s.classId === state.activeClassId &&
-                          s.unitId === unit.id &&
-                          (s.accomplishments || s.notes || s.sessionGoals),
+                          p.unitId === unit.id,
                       )
+                    : undefined;
+                  const isUnitCompleted = Boolean(
+                    state.activeClassId && (
+                      unitProg
+                        ? unitProg.status === "COMPLETED"
+                        : state.sessions.some(
+                            (s) =>
+                              s.classId === state.activeClassId &&
+                              s.unitId === unit.id &&
+                              s.sessionStatus !== "CANCELLED" &&
+                              (s.accomplishments || s.notes || s.sessionGoals),
+                          )
                     ),
                   );
 

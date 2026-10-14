@@ -47,14 +47,28 @@ export function isTombstoned(
   return recordIds.some((recordId) => context.tombstonedKeys!.has(`${entity}:${recordId}`));
 }
 
+function getNaturalKey(entity: ReconciliationEntity, item: unknown): string | null {
+  if (!item || typeof item !== 'object') return null;
+  const rec = item as Record<string, unknown>;
+  if (entity === 'grade' && typeof rec.studentId === 'string' && rec.trimester !== undefined) {
+    return `${rec.studentId}:${rec.trimester}`;
+  }
+  if (entity === 'lessonProgress' && typeof rec.classId === 'string' && typeof rec.unitId === 'string' && rec.unitId) {
+    return `${rec.classId}:${rec.unitId}`;
+  }
+  if (entity === 'session' && typeof rec.classId === 'string' && typeof rec.date === 'string' && rec.date) {
+    return `${rec.classId}:${rec.date}:${typeof rec.startTime === 'string' ? rec.startTime : ''}`;
+  }
+  return null;
+}
+
 /**
- * Remote rows win. A local row is appended only when all three hold:
- *   1. it is not already represented in the remote list (by local or cloud id),
- *   2. it is not marked deleted locally or by a server tombstone,
- *   3. the outbox still proves it has unsynced work.
- *
- * Rule 3 is what stops a stale cache from resurrecting records the teacher deleted on another
- * device: a row that exists only locally and has nothing queued is, by definition, a ghost.
+ * Remote rows win by default, EXCEPT when a local row has unacknowledged work in the outbox:
+ *   1. If a remote row is marked deleted locally (`deletedRecordIds`), it is filtered out.
+ *   2. If a remote row matches a pending local row (by id or natural key) and no server
+ *      tombstone marks it deleted, the pending local fields override the stale remote row.
+ *   3. A local-only row is appended when it is not already in the remote list (by local id,
+ *      cloud id, or natural key), is not deleted locally or tombstoned, and is pending in the outbox.
  */
 export function reconcileEntityList<T extends { id: string }>(
   entity: ReconciliationEntity,
@@ -62,18 +76,74 @@ export function reconcileEntityList<T extends { id: string }>(
   localItems: T[] | undefined,
   context: ReconciliationContext,
 ): T[] {
-  if (!localItems?.length) return remoteItems;
+  const filteredRemote = remoteItems.filter((item) => !isDeletedLocally(context, entity, item.id));
+  if (!localItems?.length) return filteredRemote;
 
-  const remoteIds = new Set(remoteItems.map((item) => item.id));
+  const localByExactId = new Map<string, T>();
+  const localByNaturalKey = new Map<string, T>();
+  for (const item of localItems) {
+    localByExactId.set(item.id, item);
+    const natKey = getNaturalKey(entity, item);
+    if (natKey) localByNaturalKey.set(natKey, item);
+  }
+
+  const matchedLocalIds = new Set<string>();
+
+  const reconciledRemote = filteredRemote
+    .filter((remoteItem) => {
+      const natKey = getNaturalKey(entity, remoteItem);
+      const localMatch = localByExactId.get(remoteItem.id) ?? (natKey ? localByNaturalKey.get(natKey) : undefined);
+      if (localMatch && isDeletedLocally(context, entity, localMatch.id)) {
+        matchedLocalIds.add(localMatch.id);
+        return false;
+      }
+      return true;
+    })
+    .map((remoteItem) => {
+      const natKey = getNaturalKey(entity, remoteItem);
+      const localMatch = localByExactId.get(remoteItem.id) ?? (natKey ? localByNaturalKey.get(natKey) : undefined);
+      if (!localMatch) return remoteItem;
+      matchedLocalIds.add(localMatch.id);
+
+      const cloudId = context.cloudIdFor(entity, localMatch.id);
+      if (isTombstoned(context, entity, remoteItem.id, cloudId, localMatch.id)) {
+        return remoteItem;
+      }
+
+      if (isPending(context, entity, localMatch.id) || isPending(context, entity, remoteItem.id)) {
+        const merged: Record<string, unknown> = {
+          ...remoteItem,
+          ...localMatch,
+          id: remoteItem.id,
+        };
+        if (entity === 'session') {
+          const remoteMarks = remoteItem as unknown as SessionMarksLike;
+          if (remoteMarks.attendance !== undefined) {
+            merged.attendance = remoteMarks.attendance;
+          }
+          for (const field of BEHAVIOR_FIELDS) {
+            if (remoteMarks[field] !== undefined) {
+              merged[field] = remoteMarks[field];
+            }
+          }
+        }
+        return merged as T;
+      }
+
+      return remoteItem;
+    });
+
+  const remoteIds = new Set(reconciledRemote.map((item) => item.id));
   const retained = localItems.filter((item) => {
+    if (matchedLocalIds.has(item.id)) return false;
     const cloudId = context.cloudIdFor(entity, item.id);
     if (remoteIds.has(item.id) || remoteIds.has(cloudId)) return false;
     if (isDeletedLocally(context, entity, item.id)) return false;
     if (isTombstoned(context, entity, cloudId, item.id)) return false;
-    return isPending(context, entity, item.id);
+    return isPending(context, entity, item.id) || isPending(context, entity, cloudId);
   });
 
-  return retained.length > 0 ? [...remoteItems, ...retained] : remoteItems;
+  return retained.length > 0 ? [...reconciledRemote, ...retained] : reconciledRemote;
 }
 
 /** The behaviour columns a session carries, in the shape the sync engine stores. */
@@ -139,42 +209,75 @@ export function reconcileSessionMarks(
   const pendingBehaviors = new Map<string, Set<string>>();
   const sessionsById = new Map(remoteSessions.map((session) => [session.id, session]));
 
+  const localByNaturalKey = new Map<string, SessionMarksLike>();
+  for (const localSession of localSessionsById.values()) {
+    const natKey = getNaturalKey('session', localSession);
+    if (natKey) localByNaturalKey.set(natKey, localSession);
+  }
+
   for (const session of remoteSessions) {
     // Start from the cloud's empty baseline, then re-apply only what is still queued.
     session.attendance = {};
     for (const field of BEHAVIOR_FIELDS) session[field] = [];
-    const local = localSessionsById.get(session.id);
+    const natKey = getNaturalKey('session', session);
+    const local = localSessionsById.get(session.id) ?? (natKey ? localByNaturalKey.get(natKey) : undefined);
+    const attendanceIds = new Set<string>();
+    const behaviorIds = new Set<string>();
+    pendingAttendance.set(session.id, attendanceIds);
+    pendingBehaviors.set(session.id, behaviorIds);
     if (!local) continue;
 
-    const attendanceIds = new Set<string>();
     for (const [studentId, status] of Object.entries(local.attendance || {})) {
       if (!status) continue;
-      if (isPending(context, 'attendance', `${session.id}:${studentId}`)) {
+      if (
+        isDeletedLocally(context, 'attendance', `${session.id}:${studentId}`) ||
+        isDeletedLocally(context, 'attendance', `${local.id}:${studentId}`)
+      ) {
+        attendanceIds.add(studentId);
+        continue;
+      }
+      if (
+        isPending(context, 'attendance', `${session.id}:${studentId}`) ||
+        isPending(context, 'attendance', `${local.id}:${studentId}`)
+      ) {
         session.attendance[studentId] = status;
         attendanceIds.add(studentId);
       }
     }
 
-    const behaviorIds = new Set<string>();
     for (const field of BEHAVIOR_FIELDS) {
       const target = session[field];
       if (!target) continue;
       for (const studentId of local[field] || []) {
-        if (isPending(context, 'behavior', `${session.id}:${studentId}:${field}`)) {
+        if (
+          isDeletedLocally(context, 'behavior', `${session.id}:${studentId}:${field}`) ||
+          isDeletedLocally(context, 'behavior', `${local.id}:${studentId}:${field}`)
+        ) {
+          behaviorIds.add(`${studentId}:${field}`);
+          continue;
+        }
+        if (
+          isPending(context, 'behavior', `${session.id}:${studentId}:${field}`) ||
+          isPending(context, 'behavior', `${local.id}:${studentId}:${field}`)
+        ) {
           if (!target.includes(studentId)) target.push(studentId);
           behaviorIds.add(`${studentId}:${field}`);
         }
       }
     }
-
-    pendingAttendance.set(session.id, attendanceIds);
-    pendingBehaviors.set(session.id, behaviorIds);
   }
 
   for (const row of attendanceRows) {
     const session = sessionsById.get(row.session_id);
     if (!session) continue;
-    if (pendingAttendance.get(session.id)?.has(row.student_id)) continue;
+    if (
+      pendingAttendance.get(session.id)?.has(row.student_id) ||
+      isPending(context, 'attendance', `${session.id}:${row.student_id}`) ||
+      isDeletedLocally(context, 'attendance', `${session.id}:${row.student_id}`)
+    ) {
+      pendingAttendance.get(session.id)?.add(row.student_id);
+      continue;
+    }
     session.attendance ??= {};
     session.attendance[row.student_id] = ATTENDANCE_STATUSES[row.status || 'present'] ?? 'PRESENT';
   }
@@ -182,7 +285,15 @@ export function reconcileSessionMarks(
   for (const row of behaviorRows) {
     const session = sessionsById.get(row.session_id);
     if (!session) continue;
-    if (pendingBehaviors.get(session.id)?.has(`${row.student_id}:${row.behavior}`)) continue;
+    const key = `${row.student_id}:${row.behavior}`;
+    if (
+      pendingBehaviors.get(session.id)?.has(key) ||
+      isPending(context, 'behavior', `${session.id}:${key}`) ||
+      isDeletedLocally(context, 'behavior', `${session.id}:${key}`)
+    ) {
+      pendingBehaviors.get(session.id)?.add(key);
+      continue;
+    }
     const field = BEHAVIOR_FIELDS.find((candidate) => candidate === row.behavior);
     if (!field) continue;
     const target = (session[field] ??= []);

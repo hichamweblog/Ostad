@@ -432,6 +432,24 @@ export async function enqueueSyncOperations(
   updatedAt: string,
   options: { allowTombstoneOverride?: boolean } = {},
 ): Promise<string> {
+  if (operations.length > 0) {
+    const supersededRecordKeys = new Set(
+      operations.map((op) => `${op.entity}:${op.recordId}`),
+    );
+    const existingEntries = await listSyncOutbox(ownerId);
+    for (const existing of existingEntries) {
+      if (existing.operations.length === 0) continue;
+      const remaining = existing.operations.filter(
+        (op) => !supersededRecordKeys.has(`${op.entity}:${op.recordId}`),
+      );
+      if (remaining.length === 0) {
+        await del(outboxKey(existing.id));
+      } else if (remaining.length !== existing.operations.length) {
+        await set(outboxKey(existing.id), { ...existing, operations: remaining });
+      }
+    }
+  }
+
   const id = `${ownerId}:${getSyncDeviceId()}:${revision}:${updatedAt}`;
   await set(outboxKey(id), {
     id, ownerId, revision, updatedAt, operations, createdAt: new Date().toISOString(),
@@ -439,6 +457,295 @@ export async function enqueueSyncOperations(
     allowTombstoneOverride: options.allowTombstoneOverride ?? false,
   } satisfies SyncOutboxEntry);
   return id;
+}
+
+/**
+ * Compacts all pending outbox entries for `ownerId` so that superseded operations
+ * for the same `(entity, recordId)` in older entries are pruned, preventing
+ * cumulative queue growth when working offline.
+ */
+export async function compactSyncOutbox(ownerId: string): Promise<SyncOutboxEntry[]> {
+  const entries = await listSyncOutbox(ownerId);
+  if (entries.length === 0) return [];
+
+  const seenRecordKeys = new Set<string>();
+  const keptDesc: SyncOutboxEntry[] = [];
+
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry.operations.length === 0) {
+      // An entry with nothing left to send is pure overhead: drop it.
+      await del(outboxKey(entry.id));
+      continue;
+    }
+    const dedupedDesc: SyncOperation[] = [];
+    for (let j = entry.operations.length - 1; j >= 0; j--) {
+      const op = entry.operations[j];
+      const key = `${op.entity}:${op.recordId}`;
+      if (seenRecordKeys.has(key)) continue;
+      seenRecordKeys.add(key);
+      dedupedDesc.push(op);
+    }
+    const remaining = dedupedDesc.reverse();
+    if (remaining.length === 0) {
+      await del(outboxKey(entry.id));
+    } else {
+      const updated = remaining.length !== entry.operations.length
+        ? { ...entry, operations: remaining }
+        : entry;
+      if (remaining.length !== entry.operations.length) {
+        await set(outboxKey(entry.id), updated);
+      }
+      keptDesc.push(updated);
+    }
+  }
+
+  return keptDesc.reverse();
+}
+
+/**
+ * Replays pending outbox operations onto `baseState` so that any unacknowledged local
+ * work in IndexedDB (`sanad:sync-outbox:*`) is guaranteed to be reflected in memory
+ * and in the local state cache, even if an earlier reload overwrote the state cache.
+ */
+export function replayOutboxEntriesOnState(
+  baseState: AppState,
+  entries: readonly SyncOutboxEntry[],
+  tombstonedKeys?: ReadonlySet<string>,
+): AppState {
+  if (!entries.length) return baseState;
+
+  let classes = [...baseState.classes];
+  let students = [...baseState.students];
+  let grades = [...baseState.grades];
+  let sessions = baseState.sessions.map((s) => ({
+    ...s,
+    attendance: { ...(s.attendance || {}) },
+    disruptions: [...(s.disruptions || [])],
+    unwrittenLessons: [...(s.unwrittenLessons || [])],
+    poorParticipation: [...(s.poorParticipation || [])],
+    goodParticipation: [...(s.goodParticipation || [])],
+  }));
+  let timetable = [...baseState.timetable];
+  let lessonProgress = [...baseState.lessonProgress];
+  let customUnits = [...baseState.customUnits];
+  let lessonPlans = [...baseState.lessonPlans];
+  let dashboardTasks = [...(baseState.dashboardTasks || [])];
+  let profile = { ...baseState.profile };
+  let settingsFields: Partial<AppState> = {};
+
+  const upsertInList = <T extends { id: string }>(
+    list: T[],
+    item: T,
+    matchNatural?: (existing: T, candidate: T) => boolean,
+  ): T[] => {
+    const idx = list.findIndex(
+      (existing) => existing.id === item.id || (matchNatural ? matchNatural(existing, item) : false),
+    );
+    if (idx >= 0) {
+      const next = [...list];
+      next[idx] = { ...next[idx], ...item, id: next[idx].id };
+      return next;
+    }
+    return [...list, item];
+  };
+
+  for (const entry of entries) {
+    for (const op of entry.operations) {
+      if (!entry.allowTombstoneOverride && tombstonedKeys?.has(`${op.entity}:${op.recordId}`)) {
+        continue;
+      }
+
+      if (op.action === 'delete') {
+        switch (op.entity) {
+          case 'class':
+            classes = classes.filter((item) => item.id !== op.recordId);
+            break;
+          case 'student':
+            students = students.filter((item) => item.id !== op.recordId);
+            break;
+          case 'grade':
+            grades = grades.filter((item) => item.id !== op.recordId);
+            break;
+          case 'session':
+            sessions = sessions.filter((item) => item.id !== op.recordId);
+            break;
+          case 'timetable':
+            timetable = timetable.filter((item) => item.id !== op.recordId);
+            break;
+          case 'lessonProgress':
+            lessonProgress = lessonProgress.filter((item) => item.id !== op.recordId);
+            break;
+          case 'customUnit':
+            customUnits = customUnits.filter((item) => item.id !== op.recordId);
+            break;
+          case 'lessonPlan':
+            lessonPlans = lessonPlans.filter((item) => item.id !== op.recordId);
+            break;
+          case 'dashboardTask':
+            dashboardTasks = dashboardTasks.filter((item) => item.id !== op.recordId);
+            break;
+          case 'attendance': {
+            const sep = op.recordId.indexOf(':');
+            if (sep > 0) {
+              const sessionId = op.recordId.slice(0, sep);
+              const studentId = op.recordId.slice(sep + 1);
+              const target = sessions.find((s) => s.id === sessionId);
+              if (target?.attendance) {
+                delete target.attendance[studentId];
+              }
+            }
+            break;
+          }
+          case 'behavior': {
+            const parts = op.recordId.split(':');
+            if (parts.length >= 3) {
+              const [sessionId, studentId, behavior] = parts;
+              const target = sessions.find((s) => s.id === sessionId);
+              if (
+                target &&
+                (behavior === 'disruptions' ||
+                  behavior === 'unwrittenLessons' ||
+                  behavior === 'poorParticipation' ||
+                  behavior === 'goodParticipation')
+              ) {
+                target[behavior] = (target[behavior] || []).filter((id) => id !== studentId);
+              }
+            }
+            break;
+          }
+          default:
+            break;
+        }
+        continue;
+      }
+
+      if (!op.payload || typeof op.payload !== 'object') continue;
+      const payload = op.payload as Record<string, any>;
+
+      switch (op.entity) {
+        case 'class':
+          classes = upsertInList(classes, payload as any);
+          break;
+        case 'student':
+          students = upsertInList(students, payload as any);
+          break;
+        case 'grade':
+          grades = upsertInList(
+            grades,
+            payload as any,
+            (a, b) => a.studentId === b.studentId && a.trimester === b.trimester,
+          );
+          break;
+        case 'session': {
+          const idx = sessions.findIndex(
+            (s) =>
+              s.id === payload.id ||
+              (s.classId === payload.classId &&
+                s.date === payload.date &&
+                (s.startTime || '') === (payload.startTime || '')),
+          );
+          if (idx >= 0) {
+            const existing = sessions[idx];
+            sessions[idx] = {
+              ...existing,
+              ...(payload as any),
+              id: existing.id,
+              attendance: {
+                ...(existing.attendance || {}),
+                ...(payload.attendance || {}),
+              },
+              disruptions: payload.disruptions?.length ? [...payload.disruptions] : existing.disruptions,
+              unwrittenLessons: payload.unwrittenLessons?.length ? [...payload.unwrittenLessons] : existing.unwrittenLessons,
+              poorParticipation: payload.poorParticipation?.length ? [...payload.poorParticipation] : existing.poorParticipation,
+              goodParticipation: payload.goodParticipation?.length ? [...payload.goodParticipation] : existing.goodParticipation,
+            };
+          } else {
+            sessions.push({
+              ...(payload as any),
+              attendance: { ...(payload.attendance || {}) },
+              disruptions: [...(payload.disruptions || [])],
+              unwrittenLessons: [...(payload.unwrittenLessons || [])],
+              poorParticipation: [...(payload.poorParticipation || [])],
+              goodParticipation: [...(payload.goodParticipation || [])],
+            });
+          }
+          break;
+        }
+        case 'attendance': {
+          const target = sessions.find((s) => s.id === payload.sessionId);
+          if (target && payload.studentId && payload.status) {
+            target.attendance = { ...(target.attendance || {}), [payload.studentId]: payload.status };
+          }
+          break;
+        }
+        case 'behavior': {
+          const target = sessions.find((s) => s.id === payload.sessionId);
+          const behavior = payload.behavior as
+            | 'disruptions'
+            | 'unwrittenLessons'
+            | 'poorParticipation'
+            | 'goodParticipation';
+          if (
+            target &&
+            payload.studentId &&
+            (behavior === 'disruptions' ||
+              behavior === 'unwrittenLessons' ||
+              behavior === 'poorParticipation' ||
+              behavior === 'goodParticipation')
+          ) {
+            const list = target[behavior] || [];
+            if (!list.includes(payload.studentId)) {
+              target[behavior] = [...list, payload.studentId];
+            }
+          }
+          break;
+        }
+        case 'timetable':
+          timetable = upsertInList(timetable, payload as any);
+          break;
+        case 'lessonProgress':
+          lessonProgress = upsertInList(
+            lessonProgress,
+            payload as any,
+            (a, b) => a.classId === b.classId && Boolean(a.unitId) && a.unitId === b.unitId,
+          );
+          break;
+        case 'customUnit':
+          customUnits = upsertInList(customUnits, payload as any);
+          break;
+        case 'lessonPlan':
+          lessonPlans = upsertInList(lessonPlans, payload as any);
+          break;
+        case 'dashboardTask':
+          dashboardTasks = upsertInList(dashboardTasks, payload as any);
+          break;
+        case 'profile':
+          profile = { ...profile, ...(payload as any) };
+          break;
+        case 'settings':
+          settingsFields = { ...settingsFields, ...(payload as any) };
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  return {
+    ...baseState,
+    ...settingsFields,
+    profile,
+    classes,
+    students,
+    grades,
+    sessions,
+    timetable,
+    lessonProgress,
+    customUnits,
+    lessonPlans,
+    dashboardTasks,
+  };
 }
 
 /**
