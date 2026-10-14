@@ -1,3 +1,4 @@
+import { getEmptyState } from '@/lib/storage';
 import { describe, expect, it } from 'vitest';
 import type { AppState } from '../lib/storage';
 import type { SessionRecord, TimetableSlot } from '../lib/types';
@@ -93,5 +94,22 @@ describe('resolveOrCreateSession', () => {
       'new-session',
       'previous-session',
     ]);
+  });
+});
+
+
+describe('orientation session without a curriculum unit', () => {
+  it('recognises both the new kind and a legacy unlinked orientation title', async () => {
+    const { isOrientationSession, ORIENTATION_SESSION_TOPIC, isSessionDocumented } = await import('@/lib/session-flow');
+    const empty = getEmptyState();
+    const slot = { id: 'slot', classId: 'class', dayOfWeek: 0, startTime: '08:00', endTime: '09:00', room: '' };
+    const { state } = resolveOrCreateSession(empty, slot, '2026-09-20', () => 'orientation');
+    const session = { ...state.sessions[0], sessionKind: 'orientation' as const, unitId: undefined, customTopic: ORIENTATION_SESSION_TOPIC };
+    expect(isOrientationSession(session)).toBe(true);
+    expect(isSessionDocumented(session)).toBe(true);
+    expect(session.unitId).toBeUndefined();
+    expect(state.lessonProgress).toEqual([]);
+    expect(isOrientationSession({ customTopic: ORIENTATION_SESSION_TOPIC })).toBe(true);
+    expect(isOrientationSession({ unitId: 'unit', customTopic: ORIENTATION_SESSION_TOPIC })).toBe(false);
   });
 });

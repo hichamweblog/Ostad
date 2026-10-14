@@ -22,11 +22,33 @@ export interface TeacherProfile {
   gender?: 'M' | 'F';
 }
 
+/**
+ * Professional ranks offered in the profile (Phase 6): the ministry list was reduced to
+ * these three choices; older stored titles fall back to the first one.
+ */
+export const PROFESSIONAL_RANKS = [
+  'أستاذ قسم أول',
+  'أستاذ قسم ثان',
+  'أستاذ مميز',
+] as const;
+
+export type ProfessionalRank = (typeof PROFESSIONAL_RANKS)[number];
+
+export type HolidayType = 'national' | 'religious' | 'term' | 'exam';
+
 export interface OfficialHoliday {
   id: string;
   name: string;
   dateStr: string; // e.g. "01 نوفمبر 2026" or "19 مارس 2027"
-  type: 'national' | 'religious' | 'term';
+  type: HolidayType;
+  /** First covered day (ISO yyyy-mm-dd). Legacy entries may lack it until edited. */
+  startDate?: string;
+  /** Last covered day (ISO, inclusive). Omitted = single-day holiday. */
+  endDate?: string;
+  /** Omitted = all levels; used for third-year-only secondary examinations. */
+  levels?: GradeLevel[];
+  /** Religious dates remain provisional until officially confirmed. */
+  provisional?: boolean;
 }
 
 export interface ContinuousEvaluationRules {
@@ -36,7 +58,7 @@ export interface ContinuousEvaluationRules {
   participationMax: number; // 5
   disruptionDeduction: number; // خصم الشغب (افتراضياً 1.0)
   unwrittenLessonDeduction: number; // خصم عدم كتابة الدروس (افتراضياً 1.0)
-  unexcusedAbsenceDeduction: number; // خصم الغياب غير المبرر (افتراضياً 1.0)
+  unexcusedAbsenceDeduction: number; // خصم الغياب غير المبرر (افتراضياً 0.5)
   lateDeduction: number; // خصم التأخر (افتراضياً 0.5)
   participationBonus: number; // علاوة المشاركة (افتراضياً 0.5)
   lackOfParticipationDeduction?: number;
@@ -155,6 +177,8 @@ export interface ClassLessonProgress {
   remedialNotes?: string;
 }
 
+export type SessionStatus = 'COMPLETED' | 'CANCELLED';
+
 export interface SessionRecord {
   id: string;
   classId: string;
@@ -172,6 +196,17 @@ export interface SessionRecord {
   assignments?: string;
   teacherNotes: string; // ملاحظات الأستاذ
   notes?: string; // دفتر الملاحظات الموحد
+  /** Session part number within the unit (1..5). */
+  partNumber?: number;
+  /** Whether the session was completed normally or cancelled for a reason. */
+  sessionStatus?: SessionStatus;
+  /** Reason when sessionStatus === 'CANCELLED' (e.g. الغياب, اجتماع, عطلة...). */
+  cancellationReason?: string;
+  /**
+   * 'orientation' = the first session of the year (تقديم توجيهات عامة + تقديم البرنامج):
+   * it is documented in the notebook but attached to no curriculum unit.
+   */
+  sessionKind?: 'orientation';
   // Legacy notebook fields kept for backward compatibility with older backups.
   memoryWhatWorked?: string; // ماذا نجح؟
   memoryWhatFailed?: string; // ماذا لم ينجح؟

@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { getLocalDateString } from '@/lib/date-utils';
+import { isDateExcluded } from '@/lib/academic-calendar';
 import { resolveOrCreateSession } from '@/lib/session-flow';
 import { compactClassName } from '@/lib/class-display';
 import { SanadTab } from './SidebarSanad';
@@ -41,7 +42,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   const todaySlots = isWeekend
     ? []
     : state.timetable
-        .filter(slot => slot.dayOfWeek === rawDay)
+        .filter(slot => slot.dayOfWeek === rawDay && !isDateExcluded(state.calendarSettings?.holidays, getLocalDateString(now), state.classes.find(c => c.id === slot.classId)?.level))
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const currentOrNextSlot =
     todaySlots.find(slot => slot.startTime <= currentTime && currentTime < slot.endTime) ??
@@ -56,7 +57,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     : (slotClass ? `ابدأ ${slotClass.name}` : 'ابدأ الحصة');
 
   const handleCenterAction = async () => {
-    if (isWeekend) {
+    if (isWeekend || isDateExcluded(state.calendarSettings?.holidays, getLocalDateString(now), fallbackClass?.level)) {
       onSelectTab('prep');
       return;
     }

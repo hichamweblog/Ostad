@@ -422,7 +422,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     const attendanceScore = Math.max(
       0,
       (rules?.attendanceMax ?? 5) -
-        stats.absent * (rules?.unexcusedAbsenceDeduction ?? 1) -
+        stats.absent * (rules?.unexcusedAbsenceDeduction ?? 0.5) -
         stats.late * (rules?.lateDeduction ?? 0.5)
     );
     const notebookScore = Math.max(

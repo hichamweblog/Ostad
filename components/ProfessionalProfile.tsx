@@ -2,8 +2,11 @@
 
 import { AppState } from "@/lib/storage";
 import { useAppState } from '@/hooks/app-state-context';
-import { TeacherProfile } from "@/lib/types";
-import { exportToDoc } from "@/lib/utils";
+import { PROFESSIONAL_RANKS, TeacherProfile } from "@/lib/types";
+
+/** Fallback rank shown when the profile has none (or an obsolete one) stored. */
+const DEFAULT_RANK_TITLE: string = PROFESSIONAL_RANKS[0];
+import { exportToDocx } from "@/lib/utils";
 import {
   Award,
   BadgeCheck,
@@ -33,6 +36,7 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
   const { state, updateStateAndWait } = useAppState();
   const [profile, setProfile] = useState<TeacherProfile>({
     ...state.profile,
+    title: PROFESSIONAL_RANKS.some(rank => rank === state.profile.title) ? state.profile.title : DEFAULT_RANK_TITLE,
   });
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
@@ -154,7 +158,7 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
                 </tr>
                 <tr>
                   <td style="padding: 6px; font-weight: bold; color: #2E7D9B; border-bottom: 1px dashed #e2e8f0; text-align: right;">الرتبة المهنية الحالية:</td>
-                  <td style="padding: 6px; font-weight: bold; color: #b45309; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.title || "أستاذ قسم أول"}</td>
+                  <td style="padding: 6px; font-weight: bold; color: #b45309; border-bottom: 1px dashed #e2e8f0; text-align: right;">${profile.title || DEFAULT_RANK_TITLE}</td>
                 </tr>
                 <tr>
                   <td style="padding: 6px; font-weight: bold; color: #2E7D9B; border-bottom: 1px dashed #e2e8f0; text-align: right;">تاريخ أول تعيين بالقطاع:</td>
@@ -223,7 +227,7 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
       </div>
     `;
 
-    exportToDoc(
+    exportToDocx(
       html,
       `البطاقة_المهنية_${(profile.name || "الأستاذ").replace(/\s+/g, "_")}`,
     );
@@ -239,7 +243,7 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
           onClick={handleExportCard}
           className="flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 text-xs font-bold transition-colors shadow-xs cursor-pointer">
           <Printer className="w-4 h-4 text-slate-500" />
-          <span>تصدير البطاقة (.doc)</span>
+          <span>تصدير البطاقة (.docx)</span>
         </button>
       </div>
 
@@ -283,7 +287,7 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/15 backdrop-blur-xs border border-white/20 text-white font-bold text-xs shadow-xs">
                   <Award className="w-3.5 h-3.5 text-amber-300" />
                   <span>
-                    {profile.title || "أستاذ التعليم الثانوي • العلوم الإسلامية"}
+                    {profile.title || DEFAULT_RANK_TITLE}
                   </span>
                 </span>
               </div>
@@ -408,17 +412,16 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
               </label>
               <select
                 id="prof-title"
-                value={profile.title || "أستاذ التعليم الثانوي • العلوم الإسلامية"}
+                value={PROFESSIONAL_RANKS.includes(profile.title as (typeof PROFESSIONAL_RANKS)[number]) ? profile.title : PROFESSIONAL_RANKS[0]}
                 onChange={(e) =>
                   setProfile({ ...profile, title: e.target.value })
                 }
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold">
-                <option value="أستاذ التعليم الثانوي • العلوم الإسلامية">أستاذ التعليم الثانوي • العلوم الإسلامية</option>
-                <option value="أستاذ رئيسي • العلوم الإسلامية">أستاذ رئيسي • العلوم الإسلامية</option>
-                <option value="أستاذ مكون • العلوم الإسلامية">أستاذ مكون • العلوم الإسلامية</option>
-                <option value="أستاذ قسم أول">أستاذ قسم أول</option>
-                <option value="أستاذ قسم ثان">أستاذ قسم ثان</option>
-                <option value="أستاذ مميز">أستاذ مميز</option>
+                {PROFESSIONAL_RANKS.map((rank) => (
+                  <option key={rank} value={rank}>
+                    {rank}
+                  </option>
+                ))}
               </select>
               <span className="text-[10px] text-slate-500 mt-1 block">
                 تنعكس الرتبة فورياً في البطاقة المهنية

@@ -3,8 +3,9 @@
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
 import React, { useEffect, useState } from 'react';
-import { exportToDoc, triggerHapticFeedback } from '@/lib/utils';
+import { exportToDocx, triggerHapticFeedback } from '@/lib/utils';
 import { AppState } from '@/lib/storage';
+import { getExcludedDayLabel, isDateExcluded } from '@/lib/academic-calendar';
 import { getLocalDateString } from '@/lib/date-utils';
 import { AttendanceStatus, SessionRecord, Student } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -254,6 +255,11 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const handleCreateTodaySession = async () => {
     const today = new Date();
     const todayStr = getLocalDateString(today);
+    const excluded = getExcludedDayLabel(state.calendarSettings?.holidays, todayStr, activeClass?.level);
+    if (excluded) {
+      showToast(`اليوم مستثنى من الحصص: ${excluded}`, 'warning');
+      return;
+    }
     const currentTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
     const todayClassSlots = state.timetable
       .filter(slot => slot.classId === selectedClassId && slot.dayOfWeek === today.getDay())
@@ -337,7 +343,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       if (matchingSlots.length > 0) {
         const dateStr = getLocalDateString(cur);
         for (const matchSlot of matchingSlots) {
-          if (count >= 24) break;
+          if (isDateExcluded(state.calendarSettings?.holidays, dateStr, activeClass?.level)) continue;
+          if (count >= 100) break;
           const exists = [...state.sessions, ...newSessions].some(
             s =>
               s.classId === selectedClassId &&
@@ -373,7 +380,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       }))
         .then(() => {
           setSelectedSessionId(newSessions[0].id);
-          showToast(`تم تأكيد توليد ${newSessions.length} حصة في السحابة للفصل ${state.activeTrimester}.`, 'success');
+          showToast(`تم حفظ ${newSessions.length} حصة في طابور المزامنة للفصل ${state.activeTrimester}.`, 'success');
         })
         .catch((error: unknown) => {
           console.error('Generated sessions sync failed:', error);
@@ -394,7 +401,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   // الحضور = إجمالي التلاميذ - عدد الغائبين
   const presentCount = classStudents.length - absentCount;
 
-  // Export official attendance sheet to Word (.doc) with clean table and RTL visual columns
+  // Export official attendance sheet to Word (.docx) with clean table and RTL visual columns
   const handleExportDoc = () => {
     const studentRows = classStudents
       .map(student => {
@@ -489,7 +496,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       </div>
     `;
 
-    exportToDoc(html, `ورقة_الغياب_${activeClass?.name || 'فوج'}_${activeSession?.date || 'حصة'}`);
+    exportToDocx(html, `ورقة_الغياب_${activeClass?.name || 'فوج'}_${activeSession?.date || 'حصة'}`);
   };
 
   return (
@@ -667,7 +674,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               onClick={handleExportDoc}
               className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs" >
               <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>تصدير إلى ملف doc</span>
+              <span>تصدير إلى ملف docx</span>
             </button>
             {onNavigateToSessions && (
               <button

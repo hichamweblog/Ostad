@@ -3,7 +3,7 @@
 import React, { useState } from'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { v4 as uuid } from 'uuid';
-import { exportToDoc } from'@/lib/utils';
+import { exportToDocx } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppState } from'@/lib/storage';
@@ -274,7 +274,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </table>
 `;
 
- exportToDoc(html,`جدول_التوقيت_الاسبوعي_${(state.profile.name ||'الأستاذ').replace(/\s+/g,'_')}`, {
+ exportToDocx(html,`جدول_التوقيت_الاسبوعي_${(state.profile.name ||'الأستاذ').replace(/\s+/g,'_')}`, {
  landscape: true,
  title:'جدول التوقيت الأسبوعي' });
  };
@@ -298,7 +298,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
        onClick={handleExportDoc}
        className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors shadow-xs cursor-pointer" >
        <Printer className="w-3.5 h-3.5 text-slate-500"/>
-       <span>تصدير (.doc)</span>
+       <span>تصدير (.docx)</span>
      </button>
      <button
        onClick={() => handleOpenAddModal()}

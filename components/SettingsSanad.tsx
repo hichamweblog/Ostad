@@ -24,7 +24,13 @@ import {
   importBackupJSON,
 } from "@/lib/storage";
 import { createPdfBackupArchive, restorePdfBackupArchive } from "@/lib/backup-archive";
-import { AcademicCalendarSettings, OfficialHoliday } from "@/lib/types";
+import { AcademicCalendarSettings, GradeLevel, HolidayType, OfficialHoliday } from "@/lib/types";
+import {
+  formatHolidayDates,
+  holidayRange,
+  holidayTypeLabel,
+  withDerivedDateStr,
+} from "@/lib/academic-calendar";
 import {
   AlertTriangle,
   Calendar,
@@ -33,6 +39,7 @@ import {
   CloudDownload,
   RefreshCw,
   Download,
+  Pencil,
   Plus,
   RotateCcw,
   Save,
@@ -65,7 +72,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     lastSyncedAt,
     refreshSyncStatus,
     syncDeviceId,
-    retrySync,
+    syncNow,
     cloudStatus,
   } = useAppState();
   const [calendarSettings, setCalendarSettings] =
@@ -73,17 +80,19 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       state.calendarSettings || DEFAULT_CALENDAR_SETTINGS,
     );
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [newHolidayName, setNewHolidayName] = useState("");
-  const [newHolidayDate, setNewHolidayDate] = useState("");
-  const [newHolidayType, setNewHolidayType] = useState<
-    "national" | "religious" | "term"
-  >("national");
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [holidayName, setHolidayName] = useState("");
+  const [holidayType, setHolidayType] = useState<HolidayType>("national");
+  const [holidayMode, setHolidayMode] = useState<"day" | "range">("day");
+  const [holidayStart, setHolidayStart] = useState("");
+  const [holidayEnd, setHolidayEnd] = useState("");
+  const [holidayScope, setHolidayScope] = useState<"all" | "3AS" | "1AS2AS">("all");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showResyncConfirm, setShowResyncConfirm] = useState(false);
   const [showHolidaysConfirm, setShowHolidaysConfirm] = useState(false);
   const [showSuccessMsg, setShowSuccessMsg] = useState("");
   const [pendingImportedState, setPendingImportedState] = useState<AppState | null>(null);
-  const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
   const [holidayToDeleteId, setHolidayToDeleteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [reminder, setReminder] = useState<BackupReminder | null>(null);
@@ -148,41 +157,101 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     setShowHolidaysConfirm(true);
   };
 
-  const confirmResetHolidays = () => {
-    setCalendarSettings((prev) => ({
+  /** Persists a calendar-settings change immediately so an excluded day can never be lost. */
+  const commitCalendarSettings = async (next: AcademicCalendarSettings): Promise<boolean> => {
+    setCalendarSettings(next);
+    try { await updateStateAndWait((prev) => ({
       ...prev,
+      calendarSettings: next,
+    }));
+      return true;
+    } catch (error) {
+      console.error("Holiday update failed:", error);
+      showToast("تعذر حفظ تعديل الرزنامة. لم يُعلن نجاح الرفع؛ أعد المحاولة.", "error");
+      return false;
+    }
+  };
+
+  const confirmResetHolidays = async () => {
+    const saved = await commitCalendarSettings({
+      ...calendarSettings,
       holidays: DEFAULT_CALENDAR_SETTINGS.holidays,
-    }));
+    });
+    if (!saved) return;
     setShowHolidaysConfirm(false);
+    showToast("تمت استعادة الرزنامة الرسمية 2026/2027 (العطل والاختبارات).", "success");
   };
 
-  const handleAddHoliday = (e: React.FormEvent) => {
+  const openAddHoliday = () => {
+    setEditingHolidayId(null);
+    setHolidayName("");
+    setHolidayType("national");
+    setHolidayMode("day");
+    setHolidayStart("");
+    setHolidayEnd("");
+    setHolidayScope("all");
+    setIsHolidayModalOpen(true);
+  };
+
+  const openEditHoliday = (holiday: OfficialHoliday) => {
+    const range = holidayRange(holiday);
+    setEditingHolidayId(holiday.id);
+    setHolidayName(holiday.name);
+    setHolidayType(holiday.type);
+    setHolidayScope(holiday.levels?.includes("3AS") ? "3AS" : holiday.levels?.length ? "1AS2AS" : "all");
+    setHolidayMode(range && range.start !== range.end ? "range" : "day");
+    setHolidayStart(range?.start || "");
+    setHolidayEnd(range && range.start !== range.end ? range.end : "");
+    setIsHolidayModalOpen(true);
+  };
+
+  const handleSaveHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newHolidayName.trim()) return;
+    const name = holidayName.trim();
+    if (!name || !holidayStart) {
+      showToast("يرجى إدخال اسم العطلة وتحديد تاريخ البداية من المفكرة.", "error");
+      return;
+    }
+    if (holidayMode === "range" && (!holidayEnd || holidayEnd < holidayStart)) {
+      showToast("تاريخ النهاية يجب ألا يسبق البداية.", "error");
+      return;
+    }
+    const endDate =
+      holidayMode === "range" && holidayEnd && holidayEnd > holidayStart
+        ? holidayEnd
+        : undefined;
+    const entry = withDerivedDateStr({
+      id: editingHolidayId || `h-${uuidv4()}`,
+      name,
+      type: holidayType,
+      startDate: holidayStart,
+      endDate,
+      levels: holidayScope === "3AS" ? ["3AS"] : holidayScope === "1AS2AS" ? ["1AS_ARTS", "1AS_SCIENCE", "2AS"] as GradeLevel[] : undefined,
+      provisional: calendarSettings.holidays.find(h => h.id === editingHolidayId)?.provisional,
+      dateStr: "",
+    });
 
-    const newH: OfficialHoliday = {
-      id: `h-${uuidv4()}`,
-      name: newHolidayName.trim(),
-      dateStr: newHolidayDate || "تاريخ محدد",
-      type: newHolidayType,
-    };
-
-    setCalendarSettings((prev) => ({
-      ...prev,
-      holidays: [...prev.holidays, newH],
-    }));
-
-    setNewHolidayName("");
-    setNewHolidayDate("");
-    setIsAddHolidayOpen(false);
+    const nextHolidays = editingHolidayId
+      ? calendarSettings.holidays.map((h) => (h.id === editingHolidayId ? entry : h))
+      : [...calendarSettings.holidays, entry];
+    if (!await commitCalendarSettings({ ...calendarSettings, holidays: nextHolidays })) return;
+    setIsHolidayModalOpen(false);
+    showToast(
+      editingHolidayId
+        ? "تم تعديل اليوم المستثنى وحفظه."
+        : "تمت إضافة اليوم المستثنى؛ سيُستثنى من الحصص آلياً.",
+      "success",
+    );
   };
 
-  const handleDeleteHoliday = (id: string) => {
-    setCalendarSettings((prev) => ({
-      ...prev,
-      holidays: prev.holidays.filter((h) => h.id !== id),
-    }));
+  const handleDeleteHoliday = async (id: string) => {
+    const saved = await commitCalendarSettings({
+      ...calendarSettings,
+      holidays: calendarSettings.holidays.filter((h) => h.id !== id),
+    });
+    if (!saved) return;
     setHolidayToDeleteId(null);
+    showToast("تم حذف اليوم المستثنى من الرزنامة.", "success");
   };
 
   // Sync panel + backup nudge derive everything from pure helpers so the wording rules stay
@@ -214,6 +283,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
   const nudge = backupNudge(reminder?.lastBackupAt, now);
   const nudgeVisible = nudge.prominent && !isBackupNudgeDismissed(reminder?.dismissedAt, now);
   const [resyncBusy, setResyncBusy] = useState(false);
+  const [syncNowBusy, setSyncNowBusy] = useState(false);
 
   const handleBackupRecorded = () => {
     setReminder(recordBackupExported(ownerId));
@@ -225,10 +295,28 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     setNow(Date.now());
   };
 
-  const handleRetryNow = async () => {
-    await retrySync();
-    await refreshSyncStatus();
-    setNow(Date.now());
+  /** "مزامنة الآن": one press = immediate enqueue + flush, with a clear outcome toast. */
+  const handleSyncNow = async () => {
+    setSyncNowBusy(true);
+    try {
+      const result = await syncNow();
+      await refreshSyncStatus();
+      setNow(Date.now());
+      if (result === "synced") {
+        showToast("تمت المزامنة مع الخادم فوراً: لا توجد عمليات متبقية.", "success");
+      } else if (result === "conflict") {
+        showToast("يوجد تعارض معلّق ينتظر قرارك قبل إتمام المزامنة.", "warning");
+      } else if (result === "offline") {
+        showToast("لا يوجد اتصال بالخادم الآن؛ عملياتك محفوظة وستُرفع تلقائياً عند عودة الشبكة.", "warning");
+      } else {
+        showToast("تعذّر إتمام المزامنة كاملة الآن؛ ستُعاد المحاولة تلقائياً.", "error");
+      }
+    } catch (error) {
+      console.error('Immediate sync failed:', error);
+      showToast('تعذّر إتمام المزامنة. لم يُعلن نجاح الرفع؛ احتفظ بالجهاز وأعد المحاولة.', 'error');
+    } finally {
+      setSyncNowBusy(false);
+    }
   };
 
   const handleResyncNow = async () => {
@@ -531,8 +619,8 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               العطل والأيام المستثناة في الجزائر
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              تُستثنى هذه الأيام تلقائياً عند حساب وتوليد الحصص الأسبوعية في
-              جدول التوقيت
+              تُستثنى هذه الأيام تلقائياً من الحصص (لا تُقترح حصة ولا يُطلب توثيقها)،
+              ويمكن تعديل كل يوم أو حذفه أو إضافته بتواريخ محددة (يوم واحد أو فترة).
             </p>
           </div>
 
@@ -544,7 +632,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               <span>استعادة الرزنامة الرسمية</span>
             </button>
             <button
-              onClick={() => setIsAddHolidayOpen(true)}
+              onClick={openAddHoliday}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--primary)] text-white rounded-xl text-xs font-bold hover:bg-[var(--primary-hover)] cursor-pointer shadow-xs">
               <Plus className="w-3.5 h-3.5" />
               <span>إضافة عطلة</span>
@@ -555,15 +643,17 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
         {/* Compact holiday timeline */}
         <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-100">
           {calendarSettings.holidays.map((holiday) => {
+            const isExam = holiday.type === "exam";
             const isNational = holiday.type === "national";
-            const isReligious = holiday.type === "religious";
             const isTerm = holiday.type === "term";
 
             return (
               <div
                 key={holiday.id}
                 className="group flex items-center gap-3 bg-white px-3 py-2.5 text-xs transition-colors hover:bg-slate-50">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                  isExam ? "bg-orange-100 text-orange-700" : "bg-[var(--primary-soft)] text-[var(--primary)]"
+                }`}>
                   <Clock className="h-3.5 w-3.5" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
@@ -571,28 +661,35 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                     <span
                       className={`px-1.5 py-0.2 rounded-md font-semibold text-[10px] ${
-                        isTerm
-                          ? "bg-blue-100 text-navy"
-                          : isNational
-                            ? "bg-[var(--primary-soft)] text-[var(--accent-navy)]"
-                            : "bg-purple-100 text-purple-800"
+                        isExam
+                          ? "bg-orange-100 text-orange-800"
+                          : isTerm
+                            ? "bg-blue-100 text-navy"
+                            : isNational
+                              ? "bg-[var(--primary-soft)] text-[var(--accent-navy)]"
+                              : "bg-purple-100 text-purple-800"
                       }`}>
-                      {isTerm
-                        ? "عطلة فصلية"
-                        : isNational
-                          ? "عطلة وطنية"
-                          : "عطلة دينية"}
+                      {holidayTypeLabel(holiday.type)}
                     </span>
-                    <span>{holiday.dateStr}</span>
+                    <span>{formatHolidayDates(holiday)}</span>
+                    {holiday.provisional && <span className="text-amber-700">تاريخ ديني تقديري قابل للتعديل</span>}
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setHolidayToDeleteId(holiday.id)}
-                  className="p-2 text-slate-300 opacity-0 transition-opacity hover:text-rose-600 group-hover:opacity-100 cursor-pointer"
-                  title="حذف">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditHoliday(holiday)}
+                    className="p-2 text-slate-500 transition-colors hover:text-[var(--primary)] cursor-pointer"
+                    title="تعديل التاريخ أو الاسم">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setHolidayToDeleteId(holiday.id)}
+                    className="p-2 text-slate-500 transition-colors hover:text-rose-600 cursor-pointer"
+                    title="حذف">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -690,7 +787,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 max="5"
                 value={
                   calendarSettings.evaluationRules.unexcusedAbsenceDeduction ??
-                  1.0
+                  0.5
                 }
                 onChange={(e) =>
                   setCalendarSettings((prev) => ({
@@ -705,7 +802,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">
-                افتراضياً 1 نقطة لكل غياب غير مبرر
+                افتراضياً 0.5 نقطة لكل غياب غير مبرر (مثل بقية قواعد الخصم)
               </span>
             </div>
           </div>
@@ -874,11 +971,11 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
 
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => void handleRetryNow()}
-            disabled={pendingCount === 0}
+            onClick={() => void handleSyncNow()}
+            disabled={syncNowBusy}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--primary)] text-white rounded-xl text-xs font-bold transition-opacity shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-            <RefreshCw className="w-4 h-4" />
-            <span>مزامنة الآن</span>
+            <RefreshCw className={`w-4 h-4 ${syncNowBusy ? "animate-spin" : ""}`} />
+            <span>{syncNowBusy ? "جارٍ المزامنة..." : "مزامنة الآن"}</span>
           </button>
           <button
             onClick={() => setShowResyncConfirm(true)}
@@ -1016,39 +1113,28 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
     </section>
   )}
 
-      {/* Add Holiday Modal */}
-      {isAddHolidayOpen && (
+      {/* Add / Edit Holiday Modal */}
+      {isHolidayModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div
             role="dialog"
             aria-modal="true"
             className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200 text-right space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm">إضافة عطلة</h3>
+            <h3 className="font-bold text-slate-900 text-sm">
+              {editingHolidayId ? "تعديل عطلة / يوم مستثنى" : "إضافة عطلة / يوم مستثنى"}
+            </h3>
 
-            <form onSubmit={handleAddHoliday} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveHoliday} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  اسم العطلة
+                  اسم العطلة أو السبب
                 </label>
                 <input
                   type="text"
                   required
-                  value={newHolidayName}
-                  onChange={(e) => setNewHolidayName(e.target.value)}
-                  placeholder="مثال: زيارة بيداغوجية / ندوة تربوية"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  التاريخ / الفترة
-                </label>
-                <input
-                  type="text"
-                  value={newHolidayDate}
-                  onChange={(e) => setNewHolidayDate(e.target.value)}
-                  placeholder="مثال: 15 أفريل 2027"
+                  value={holidayName}
+                  onChange={(e) => setHolidayName(e.target.value)}
+                  placeholder="مثال: اختبارات الفصل الأول / ندوة تربوية"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900"
                 />
               </div>
@@ -1058,30 +1144,94 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                   النوع
                 </label>
                 <select
-                  value={newHolidayType}
-                  onChange={(e) =>
-                    setNewHolidayType(
-                      e.target.value as "national" | "religious" | "term",
-                    )
-                  }
+                  value={holidayType}
+                  onChange={(e) => setHolidayType(e.target.value as HolidayType)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900">
-                  <option value="national">عطلة وطنية</option>
-                  <option value="religious">عطلة دينية</option>
+                  <option value="national">مناسبة وطنية</option>
+                  <option value="religious">مناسبة دينية</option>
                   <option value="term">عطلة فصلية / مدرسية</option>
+                  <option value="exam">أيام اختبارات / فروض</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">الأقسام المعنية</label>
+                <select value={holidayScope} onChange={e => setHolidayScope(e.target.value as typeof holidayScope)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-slate-900">
+                  <option value="all">جميع المستويات</option>
+                  <option value="3AS">السنة الثالثة ثانوي فقط</option>
+                  <option value="1AS2AS">السنتان الأولى والثانية ثانوي</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  التحديد من المفكرة (calendar)
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setHolidayMode("day")}
+                    className={`min-h-9 px-2 rounded-lg font-bold transition-colors cursor-pointer ${
+                      holidayMode === "day"
+                        ? "bg-[var(--primary)] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}>
+                    يوم واحد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHolidayMode("range")}
+                    className={`min-h-9 px-2 rounded-lg font-bold transition-colors cursor-pointer ${
+                      holidayMode === "range"
+                        ? "bg-[var(--primary)] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}>
+                    فترة (من - إلى)
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block mb-0.5">
+                      {holidayMode === "day" ? "تاريخ اليوم" : "من تاريخ"}
+                    </span>
+                    <input
+                      type="date"
+                      required
+                      value={holidayStart}
+                      onChange={(e) => setHolidayStart(e.target.value)}
+                      className="w-full px-2 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-mono"
+                    />
+                  </div>
+                  {holidayMode === "range" && (
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">إلى تاريخ</span>
+                      <input
+                        type="date"
+                        required
+                        min={holidayStart || undefined}
+                        value={holidayEnd}
+                        onChange={(e) => setHolidayEnd(e.target.value)}
+                        className="w-full px-2 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                  تُستثنى هذه الأيام آلياً من الحصص: لا تُقترح حصة في دفتر النصوص ولا في
+                  حصص اليوم، ويمكن توثيقها كحصة ملغاة بالسبب نفسه.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddHolidayOpen(false)}
+                  onClick={() => setIsHolidayModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-bold cursor-pointer">
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-[var(--primary)] text-white font-bold rounded-xl hover:bg-[var(--primary-hover)] cursor-pointer">
-                  إضافة
+                  {editingHolidayId ? "حفظ التعديل" : "إضافة"}
                 </button>
               </div>
             </form>

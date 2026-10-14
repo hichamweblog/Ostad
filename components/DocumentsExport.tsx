@@ -2,12 +2,14 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
+import { exportToDocx } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import { AppState } from '@/lib/storage';
 import { SessionRecord } from '@/lib/types';
 import { getMergedCurriculumUnits } from '@/lib/curriculum-data';
 import { calculateCouncilStatistics, calculateStudentAverage } from '@/lib/grade-calculator';
 import { getDefaultEstimation } from '@/lib/pedagogical-evaluations';
+import { isSessionDocumented } from '@/lib/session-flow';
 import Link from 'next/link';
 import {
   FileText,
@@ -44,14 +46,15 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
 
-  const isSessionDocumented = (session: SessionRecord): boolean => {
-    return Boolean(
-      session.unitId ||
-      session.customTopic?.trim() ||
-      session.accomplishments?.trim() ||
-      session.notes?.trim() ||
-      session.summary?.trim()
-    );
+  const isSessionCancelled = (session: SessionRecord): boolean =>
+    session.sessionStatus === 'CANCELLED';
+
+  /** A cancelled session keeps its scheduled topic but is labelled as cancelled in the export. */
+  const sessionTitleForDoc = (session: SessionRecord, unitTitle?: string): string => {
+    if (!isSessionCancelled(session)) return unitTitle || session.customTopic || 'حصة عادية';
+    const reason = session.cancellationReason?.trim();
+    if (unitTitle) return `حصة ملغاة${reason ? ` (${reason})` : ''} — ${unitTitle}`;
+    return session.customTopic?.trim() || `حصة ملغاة${reason ? ` (${reason})` : ''}`;
   };
 
   const classPastSessions = useMemo(() => {
@@ -115,10 +118,8 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     showToast('المشاركة غير متاحة على هذا الجهاز. استخدم تصدير الوثيقة إلى doc.', 'warning');
   };
 
-  // Export to Microsoft Word document (.doc)
-  // Table cells are arranged in Left-to-Right DOM order so that in ONLYOFFICE/Word
-  // which renders table columns from Left to Right, the visual flow is strictly Right-to-Left (RTL):
-  // Rightmost column is Column 1 (الرقم / التاريخ), Leftmost column is the final column (الغياب / الإرشادات).
+  // Export to Microsoft Word document (.docx)
+  // OOXML uses bidiVisual for tables: the first logical column is rendered on the right.
   const handleExportDoc = () => {
     const docTitle = getDocTitle();
     const className = activeClass?.name || 'فوج';
@@ -152,7 +153,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                             <b>${ses.date}</b><br/>
                             <small>${ses.startTime} - ${ses.endTime}</small>
                           </td>
-                          <td style="border: 1px solid #000; padding: 5px; text-align: right;"><b>${unit ? unit.title : ses.customTopic || 'حصة عادية'}</b></td>
+                          <td style="border: 1px solid #000; padding: 5px; text-align: right;"><b>${sessionTitleForDoc(ses, unit?.title)}</b></td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.accomplishments || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${ses.nextSteps || '-'}</td>
                           <td style="border: 1px solid #000; padding: 5px; text-align: right; white-space: pre-wrap;">${getSessionNotes(ses) || '-'}</td>
@@ -412,16 +413,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       ${'</html>'}
     `;
 
-    const blob = new Blob(['\ufeff' + wordHtml], {
-      type: 'application/msword;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    exportToDocx(
+      wordHtml,
+      `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}`,
+    );
   };
 
   return (
@@ -553,7 +548,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             className="w-full flex justify-center items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md active:scale-95 transition-all"
           >
             <Download className="w-4 h-4" />
-            <span>تحميل مباشر (.doc)</span>
+            <span>تحميل مباشر (.docx)</span>
           </button>
         </div>
       </div>
@@ -594,9 +589,14 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                   <article key={session.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 shadow-xs">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs font-black text-[var(--text-primary)]">{unit?.title || session.customTopic || 'حصة عادية'}</div>
+                        <div className="text-xs font-black text-[var(--text-primary)]">{sessionTitleForDoc(session, unit?.title)}</div>
                         <div className="mt-1 text-[11px] font-semibold text-[var(--text-tertiary)]">{session.date} • {session.startTime} - {session.endTime}</div>
                       </div>
+                      {isSessionCancelled(session) && (
+                        <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                          ملغاة
+                        </span>
+                      )}
                     </div>
                     <div className="mt-2 space-y-1 text-xs leading-6 text-[var(--text-secondary)]">
                       <p><strong>المنجز:</strong> {session.accomplishments || '—'}</p>
@@ -636,7 +636,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                             <div className="text-[9px] text-slate-600">{ses.startTime} – {ses.endTime}</div>
                           </td>
                           <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-xs'}`}>
-                            {unit ? unit.title : ses.customTopic || 'حصة عادية'}
+                            {sessionTitleForDoc(ses, unit?.title)}
                           </td>
                           <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
                             {ses.accomplishments || '-'}

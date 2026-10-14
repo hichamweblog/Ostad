@@ -1,8 +1,9 @@
 import { CurriculumUnit, TeacherProfile } from './types';
+import { exportToDocx } from './utils';
 import { OFFICIAL_LEVELS } from './curriculum-data';
 
 /**
- * Generates and downloads a rich, beautifully formatted Microsoft Word (.doc) document
+ * Generates and downloads a rich, beautifully formatted Microsoft Word (.docx) document
  * compliant with the Algerian Ministry of National Education pedagogical standards.
  */
 
@@ -281,21 +282,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
 </html>
 `;
 
-  // Create Word document Blob
-  const blob = new Blob(['\ufeff' + htmlContent], {
-    type: 'application/msword;charset=utf-8'
-  });
-
-  // Generate clean filename
+  // Generate clean filename and package a real .docx (A4, RTL)
   const cleanTitle = unit.title.replace(/[\/\\:*?"<>|]/g, '-').trim();
-  const fileName = `مذكرة_${cleanTitle}_${unit.level}.doc`;
-
-  // Trigger download
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(link.href);
+  exportToDocx(htmlContent, `مذكرة_${cleanTitle}_${unit.level}`);
 }

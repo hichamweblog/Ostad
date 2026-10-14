@@ -148,9 +148,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     );
     if (progress?.status) return progress.status;
 
-    // Automatically recognize as completed if documented in the notebook
+    // Automatically recognize as completed if documented in the notebook (excluding cancelled sessions)
     const isDocumentedInSessions = state.sessions.some(
-      s => s.classId === state.activeClassId && s.unitId === unitId && (s.accomplishments || s.notes || s.sessionGoals)
+      s =>
+        s.classId === state.activeClassId &&
+        s.unitId === unitId &&
+        s.sessionStatus !== 'CANCELLED' &&
+        (s.accomplishments || s.notes || s.sessionGoals)
     );
     if (isDocumentedInSessions) return 'COMPLETED';
 

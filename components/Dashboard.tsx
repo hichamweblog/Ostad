@@ -4,7 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AppState, exportBackupJSON, isDemoState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
-import { resolveOrCreateSession } from '@/lib/session-flow';
+import { resolveOrCreateSession, isSessionDocumented } from '@/lib/session-flow';
+import {
+  addDaysIso,
+  getExcludedDayLabel,
+  isDateExcluded,
+  isoWeekday,
+} from '@/lib/academic-calendar';
 import { SanadTab } from './SidebarSanad';
 import { OFFICIAL_CURRICULUM } from '@/lib/curriculum-data';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -115,18 +121,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
     'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر' ];
   const dateFormatted = `${dayNames[now.getDay()]}، ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
-  // Today's slots (only on school days Sunday..Thursday)
-  const todaySlots = isWeekend
+  // Days covered by the official calendar (holidays, breaks, examinations) are excluded
+  // from teaching sessions automatically — no slot is proposed and nothing nags to document.
+  const todayIso = getLocalDateString();
+  const todayExclusion = getExcludedDayLabel(state.calendarSettings?.holidays.filter(h => !h.levels?.length), todayIso);
+
+  // Today's slots (only on school days Sunday..Thursday, never on excluded days)
+  const todaySlots = isWeekend || todayExclusion
     ? []
     : state.timetable
-        .filter(slot => slot.dayOfWeek === rawDay)
+        .filter(slot => slot.dayOfWeek === rawDay && !isDateExcluded(state.calendarSettings?.holidays, todayIso, state.classes.find(c => c.id === slot.classId)?.level))
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
     now.getMinutes()
   ).padStart(2, '0')}`;
 
-  const activeSlot = isWeekend
+  const activeSlot = isWeekend || todayExclusion
     ? null
     : (todaySlots.find(s => s.startTime <= currentTimeStr && currentTimeStr < s.endTime) ??
        todaySlots.find(s => s.startTime > currentTimeStr) ??
@@ -136,11 +147,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Next upcoming slot (for weekend or when today's classes finish)
   const nextUpcoming = (() => {
     if (state.timetable.length === 0) return null;
-    for (let offset = 1; offset <= 7; offset++) {
-      const targetDay = (rawDay + offset) % 7;
-      if (targetDay === 5 || targetDay === 6) continue; // Skip weekend
+    for (let offset = 1; offset <= 60; offset++) {
+      const targetIsoDate = addDaysIso(todayIso, offset);
+      const targetDay = isoWeekday(targetIsoDate);
+      if (targetDay === null || targetDay === 5 || targetDay === 6) continue; // Skip weekend
       const daySlots = state.timetable
-        .filter(s => s.dayOfWeek === targetDay)
+        .filter(s => s.dayOfWeek === targetDay && !isDateExcluded(state.calendarSettings?.holidays, targetIsoDate, state.classes.find(c => c.id === s.classId)?.level))
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
       if (daySlots.length > 0) {
         const slot = daySlots[0];
@@ -335,6 +347,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <h2 id="dashboard-today-title" className="text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
                 {isFriday ? `جمعة مباركة، ${teacherTitle}` :
                  isSaturday ? `عطلة نهاية أسبوع طيبة، ${teacherTitle}` :
+                 todayExclusion ? 'يوم مستثنى من الحصص' :
                  activeSlot ? 'جاهز لحصة اليوم؟' :
                  `أهلاً بك، ${teacherTitle}`}
               </h2>
@@ -347,6 +360,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   nextUpcoming
                     ? `عطلة نهاية أسبوع مريحة. لا توجد حصص دراسية اليوم؛ تبدأ الدراسة غداً ${nextUpcoming.dayName} مع قسم ${nextUpcoming.classRoom?.name || 'القسم'} (${nextUpcoming.slot.startTime} - ${nextUpcoming.slot.endTime}).`
                     : 'عطلة نهاية أسبوع مريحة. لا توجد حصص مبرمجة اليوم، استعد للأسبوع القادم بمراجعة التحاضير والمذكرات.'
+                ) : todayExclusion ? (
+                  `اليوم مستثنى آلياً من الحصص: ${todayExclusion}. لا تُطلب أي توثيقات لهذا اليوم، وإن أردت ترك أثر رسمي يمكنك توثيق حصة ملغاة بالسبب نفسه من دفتر النصوص.`
                 ) : activeSlot ? (
                   `الحصة ${activeSlotClass?.name || 'القادمة'} من ${activeSlot.startTime} إلى ${activeSlot.endTime}. يمكنك بدء الحضور ثم متابعة دفتر النصوص مباشرة.`
                 ) : (
@@ -355,7 +370,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {isWeekend ? (
+              {isWeekend || todayExclusion ? (
                 <>
                   <button
                     type="button"
@@ -777,9 +792,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <div className="divide-y divide-[var(--border-subtle)] text-xs">
               {(() => {
-                const documentedSessions = state.sessions.filter(ses =>
-                  Boolean(ses.unitId || ses.customTopic?.trim() || ses.accomplishments?.trim() || ses.notes?.trim() || ses.summary?.trim())
-                );
+                const documentedSessions = state.sessions.filter(isSessionDocumented);
                 if (documentedSessions.length === 0) {
                   return (
                     <p className="text-xs text-[var(--text-secondary)] py-4 text-center">لم يتم تسجيل حصص بعد في الدفتر اليومي.</p>
@@ -787,14 +800,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }
                 return documentedSessions.slice(0, 3).map(ses => {
                   const cls = state.classes.find(c => c.id === ses.classId);
+                  const isCancelled = ses.sessionStatus === 'CANCELLED';
                   return (
                     <div key={ses.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
                       <div>
                         <div className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
                         <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
                       </div>
-                      <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full shrink-0">
-                        موثقة
+                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                        isCancelled
+                          ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                          : 'text-[var(--primary)] bg-[var(--primary-soft)]'
+                      }`}>
+                        {isCancelled ? 'ملغاة' : 'موثقة'}
                       </span>
                     </div>
                   );
@@ -935,9 +953,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {todaySlots.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  {isWeekend
-                    ? `اليوم ${dayNames[now.getDay()]} عطلة نهاية الأسبوع؛ لا توجد حصص دراسية مبرمجة.`
-                    : `لا توجد حصص مبرمجة ليوم ${dayNames[now.getDay()]} في جدول التوقيت الأسبوعي.`}
+                  {todayExclusion
+                    ? `اليوم مستثنى آلياً من الحصص: ${todayExclusion}. لا توجد حصة واجبة التوثيق.`
+                    : isWeekend
+                      ? `اليوم ${dayNames[now.getDay()]} عطلة نهاية الأسبوع؛ لا توجد حصص دراسية مبرمجة.`
+                      : `لا توجد حصص مبرمجة ليوم ${dayNames[now.getDay()]} في جدول التوقيت الأسبوعي.`}
                 </div>
               ) : (
                 todaySlots.map((slot, idx) => {
