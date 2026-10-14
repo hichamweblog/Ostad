@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
+import { exportToDocx } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
 import { AppState } from '@/lib/storage';
 import { SessionRecord } from '@/lib/types';
@@ -117,10 +118,8 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     showToast('المشاركة غير متاحة على هذا الجهاز. استخدم تصدير الوثيقة إلى doc.', 'warning');
   };
 
-  // Export to Microsoft Word document (.doc)
-  // Table cells are arranged in Left-to-Right DOM order so that in ONLYOFFICE/Word
-  // which renders table columns from Left to Right, the visual flow is strictly Right-to-Left (RTL):
-  // Rightmost column is Column 1 (الرقم / التاريخ), Leftmost column is the final column (الغياب / الإرشادات).
+  // Export to Microsoft Word document (.docx)
+  // OOXML uses bidiVisual for tables: the first logical column is rendered on the right.
   const handleExportDoc = () => {
     const docTitle = getDocTitle();
     const className = activeClass?.name || 'فوج';
@@ -414,16 +413,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       ${'</html>'}
     `;
 
-    const blob = new Blob(['\ufeff' + wordHtml], {
-      type: 'application/msword;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    exportToDocx(
+      wordHtml,
+      `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}`,
+    );
   };
 
   return (
@@ -555,7 +548,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             className="w-full flex justify-center items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md active:scale-95 transition-all"
           >
             <Download className="w-4 h-4" />
-            <span>تحميل مباشر (.doc)</span>
+            <span>تحميل مباشر (.docx)</span>
           </button>
         </div>
       </div>

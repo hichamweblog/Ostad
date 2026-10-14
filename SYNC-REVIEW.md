@@ -768,3 +768,40 @@ requirement, **F** is the logout contract (outbox survives, cache does not).
 - The tests that do exist are meaningful (delta computation, tombstones, cache isolation, conflict
   guards) — they just do not cover the hook's lifecycle or two-device behaviour yet.
 - `STATE-INVENTORY.md` as a practice is excellent; it only needs to stay true to the code.
+
+
+## Phase 6 — final follow-up review (2026-10-14)
+
+### Delivered
+
+1. Exactly three professional-rank choices: أستاذ قسم أول، أستاذ قسم ثان، أستاذ مميز.
+2. Editable/deletable calendar exclusions, using native date pickers for a single day or an inclusive range. Dates are persisted through the existing settings outbox, not a new local store. Mobile edit/delete actions are always visible.
+3. The supplied 2026/2027 secondary calendar is encoded in `lib/academic-calendar.ts`. Exam scope distinguishes third-year mock baccalaureate (May 9–13) from first-/second-year third-term tests (May 23–27). March tests are split into 2–4 and 7–8. Religious dates are marked provisional and remain editable.
+4. Dashboard, mobile start actions and attendance-session generation skip exclusions. Notebook dates show the reason and can be documented as cancelled. Historical documentation is never deleted because a holiday is added. The old 24-session inner-loop cap was corrected to match the existing 100-session safety cap.
+5. First-year orientation sessions use `sessionKind: orientation`, no unit id, and the title «تقديم توجيهات عامة + تقديم البرنامج». They never create curriculum progress.
+6. Unexcused absence default deduction is 0.5. Unmodified legacy defaults can migrate, but existing custom settings and previously recorded marks are not rewritten.
+7. Manual sync cancels the debounce delay, durably enqueues the latest state, force-retries backoff entries, waits for an active flush, and downloads other-device changes without clobbering a newer local edit. Auth checks on a forced retry bypass the short-lived auth cache. Success is not inferred from an empty queue after a failed flush.
+8. Genuine zipped OOXML `.docx` for every Word export: A4 portrait/landscape, RTL sections/paragraphs/tables, cell spans, repeated table headings, nested identity tables and embedded avatar images. JSON backups and PDF archives retain their data/archive formats.
+
+### Additional data-safety fixes found in this review
+
+- New outbox entries are written **before** pruning superseded older entries. An IndexedDB quota/write failure cannot destroy the previous durable grade. Concurrent enqueue operations are serialized per owner.
+- The hook advances its delta baseline only after durable enqueue succeeds. Explicit save, background save, backgrounding, manual sync and pre-sign-out flush share this baseline contract.
+- Grade uploads never use the missing-column fallback. A server-schema mismatch must reject the whole grade operation; it cannot silently discard a mark and then remove the queue entry. Invalid numeric values are rejected, not clamped into a different acknowledged mark. Zero and null remain distinct.
+- Natural-key grade lookup errors are not ignored.
+- Avatar or memorandum failures no longer block grade uploads. Overall sync still reports the file failure.
+- Online retry and manual refresh share the guarded merge path. A pending local edit made during download prevents application of that stale response.
+
+### Verification and limits
+
+- `npm ci`, `npx tsc --noEmit`, `npm run lint`, `npm run test`: **284/284** tests in 18 files.
+- `npm run build`: success with `NEXT_FONT_GOOGLE_MOCKED_RESPONSES=/tmp/fontmock/mock.cjs` locally (Google Fonts blocked by sandbox egress; the mock is outside Git).
+- Export bytes were unzipped and each XML part parsed with a separate XML parser; `python-docx` accepted the document, A4 210×297 mm, its nested table and embedded photo. This is structural verification, not a claim of a visual print test in Word/OnlyOffice on the teacher's device.
+- The actual production teacher account and two-device live Supabase end-to-end scenario were **not** accessed/tested. Tests cover the real queue/flush/load seams with controlled clients. A live acceptance check after deployment remains recommended.
+- Clearing browser data while offline still destroys unuploaded IndexedDB operations: no client-side fix can restore bytes intentionally erased before server acknowledgement. Use «مزامنة الآن» and confirm no pending operations before clearing storage/signing out; export JSON as an additional backup.
+
+### Dependency review
+
+- Updated Next.js, SWC and eslint-config-next from 16.3.5 to **16.3.8**, DOMPurify to **3.4.17**; ran non-forced `npm audit fix` for compatible dependency patches. `shadcn` is a developer CLI and moved to devDependencies, with no runtime imports.
+- `npm audit --omit=dev` decreased from **19 dependency entries (2 critical)** to **1 high entry, 0 critical**: `xlsx` (SheetJS prototype-pollution / ReDoS advisories, no npm fix). This remaining runtime dependency requires a separately tested parser migration rather than a forced replacement during a data-safety patch.
+- Full development-toolchain audit still reports **22 entries (6 moderate, 16 high, 0 critical)**, primarily CLI/build tooling. They are not hidden or described as resolved; some proposed npm fixes involve breaking downgrades/replacements and were not force-applied.

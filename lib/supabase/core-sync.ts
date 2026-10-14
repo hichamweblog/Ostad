@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getEmptyState, isDemoState, type AppState } from '@/lib/storage';
+import { getEmptyState, isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from '@/lib/storage';
+import { normalizeCalendarSettings } from '@/lib/academic-calendar';
 import type { ClassLessonProgress, ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
 import type { Database } from './database.types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
@@ -122,11 +123,14 @@ async function upsertWithColumnFallback(
   };
 
   let lastResult = await send({ ...row });
+  // Grades must be acknowledged in full. Never silently discard any mark or evaluation
+  // field because a deployed schema is behind: keep the operation pending instead.
+  if (table === 'grades') return lastResult;
   for (let attempt = 0; attempt < 8 && lastResult?.error && isMissingColumnError(lastResult.error); attempt++) {
     const named = extractMissingColumn(lastResult.error);
-    const column = named && named in row && !dropped.has(named)
+    const column = named && OPTIONAL_FALLBACK_COLUMNS.some(col => col === named) && named in row && !dropped.has(named)
       ? named
-      : OPTIONAL_FALLBACK_COLUMNS.find((col) => col in row && !dropped.has(col));
+      : !named ? OPTIONAL_FALLBACK_COLUMNS.find((col) => col in row && !dropped.has(col)) : undefined;
     if (!column) return lastResult;
     dropped.add(column);
 
@@ -187,11 +191,13 @@ function toRow(entity: SyncEntity, payload: any, ownerId: string, workspace: str
     case 'grade': {
       const clamp = (val: any, min: number, max: number): number | null => {
         if (val === null || val === undefined || val === '') return null;
-        const n = Number(val);
-        if (isNaN(n)) return null;
-        return Math.min(Math.max(n, min), max);
+        if (typeof val !== 'number' || !Number.isFinite(val) || val < min || val > max) {
+          throw new Error('قيمة نقطة غير صالحة؛ أُوقف الرفع حفاظاً على السجل الأصلي.');
+        }
+        return val;
       };
-      const trimester = Math.min(Math.max(Number(payload.trimester) || 1, 1), 3);
+      const trimester = payload.trimester;
+      if (![1, 2, 3].includes(trimester)) throw new Error('الفصل الدراسي للنقطة غير صالح.');
       return {
         ...base,
         student_id: studentId(payload.studentId),
@@ -569,6 +575,12 @@ export async function loadCoreState(
       activeClassId,
       cloudRevision: maxRevision,
     };
+    // Phase 6 migration: normalise the calendar settings (official dated holidays and the
+    // 0.5 unexcused-absence deduction) on every cloud load, whatever the stored jsonb holds.
+    mergedState.calendarSettings = normalizeCalendarSettings(
+      mergedState.calendarSettings,
+      DEFAULT_CALENDAR_SETTINGS,
+    );
 
     if (!options.outboxEntries?.length) return mergedState;
 
@@ -594,6 +606,7 @@ export async function loadCoreState(
 
     return {
       ...replayed,
+      calendarSettings: normalizeCalendarSettings(replayed.calendarSettings, DEFAULT_CALENDAR_SETTINGS),
       // Re-apply the relational filter: a replayed child must never outlive its class.
       students: refilter(replayed.students),
       grades: refilter(replayed.grades),
@@ -715,6 +728,7 @@ async function applyOperationOnce(client: AnyClient, ownerId: string, workspace:
         .eq('student_id', row.student_id)
         .eq('trimester', row.trimester)
         .maybeSingle();
+      if (existingGrade.error) throw existingGrade.error;
       if (existingGrade.data?.id && existingGrade.data.id !== recordId) {
         recordId = existingGrade.data.id;
         row.id = existingGrade.data.id;

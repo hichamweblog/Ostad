@@ -1,5 +1,14 @@
 import { get, set, keys, del } from 'idb-keyval';
-import { getEmptyState, isDemoState, type AppState } from './storage';
+import { getEmptyState, isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from './storage';
+import { normalizeCalendarSettings } from './academic-calendar';
+
+/** Applies the calendar-settings migration to a state read straight from the cache. */
+function withNormalizedCalendar(state: AppState): AppState {
+  return {
+    ...state,
+    calendarSettings: normalizeCalendarSettings(state.calendarSettings, DEFAULT_CALENDAR_SETTINGS),
+  };
+}
 
 export const LEGACY_CACHE_KEY = 'sanad:app-state:v3';
 
@@ -74,7 +83,7 @@ export async function loadAppStateCache(userId?: string | null): Promise<AppStat
   try {
     const key = getCacheKey(userId);
     const cached = await get<AppState>(key);
-    if (cached) return cached;
+    if (cached) return withNormalizedCalendar(cached);
 
     // Backward-compatibility fallback: read legacy v3 key once if migrating
     const legacy = await get<AppState>(LEGACY_CACHE_KEY);
@@ -83,7 +92,7 @@ export async function loadAppStateCache(userId?: string | null): Promise<AppStat
         await set(key, legacy);
         await del(LEGACY_CACHE_KEY);
       }
-      return legacy;
+      return withNormalizedCalendar(legacy);
     }
     return null;
   } catch (error) {

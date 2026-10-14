@@ -425,38 +425,47 @@ export async function enqueueSyncDelta(
   return enqueueSyncOperations(ownerId, operations, revision, updatedAt);
 }
 
-export async function enqueueSyncOperations(
+// Serialize writes per teacher so two quick edits cannot prune each other's newest work.
+const enqueueTails = new Map<string, Promise<unknown>>();
+
+export function enqueueSyncOperations(
   ownerId: string,
   operations: SyncOperation[],
   revision: number,
   updatedAt: string,
   options: { allowTombstoneOverride?: boolean } = {},
 ): Promise<string> {
-  if (operations.length > 0) {
-    const supersededRecordKeys = new Set(
-      operations.map((op) => `${op.entity}:${op.recordId}`),
-    );
+  const previous = enqueueTails.get(ownerId) ?? Promise.resolve();
+  const write = previous.catch(() => undefined).then(async () => {
     const existingEntries = await listSyncOutbox(ownerId);
-    for (const existing of existingEntries) {
-      if (existing.operations.length === 0) continue;
-      const remaining = existing.operations.filter(
-        (op) => !supersededRecordKeys.has(`${op.entity}:${op.recordId}`),
-      );
-      if (remaining.length === 0) {
-        await del(outboxKey(existing.id));
-      } else if (remaining.length !== existing.operations.length) {
-        await set(outboxKey(existing.id), { ...existing, operations: remaining });
+    const id = `${ownerId}:${getSyncDeviceId()}:${revision}:${updatedAt}:${globalThis.crypto.randomUUID()}`;
+    // Persist first. If storage is full or fails, the earlier durable copy is untouched.
+    await set(outboxKey(id), {
+      id, ownerId, revision, updatedAt, operations, createdAt: new Date().toISOString(),
+      attempts: 0, nextAttemptAt: new Date().toISOString(),
+      allowTombstoneOverride: options.allowTombstoneOverride ?? false,
+    } satisfies SyncOutboxEntry);
+    const supersededRecordKeys = new Set(operations.map(op => `${op.entity}:${op.recordId}`));
+    // Pruning is an optimisation only. Its failure must never turn a successful write into
+    // a failed enqueue; both copies are safe and the next boot compacts the queue again.
+    try {
+      for (const existing of existingEntries) {
+        const remaining = existing.operations.filter(op => !supersededRecordKeys.has(`${op.entity}:${op.recordId}`));
+        if (!remaining.length) await del(outboxKey(existing.id));
+        else if (remaining.length !== existing.operations.length) {
+          await set(outboxKey(existing.id), { ...existing, operations: remaining });
+        }
       }
+    } catch (error) {
+      console.warn('Outbox compaction deferred; newest operation is durable:', error);
     }
-  }
-
-  const id = `${ownerId}:${getSyncDeviceId()}:${revision}:${updatedAt}`;
-  await set(outboxKey(id), {
-    id, ownerId, revision, updatedAt, operations, createdAt: new Date().toISOString(),
-    attempts: 0, nextAttemptAt: new Date().toISOString(),
-    allowTombstoneOverride: options.allowTombstoneOverride ?? false,
-  } satisfies SyncOutboxEntry);
-  return id;
+    return id;
+  });
+  enqueueTails.set(ownerId, write);
+  void write.finally(() => {
+    if (enqueueTails.get(ownerId) === write) enqueueTails.delete(ownerId);
+  }).catch(() => undefined);
+  return write;
 }
 
 /**

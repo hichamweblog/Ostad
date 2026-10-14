@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import DOMPurify from 'dompurify';
+import { exportHtmlToDocx } from './docx-exporter';
+import { showToast } from '@/components/Toast';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -64,22 +66,16 @@ export function sanitizeExportColors(htmlContent: string): string {
   });
 }
 
-export function exportToDoc(htmlContent: string, filename: string, options?: ExportToDocOptions) {
-  const page = options?.landscape
-    ? '@page Section1 { size: 841.9pt 595.3pt; mso-page-orientation: landscape; margin: 0.45cm 0.55cm; }'
-    : '@page Section1 { size: 595.3pt 841.9pt; margin: 0.45cm 0.6cm; }';
-  const title = DOMPurify.sanitize(options?.title || filename);
-  const sanitizedContent = sanitizeExportColors(DOMPurify.sanitize(htmlContent));
-  const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>${title}</title><style>${page} body{font-family:Amiri,Arial,sans-serif;direction:rtl}table{border-collapse:collapse;width:100%}td,th{border:1px solid lightgray;padding:4px;vertical-align:top}</style></head><body><div class="Section1">${sanitizedContent}</div></body></html>`;
-  const blob = new Blob([`\ufeff${html}`], { type: 'application/msword;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${filename}.doc`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+/**
+ * Phase 6: every Word export in the app produces a real .docx (OOXML) file — A4 paper,
+ * right-to-left — instead of the legacy HTML-renamed .doc.
+ */
+export function exportToDocx(htmlContent: string, filename: string, options?: ExportToDocOptions) {
+  const sanitizedContent = DOMPurify.sanitize(htmlContent);
+  void exportHtmlToDocx(sanitizedContent, filename, {
+    landscape: options?.landscape,
+    title: options?.title || filename,
+  }).catch(error => showToast(error instanceof Error ? error.message : 'تعذر تصدير الوثيقة.', 'error'));
 }
 
 export function triggerHapticFeedback() {

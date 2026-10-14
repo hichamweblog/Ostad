@@ -12,6 +12,10 @@ import {
   TeacherProfile,
   TimetableSlot,
 } from "./types";
+import {
+  OFFICIAL_HOLIDAYS_2026_2027,
+  normalizeCalendarSettings,
+} from "./academic-calendar";
 
 export interface LastWorkspace {
   route: 'attendance' | 'sessions' | 'grades';
@@ -128,11 +132,6 @@ function normalizeImportedState(value: unknown): AppState {
   const defaults = getInitialState();
   const defaultCalendarSettings =
     defaults.calendarSettings ?? DEFAULT_CALENDAR_SETTINGS;
-  const importedCalendar: Record<string, unknown> = isRecord(
-    value.calendarSettings,
-  )
-    ? value.calendarSettings
-    : {};
   return {
     ...defaults,
     ...value,
@@ -148,24 +147,12 @@ function normalizeImportedState(value: unknown): AppState {
     lessonProgress: value.lessonProgress,
     customUnits: value.customUnits,
     lessonPlans: value.lessonPlans,
-    calendarSettings: isRecord(value.calendarSettings)
-      ? {
-          ...defaultCalendarSettings,
-          ...importedCalendar,
-          evaluationRules: {
-            ...defaultCalendarSettings.evaluationRules,
-            ...(isRecord(importedCalendar.evaluationRules)
-              ? importedCalendar.evaluationRules
-              : {}),
-          },
-          timetableSettings: {
-            ...defaultCalendarSettings.timetableSettings,
-            ...(isRecord(importedCalendar.timetableSettings)
-              ? importedCalendar.timetableSettings
-              : {}),
-          },
-        }
-      : defaultCalendarSettings,
+    calendarSettings: normalizeCalendarSettings(
+      isRecord(value.calendarSettings)
+        ? (value.calendarSettings as unknown as AcademicCalendarSettings)
+        : undefined,
+      defaultCalendarSettings,
+    ),
   };
 }
 
@@ -178,67 +165,7 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     term3Start: "2027-03-16",
     term3End: "2027-06-30",
   },
-  holidays: [
-    { id: "h-1", name: "عطلة الشتاء", dateStr: "عطلة فصلية", type: "term" },
-    { id: "h-2", name: "عطلة الربيع", dateStr: "عطلة فصلية", type: "term" },
-    {
-      id: "h-3",
-      name: "عيد ثورة أول نوفمبر",
-      dateStr: "01 نوفمبر 2026",
-      type: "national",
-    },
-    {
-      id: "h-4",
-      name: "رأس السنة الميلادية",
-      dateStr: "01 جانفي 2027",
-      type: "national",
-    },
-    {
-      id: "h-5",
-      name: "رأس السنة الأمازيغية (يناير)",
-      dateStr: "12 جانفي 2027",
-      type: "national",
-    },
-    {
-      id: "h-6",
-      name: "عيد الفطر",
-      dateStr: "10 مارس 2027",
-      type: "religious",
-    },
-    {
-      id: "h-7",
-      name: "عيد الفطر — اليوم الثاني",
-      dateStr: "11 مارس 2027",
-      type: "religious",
-    },
-    { id: "h-8", name: "عيد النصر", dateStr: "19 مارس 2027", type: "national" },
-    { id: "h-9", name: "عيد العمال", dateStr: "01 ماي 2027", type: "national" },
-    {
-      id: "h-10",
-      name: "عيد الأضحى",
-      dateStr: "17 ماي 2027",
-      type: "religious",
-    },
-    {
-      id: "h-11",
-      name: "عيد الأضحى — اليوم الثاني",
-      dateStr: "18 ماي 2027",
-      type: "religious",
-    },
-    {
-      id: "h-12",
-      name: "رأس السنة الهجرية",
-      dateStr: "06 جوان 2027",
-      type: "religious",
-    },
-    { id: "h-13", name: "عاشوراء", dateStr: "15 جوان 2027", type: "religious" },
-    {
-      id: "h-14",
-      name: "عيد الاستقلال والشباب",
-      dateStr: "05 جويلية 2027",
-      type: "national",
-    },
-  ],
+  holidays: OFFICIAL_HOLIDAYS_2026_2027,
   evaluationRules: {
     behaviorMax: 5,
     attendanceMax: 5,
@@ -246,7 +173,8 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     participationMax: 5,
     disruptionDeduction: 0.5,
     unwrittenLessonDeduction: 0.5,
-    unexcusedAbsenceDeduction: 1.0,
+    // Phase 6: unexcused absence now deducts 0.5 by default, like every other rule.
+    unexcusedAbsenceDeduction: 0.5,
     lateDeduction: 0.5,
     participationBonus: 0.5,
     maxScore: 20,
@@ -267,7 +195,7 @@ export const DEFAULT_PROFILE: TeacherProfile = {
   firstNameEn: "",
   lastNameEn: "",
   email: "",
-  title: "أستاذ التعليم الثانوي • العلوم الإسلامية",
+  title: "أستاذ قسم أول",
   schoolName: "",
   stateName: "",
   academicYear: "2026/2027",

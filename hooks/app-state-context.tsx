@@ -35,6 +35,8 @@ export interface AppStateContextValue {
   syncDeviceId: string | null;
   /** Retries the queued operations now. */
   retrySync: () => Promise<void>;
+  /** Forces an immediate sync: flushes the debounce window and the durable outbox at once. */
+  syncNow: () => Promise<'synced' | 'pending' | 'offline' | 'conflict'>;
   /** Current cloud sync status, used by the sync panel. */
   cloudStatus: CloudSyncStatusLike;
   conflicts: SyncConflictDescriptor[];

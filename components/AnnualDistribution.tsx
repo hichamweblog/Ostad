@@ -8,7 +8,7 @@ import {
 } from "@/lib/curriculum-data";
 import { AppState } from "@/lib/storage";
 import { CurriculumUnit, GradeLevel } from "@/lib/types";
-import { exportToDoc } from "@/lib/utils";
+import { exportToDocx } from "@/lib/utils";
 import { Layers, Printer } from "lucide-react";
 import React, { useEffect, useState } from "react";
 
@@ -385,7 +385,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
       </div>
     `;
 
-    exportToDoc(htmlContent, `التوزيع_السنوي_${selectedLevel}`, {
+    exportToDocx(htmlContent, `التوزيع_السنوي_${selectedLevel}`, {
       landscape: true,
       title: `التوزيع السنوي - ${levelLabel[selectedLevel]}`,
     });
@@ -425,7 +425,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
           className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
           title="تصدير التوزيع السنوي كاملاً إلى ملف وورد منسق وجاهز للطباعة">
           <Printer className="w-4 h-4 text-slate-500" />
-          <span>تصدير إلى ملف doc</span>
+          <span>تصدير إلى ملف docx</span>
         </button>
       </div>
 

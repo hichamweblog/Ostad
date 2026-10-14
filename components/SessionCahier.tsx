@@ -38,17 +38,22 @@ import {
   FileDown,
   Ban
 } from 'lucide-react';
-import { exportToDoc } from '@/lib/utils';
+import { exportToDocx } from '@/lib/utils';
 import {
   CANCELLATION_REASON_PRESETS,
   DEFAULT_CANCELLATION_REASON,
+  ORIENTATION_SESSION_GOALS,
+  ORIENTATION_SESSION_TOPIC,
+  ORIENTATION_SESSION_UNIT_ID,
   SESSION_PART_NUMBERS,
   buildCancellationNote,
   buildSessionTitle,
+  isOrientationSession,
   isSessionDocumented,
   normalizeSessionPart,
   readSessionPart,
 } from '@/lib/session-flow';
+import { getExcludedDayLabel } from '@/lib/academic-calendar';
 
 interface SessionCahierProps {
   initialSessionId?: string;
@@ -167,8 +172,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(initialSessionId || null);
   const [partNumber, setPartNumber] = useState<number>(1);
   const [isUnitCompleted, setIsUnitCompleted] = useState<boolean>(false);
-  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('COMPLETED');
-  const [cancellationReason, setCancellationReason] = useState<string>('');
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>(() => getExcludedDayLabel(state.calendarSettings?.holidays, todayStr, activeClass?.level) ? 'CANCELLED' : 'COMPLETED');
+  const [cancellationReason, setCancellationReason] = useState<string>(() => getExcludedDayLabel(state.calendarSettings?.holidays, todayStr, activeClass?.level) || '');
   const [unifiedNotes, setUnifiedNotes] = useState<string>('');
 
   // Curriculum Extraction Modal State
@@ -189,8 +194,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
         setSessionDate(ses.date);
         setStartTime(ses.startTime || '08:00');
         setEndTime(ses.endTime || '09:00');
-        if (ses.unitId) {
-          setSelectedUnitId(ses.unitId);
+        setSelectedUnitId(isOrientationSession(ses) ? ORIENTATION_SESSION_UNIT_ID : ses.unitId || '');
+        if (isOrientationSession(ses)) {
+          setSelectedUnitId(ORIENTATION_SESSION_UNIT_ID);
         }
         if (ses.sessionStatus === 'CANCELLED') {
           setSessionStatus('CANCELLED');
@@ -232,15 +238,28 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     return nextUnit?.id || '';
   }, [availableUnits, state.lessonProgress, state.activeClassId]);
 
-  const effectiveSelectedUnitId = availableUnits.some(unit => unit.id === selectedUnitId)
-    ? selectedUnitId
-    : (nextSuggestedUnitId || availableUnits[0]?.id || '');
+  const hasPriorDocumentedSession = state.sessions.some(s => s.classId === state.activeClassId && s.id !== editingSessionId && isSessionDocumented(s) && s.date <= sessionDate);
+  const isOrientationSelected = selectedUnitId === ORIENTATION_SESSION_UNIT_ID || (!selectedUnitId && !hasPriorDocumentedSession);
+  const effectiveSelectedUnitId = isOrientationSelected
+    ? ''
+    : availableUnits.some(unit => unit.id === selectedUnitId)
+      ? selectedUnitId
+      : (nextSuggestedUnitId || availableUnits[0]?.id || '');
   const selectedUnitObj = availableUnits.find(u => u.id === effectiveSelectedUnitId);
-  const sessionGoals = selectedUnitObj ? getObjectivesFromUnit(selectedUnitObj) : '';
+  const sessionGoals = isOrientationSelected
+    ? ORIENTATION_SESSION_GOALS
+    : selectedUnitObj
+      ? getObjectivesFromUnit(selectedUnitObj)
+      : '';
+
+  // Days covered by the official calendar (holidays / examinations) are excluded from
+  // sessions automatically: the form pre-fills a cancelled session carrying the reason.
+  const excludedDayLabel = getExcludedDayLabel(state.calendarSettings?.holidays, sessionDate, activeClass?.level);
 
   // Auto-suggest part number and unit completion status when creating a new session
   useEffect(() => {
     if (editingSessionId) return;
+    if (isOrientationSelected) return;
     if (!effectiveSelectedUnitId || !state.activeClassId) return;
 
     const priorSessions = state.sessions.filter(
@@ -256,10 +275,11 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
 
     const totalHours = selectedUnitObj?.hourlyVolume || 2;
     setIsUnitCompleted(nextPart >= totalHours);
-  }, [effectiveSelectedUnitId, state.activeClassId, editingSessionId, state.sessions, selectedUnitObj?.hourlyVolume]);
+  }, [effectiveSelectedUnitId, state.activeClassId, editingSessionId, state.sessions, selectedUnitObj?.hourlyVolume, isOrientationSelected]);
 
   const handleCancelEdit = () => {
     setEditingSessionId(null);
+    setSelectedUnitId('');
     onClearInitialSession?.();
     setSessionDate(todayStr);
     setStartTime('08:00');
@@ -267,8 +287,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     setUnifiedNotes('');
     setPartNumber(1);
     setIsUnitCompleted(false);
-    setSessionStatus('COMPLETED');
-    setCancellationReason('');
+    const todayReason = getExcludedDayLabel(state.calendarSettings?.holidays, todayStr, activeClass?.level);
+    setSessionStatus(todayReason ? 'CANCELLED' : 'COMPLETED');
+    setCancellationReason(todayReason || '');
   };
 
   // When selected unit changes, fill objectives automatically from curriculum DB
@@ -279,6 +300,18 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const handleSessionDateChange = (date: string) => {
     setSessionDate(date);
     if (!date || !activeClass) return;
+
+    const exclusion = getExcludedDayLabel(state.calendarSettings?.holidays, date, activeClass.level);
+    if (!exclusion && !editingSessionId && cancellationReason === excludedDayLabel) {
+      setSessionStatus('COMPLETED');
+      setCancellationReason('');
+    }
+    if (exclusion && !editingSessionId) {
+      // Excluded days carry no teaching session: document them as cancelled with the reason.
+      setSessionStatus('CANCELLED');
+      setCancellationReason(exclusion);
+      setIsUnitCompleted(false);
+    }
 
     const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
     const linkedSlot = state.timetable
@@ -304,6 +337,10 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       return;
     }
 
+    if (excludedDayLabel && sessionStatus !== 'CANCELLED' && !editingSessionId) {
+      showToast('هذا اليوم مستثنى من الحصص. عدّل الرزنامة إن لزم، أو وثّقه كحصة ملغاة.', 'warning');
+      return;
+    }
     const isCancelled = sessionStatus === 'CANCELLED';
     const effectiveReason = cancellationReason.trim() || DEFAULT_CANCELLATION_REASON;
 
@@ -366,10 +403,12 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       }
     }
 
-    const sessionTitle = buildSessionTitle(selectedUnitObj?.title, partNumber, {
-      cancelled: isCancelled,
-      reason: effectiveReason,
-    });
+    const sessionTitle = isOrientationSelected
+      ? (isCancelled ? buildSessionTitle(ORIENTATION_SESSION_TOPIC, 1, { cancelled: true, reason: effectiveReason }) : ORIENTATION_SESSION_TOPIC)
+      : buildSessionTitle(selectedUnitObj?.title, partNumber, {
+          cancelled: isCancelled,
+          reason: effectiveReason,
+        });
 
     const accomplishmentsToSave = isCancelled
       ? buildCancellationNote(effectiveReason, unifiedNotes)
@@ -383,9 +422,10 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
             if (s.id === existingSession.id) {
               return {
                 ...s,
-                unitId: effectiveSelectedUnitId,
+                unitId: isOrientationSelected ? undefined : effectiveSelectedUnitId,
                 customTopic: sessionTitle,
-                partNumber: isCancelled ? undefined : partNumber,
+                partNumber: isCancelled || isOrientationSelected ? undefined : partNumber,
+                sessionKind: isOrientationSelected ? 'orientation' : undefined,
                 sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
                 cancellationReason: isCancelled ? effectiveReason : undefined,
                 date: sessionDate,
@@ -406,9 +446,10 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
           const newSession: SessionRecord = {
             id: uuidv4(),
             classId: prev.activeClassId!,
-            unitId: effectiveSelectedUnitId,
+            unitId: isOrientationSelected ? undefined : effectiveSelectedUnitId,
             customTopic: sessionTitle,
-            partNumber: isCancelled ? undefined : partNumber,
+            partNumber: isCancelled || isOrientationSelected ? undefined : partNumber,
+            sessionKind: isOrientationSelected ? 'orientation' : undefined,
             sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
             cancellationReason: isCancelled ? effectiveReason : undefined,
             date: sessionDate,
@@ -479,6 +520,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       setEditingSessionId(null);
       onClearInitialSession?.();
       setUnifiedNotes('');
+      setSelectedUnitId('');
       setSessionStatus('COMPLETED');
       setCancellationReason('');
       if (timeWasShifted) {
@@ -527,51 +569,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     return classPastSessions.filter(isSessionDocumented);
   }, [classPastSessions]);
 
-  // Export Cahier de texte to Word (.doc)
-
-  const handleExportMarkdown = () => {
-    let mdContent = `# دفتر النصوص - قسم ${activeClass?.name || 'القسم'}
-
-`;
-    classDocumentedSessions.forEach((s, idx) => {
-      const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
-      const domain = unitObj?.domain || '—';
-      const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
-
-      mdContent += `## الحصة رقم ${classDocumentedSessions.length - idx}: ${title} (${s.date})
-`;
-      mdContent += `- التوقيت: ${timeSlot}
-`;
-      mdContent += `- الميدان: ${domain}
-`;
-
-      if (s.sessionGoals) mdContent += `
-### أهداف الحصة
-${s.sessionGoals}
-`;
-      if (s.accomplishments) mdContent += `
-### توثيق وملاحظات الحصة
-${s.accomplishments}
-`;
-      mdContent += `
----
-
-`;
-    });
-
-    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `دفتر_النصوص_${activeClass?.name || 'القسم'}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCahierDoc = () => {
+const handleExportCahierDoc = () => {
     const rowsHtml = classDocumentedSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
       const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
@@ -628,7 +626,7 @@ ${s.accomplishments}
       ${detailsHtml}
     `;
 
-    exportToDoc(html, `دفتر_نصوص_${activeClass?.name || 'القسم'}`);
+    exportToDocx(html, `دفتر_نصوص_${activeClass?.name || 'القسم'}`);
   };
 
   return (
@@ -645,6 +643,7 @@ ${s.accomplishments}
             value={state.activeClassId || ''}
             onChange={(e) => {
               const newId = e.target.value;
+              setSelectedUnitId('');
               void updateStateAndWait(prev => ({ ...prev, activeClassId: newId }));
               const cls = state.classes.find(c => c.id === newId);
               if (cls) {
@@ -670,18 +669,10 @@ ${s.accomplishments}
             <button
               onClick={handleExportCahierDoc}
               className="min-h-9 px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-              title="تصدير دفتر النصوص كاملاً إلى ملف Word (.doc)"
+              title="تصدير دفتر النصوص كاملاً إلى ملف Word (.docx)"
             >
               <FileDown className="w-3.5 h-3.5 text-white/70" />
-              <span>تصدير Word (.doc)</span>
-            </button>
-            <button
-              onClick={handleExportMarkdown}
-              className="min-h-9 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer hidden sm:flex items-center gap-1.5"
-              title="تصدير دفتر النصوص إلى ملف Markdown (.md)"
-            >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
-              <span>Markdown</span>
+              <span>تصدير Word (.docx)</span>
             </button>
           </div>
         )}
@@ -711,7 +702,24 @@ ${s.accomplishments}
 
       {/* Session Entry Form */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4" id="session-entry-form-card">
-            {!editingSessionId && selectedUnitObj && !selectedUnitId && (
+            {!editingSessionId && !selectedUnitId && classDocumentedSessions.length === 0 && state.classes.length > 0 && (
+              <div className="rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)] p-4">
+                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">الحصة الأولى من السنة الدراسية</div>
+                <div className="mt-1 text-sm font-black text-[var(--text-primary)]">{ORIENTATION_SESSION_TOPIC}</div>
+                <p className="mt-1 text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                  هذه الحصة لا ترتبط بوحدة من المنهاج: تُخصص للتوجيهات العامة وتقديم البرنامج السنوي للتلاميذ.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUnitId(ORIENTATION_SESSION_UNIT_ID)}
+                  className="mt-3 min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-black text-white"
+                >
+                  اعتماد حصة التقديم
+                </button>
+              </div>
+            )}
+
+            {!editingSessionId && selectedUnitObj && !selectedUnitId && classDocumentedSessions.length > 0 && (
               <div className="rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)] p-4">
                 <div className="text-[11px] font-bold text-[var(--text-tertiary)]">الدرس التالي المقترح وفق تقدم المنهاج</div>
                 <div className="mt-1 text-sm font-black text-[var(--text-primary)]">{selectedUnitObj.title}</div>
@@ -783,6 +791,19 @@ ${s.accomplishments}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:ring-1 focus:ring-[var(--primary)]" />
               </div>
             </div>
+
+            {excludedDayLabel && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 space-y-1">
+                <div className="flex items-center gap-2 font-black">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>يوم مستثنى من الحصص: {excludedDayLabel}</span>
+                </div>
+                <p className="font-medium leading-relaxed">
+                  هذا اليوم مستثنى؛ لا تُنشأ فيه حصة دراسية جديدة. يمكنك توثيقه كحصة ملغاة بهذا السبب،
+                  أو تعديل الرزنامة من الإعدادات. التوثيقات السابقة تبقى محفوظة ولا تُحذف.
+                </p>
+              </div>
+            )}
 
             {/* Session Status Toggle: Completed vs Cancelled */}
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 text-sm">
@@ -864,16 +885,21 @@ ${s.accomplishments}
                     ? 'موضوع الدرس المبرمج للحصة (اختياري):'
                     : 'موضوع الدرس / الوحدة التعلمية المقررة:'}
                 </span>
-                {selectedUnitObj && (
+                {isOrientationSelected ? (
+                  <span className="text-[var(--primary)] font-semibold">حصة توجيهية دون وحدة</span>
+                ) : selectedUnitObj ? (
                   <span className="text-[var(--primary)] font-semibold">
                     الميدان: {selectedUnitObj.domain} • الحجم: {selectedUnitObj.hourlyVolume} سا
                   </span>
-                )}
+                ) : null}
               </label>
               <select
-                value={effectiveSelectedUnitId}
+                value={isOrientationSelected ? ORIENTATION_SESSION_UNIT_ID : effectiveSelectedUnitId}
                 onChange={e => handleSelectUnit(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-900 focus:ring-1 focus:ring-[var(--primary)] cursor-pointer bg-white" >
+                <option value={ORIENTATION_SESSION_UNIT_ID}>
+                  الحصة الأولى: تقديم توجيهات عامة + تقديم البرنامج (دون وحدة)
+                </option>
                 {availableUnits.map(unit => (
                   <option key={unit.id} value={unit.id}>
                     الوحدة {unit.unitNumber}: {unit.title} ({unit.domain})
@@ -883,7 +909,7 @@ ${s.accomplishments}
             </div>
 
             {/* Part selector & Unit completion toggle */}
-            {sessionStatus !== 'CANCELLED' && (
+            {sessionStatus !== 'CANCELLED' && !isOrientationSelected && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
                 <div>
                   <label className="text-xs font-bold text-slate-700 mb-1.5 block">

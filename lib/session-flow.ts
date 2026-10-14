@@ -24,6 +24,31 @@ export const CANCELLATION_REASON_PRESETS = [
 
 export const DEFAULT_CANCELLATION_REASON = 'سبب طارئ / غير محدد';
 
+/**
+ * The first session of the year carries no curriculum unit: it is dedicated to general
+ * guidance and presenting the annual programme. The sentinel id is used only inside the
+ * notebook form; stored sessions keep `unitId` undefined and `sessionKind: 'orientation'`.
+ */
+export const ORIENTATION_SESSION_UNIT_ID = '__ORIENTATION_SESSION__';
+
+export const ORIENTATION_SESSION_TOPIC = 'تقديم توجيهات عامة + تقديم البرنامج';
+
+export const ORIENTATION_SESSION_GOALS = [
+  '• التعريف بالمادة وبأهميتها في الحياة الدراسية والتربوية.',
+  '• تقديم توجيهات عامة: طريقة العمل في القسم، تنظيم الكراس والدفتر، الواجبات المنزلية.',
+  '• تقديم البرنامج السنوي: الميادين والوحدات التعليمية والتوزيع الزمني المتوقع.',
+  '• شرح طريقة التقويم المستمر والاختبارات وشروطها.',
+].join('\n');
+
+/** Whether a stored session is the orientation session (no unit, guidance topic). */
+export function isOrientationSession(
+  session: Pick<SessionRecord, 'sessionKind' | 'unitId' | 'customTopic'> | undefined | null,
+): boolean {
+  if (!session) return false;
+  if (session.sessionKind === 'orientation') return true;
+  return !session.unitId && session.customTopic?.trim() === ORIENTATION_SESSION_TOPIC;
+}
+
 /** A session the teacher recorded as not taught. */
 export function isSessionCancelled(session: Pick<SessionRecord, 'sessionStatus'> | undefined | null): boolean {
   return session?.sessionStatus === 'CANCELLED';

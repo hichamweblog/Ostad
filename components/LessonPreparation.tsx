@@ -306,7 +306,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
     setTimeout(() => setPdfUploadNotice(null), 3000);
   };
 
-  // Word (.doc) Export of official lesson card
+  // Word (.docx) Export of official lesson card
   const handleExportWord = () => {
     if (!currentUnit) return;
     exportUnitToWordDoc(currentUnit, state.profile);
@@ -429,13 +429,13 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
               </button>
             </div>
 
-            {/* Word .doc Export Action */}
+            {/* Word .docx Export Action */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={handleExportWord}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--text-primary)] text-white hover:bg-[var(--primary-hover)] text-xs font-bold transition-all shadow-xs cursor-pointer" title="تصدير المذكرة كملف Word (.doc) جاهز للتحرير والطباعة" >
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--text-primary)] text-white hover:bg-[var(--primary-hover)] text-xs font-bold transition-all shadow-xs cursor-pointer" title="تصدير المذكرة كملف Word (.docx) جاهز للتحرير والطباعة" >
                 <Download className="w-3.5 h-3.5 text-amber-300" />
-                <span>تصدير Word (.doc)</span>
+                <span>تصدير Word (.docx)</span>
               </button>
             </div>
           </div>

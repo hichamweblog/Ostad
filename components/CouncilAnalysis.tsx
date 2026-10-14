@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
-import { exportToDoc } from '@/lib/utils';
+import { exportToDocx } from '@/lib/utils';
 import { AppState } from '@/lib/storage';
 import { calculateCouncilStatistics } from '@/lib/grade-calculator';
 import {
@@ -191,7 +191,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
       </div>
     `;
 
-    exportToDoc(html, `تحليل_نتائج_مجلس_القسم_${activeClass?.name || 'الفوج'}`);
+    exportToDocx(html, `تحليل_نتائج_مجلس_القسم_${activeClass?.name || 'الفوج'}`);
   };
 
   // Grade Bands definition
@@ -212,7 +212,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs cursor-pointer" id="btn-print-council-report" >
             <Printer className="w-4 h-4" />
-            <span>تصدير تحليل النتائج كملف doc</span>
+            <span>تصدير تحليل النتائج كملف docx</span>
           </button>
         </div>
       </div>
