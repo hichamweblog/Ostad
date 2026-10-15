@@ -13,7 +13,6 @@ import { flushMemorandaOutbox } from '@/lib/supabase/memoranda-storage';
 
 /** Quiet period before a burst of realtime events triggers one workspace load. */
 const REALTIME_REFRESH_COALESCE_MS = 250;
-const CLOUD_SYNC_TIMEOUT_MS = 20_000;
 import { createCoalescer } from '@/lib/coalescer';
 import {
   SYNCHRONIZED_TABLES,
@@ -194,29 +193,6 @@ async function hasAuthenticatedOwner(
  */
 const activeFlushes = new Map<string, Promise<boolean>>();
 const retryTimers = new Map<string, number>();
-
-/**
- * A cloud request must not keep an edit modal blocked forever. The durable outbox
- * remains authoritative when this deadline is reached, so the scheduled retry can
- * finish the upload without losing the user's edit.
- */
-function withCloudSyncTimeout<T>(promise: Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error('انتهت مهلة مزامنة السحابة. تم الاحتفاظ بالتعديل وسيُعاد رفعه تلقائياً.'));
-    }, CLOUD_SYNC_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
 
 /** A manual flush waits for an in-flight flush, then retries any entries still pending. */
 export async function flushSyncOutbox(
@@ -692,17 +668,21 @@ export function useCloudAppState(user: User | null) {
    * Shared by the debounced background save and the manual "مزامنة الآن" action so both
    * paths behave identically and neither can drop unacknowledged work.
    */
-  const runSavePipeline = (nextState: AppState, force = false): Promise<void> => {
+  const runSavePipeline = (
+    nextState: AppState,
+    force = false,
+    alreadyEnqueued = false,
+  ): Promise<void> => {
     if (!user) return Promise.resolve();
     const saveGeneration = saveGenerationRef.current;
     const client = createSupabaseBrowserClient();
     const syncedDeletedIds = new Set(nextState.deletedRecordIds || []);
-    return enqueueSnapshot(nextState)
+    return (alreadyEnqueued ? Promise.resolve(null) : enqueueSnapshot(nextState))
       .then(async (enqueued) => {
         if (saveGeneration !== saveGenerationRef.current) return false;
         const pending = await listSyncOutbox(user.id);
         if (!enqueued && pending.length === 0) return true;
-        return withCloudSyncTimeout(flushSyncOutbox(client, user.id, syncingRef, (error) => {
+        return flushSyncOutbox(client, user.id, syncingRef, (error) => {
           if (isLocalOnlyCloudError(error)) {
             setCloudStatus('local-only');
             return;
@@ -712,7 +692,7 @@ export function useCloudAppState(user: User | null) {
           setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
           void registerConflict(error);
           console.error('Cloud state save failed:', message);
-        }, force, abortControllerRef.current?.signal));
+        }, force, abortControllerRef.current?.signal);
       })
       .then(async (flushed) => {
         if (!flushed || (await listSyncOutbox(user.id)).length > 0) return;
@@ -837,6 +817,25 @@ export function useCloudAppState(user: User | null) {
     window.addEventListener('online', retryWhenOnline);
     return () => window.removeEventListener('online', retryWhenOnline);
   // The retry listener is intentionally scoped to the authenticated user.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Keep retrying pending local work while the app remains open. The online event is
+  // immediate, while this interval also covers transient failures that do not emit it.
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    const retryPendingWork = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      if ((await listSyncOutbox(user.id)).length === 0) return;
+      void runSavePipeline(latestStateRef.current, false, true).catch((error) => {
+        console.warn('Automatic background sync retry failed:', describeCloudError(error).message);
+      });
+    };
+    const timer = window.setInterval(() => {
+      void retryPendingWork();
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  // The callback intentionally reads live refs so it never retries a stale snapshot.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -1067,44 +1066,13 @@ export function useCloudAppState(user: User | null) {
     setCloudStatus('sync-pending');
     setSyncError(null);
 
-    const syncedDeletedIds = new Set(nextState.deletedRecordIds || []);
-
-    const client = createSupabaseBrowserClient();
     try {
       await enqueueSnapshot(nextState);
-      if (!client) {
-        setCloudStatus('local-only');
-        void refreshSyncStatus();
-        return;
-      }
-      const flushed = await withCloudSyncTimeout(flushSyncOutbox(client, user.id, syncingRef, (error) => {
-        if (isLocalOnlyCloudError(error)) {
-          setCloudStatus('local-only');
-          return;
-        }
-        const message = describeCloudError(error).message;
-        setSyncError(message);
-        setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
-        void registerConflict(error);
-        console.error('Cloud state save failed:', message);
-      }, true));
-
-      if (flushed && (await listSyncOutbox(user.id)).length === 0 && latestStateRef.current === nextState) {
-        lastSyncedStateRef.current = nextState;
-        lastEnqueuedStateRef.current = nextState;
-        setSyncError(null);
-        setCloudStatus('ready');
-        setState((previous) => (
-          previous.deletedRecordIds?.length
-            ? {
-                ...previous,
-                deletedRecordIds: previous.deletedRecordIds.filter(
-                  (id) => !syncedDeletedIds.has(id),
-                ),
-              }
-            : previous
-        ));
-      }
+      // Local durability is the save contract for the editor. Upload in the background
+      // so a slow or unavailable server never keeps the modal in a saving state.
+      void runSavePipeline(nextState, false, true).catch((error) => {
+        console.error('Background cloud sync failed:', describeCloudError(error).message);
+      });
       void refreshSyncStatus();
     } catch (error) {
       const message = describeCloudError(error).message;
