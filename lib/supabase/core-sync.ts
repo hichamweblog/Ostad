@@ -95,6 +95,7 @@ const OPTIONAL_FALLBACK_COLUMNS = [
   'birth_place',
   'family_status',
   'gender',
+  'room_number',
 ] as const;
 
 /**
@@ -186,7 +187,17 @@ function toRow(entity: SyncEntity, payload: any, ownerId: string, workspace: str
   const sessionId = (value: string | undefined) => value ? getCloudRecordId(ownerId, 'session', value) : null;
   const base = { id, owner_id: ownerId, workspace_id: workspace, revision: metadata.revision, sync_revision: metadata.revision, updated_by: ownerId, sync_device_id: metadata.deviceId, sync_updated_at: metadata.updatedAt };
   switch (entity) {
-    case 'class': return { ...base, name: payload.name.trim(), level: payload.level, section: payload.stream || null, weekly_hours: getWeeklyHours(payload.level), academic_year: null, notes: null, color: payload.color || null };
+    case 'class': return {
+      ...base,
+      name: payload.name.trim(),
+      level: payload.level,
+      section: payload.stream || null,
+      room_number: payload.roomNumber?.trim() || null,
+      weekly_hours: getWeeklyHours(payload.level),
+      academic_year: null,
+      notes: null,
+      color: payload.color || null,
+    };
     case 'student': return { ...base, class_id: classId(payload.classId), full_name: payload.fullName.trim(), number_in_list: payload.numberInList, reg_number: payload.regNumber || null, registration_number: payload.registrationNumber || null, is_repeater: payload.isRepeater ?? false, guardian_phone: payload.guardianPhone || null, gender: payload.gender === 'M' ? 'male' : payload.gender === 'F' ? 'female' : null, birth_date: normalizeDateToIso(payload.birthDate) || null, notes: payload.notes || null };
     case 'grade': {
       const clamp = (val: any, min: number, max: number): number | null => {
@@ -303,7 +314,14 @@ function toRow(entity: SyncEntity, payload: any, ownerId: string, workspace: str
 }
 
 function fromRow(entity: SyncEntity, row: any): any {
-  if (entity === 'class') return { id: row.id, name: row.name, level: row.level || '1AS_SCIENCE', stream: row.section || '', color: row.color || undefined } satisfies ClassRoom;
+  if (entity === 'class') return {
+    id: row.id,
+    name: row.name,
+    level: row.level || '1AS_SCIENCE',
+    stream: row.section || '',
+    roomNumber: row.room_number || undefined,
+    color: row.color || undefined,
+  } satisfies ClassRoom;
   if (entity === 'student') return { id: row.id, classId: row.class_id, numberInList: row.number_in_list, fullName: row.full_name, regNumber: row.reg_number || undefined, registrationNumber: row.registration_number || undefined, gender: row.gender === 'male' ? 'M' : row.gender === 'female' ? 'F' : undefined, birthDate: row.birth_date || undefined, notes: row.notes || undefined, isRepeater: row.is_repeater, guardianPhone: row.guardian_phone || undefined } satisfies Student;
   if (entity === 'grade') return { id: row.id, studentId: row.student_id, classId: row.class_id, trimester: row.trimester, continuousEval: row.continuous_eval, behaviorScore: row.behavior_score, attendanceScore: row.attendance_score, notebookScore: row.notebook_score, participationScore: row.participation_score, quiz: row.quiz, exam: row.exam, calculatedAverage: row.calculated_average, estimation: row.estimation || undefined, guidance: row.guidance || undefined, remarks: row.remarks || undefined, followUpNotes: row.follow_up_notes || undefined } satisfies StudentGrade;
   if (entity === 'session' || entity === 'lessonProgress') {
@@ -439,7 +457,10 @@ export async function loadCoreState(
     const profile = by('profile')[0];
     let remoteAvatarUrl: string | undefined;
     if (profile?.avatar_storage_key) {
-      const signedAvatar = await c.storage.from('avatars').createSignedUrl(profile.avatar_storage_key, 604800);
+      const avatarStoragePath = profile.avatar_storage_key === 'profile'
+        ? `users/${userId}/profile`
+        : profile.avatar_storage_key;
+      const signedAvatar = await c.storage.from('avatars').createSignedUrl(avatarStoragePath, 604800);
       if (signedAvatar.error) throw signedAvatar.error;
       remoteAvatarUrl = signedAvatar.data?.signedUrl;
     }

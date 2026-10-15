@@ -347,7 +347,13 @@ describe('core sync', () => {
       entity: 'class',
       action: 'upsert',
       recordId: 'local-class',
-      payload: { id: 'local-class', name: '  1 علوم  ', level: '1AS_SCIENCE', stream: '' },
+      payload: {
+        id: 'local-class',
+        name: '  1 علوم  ',
+        level: '1AS_SCIENCE',
+        stream: '',
+        roomNumber: 'القاعة 12',
+      },
     };
     const entry: SyncOutboxEntry = {
       id: 'entry-1',
@@ -366,6 +372,7 @@ describe('core sync', () => {
     expect(calls[0].value).toEqual(expect.objectContaining({
       id: getCloudRecordId(ownerId, 'class', 'local-class'),
       name: '1 علوم',
+      room_number: 'القاعة 12',
       revision: 7,
       sync_device_id: deviceId,
     }));
@@ -1161,7 +1168,10 @@ describe('delta sync engine', () => {
         select: vi.fn(() => ({
           eq: vi.fn(() => {
             if (table === 'classes') {
-              return { data: [{ id: 'class-1', name: '2 لغات', level: '2AS' }], error: null };
+              return {
+                data: [{ id: 'class-1', name: '2 لغات', level: '2AS', room_number: 'القاعة 12' }],
+                error: null,
+              };
             }
             if (table === 'app_settings') {
               return { data: [{ settings: { activeClassId: 'class-1' } }], error: null };
@@ -1186,6 +1196,7 @@ describe('delta sync engine', () => {
     const loaded = await loadCoreState(mockClient as any, emptyLocal);
     expect(loaded.classes).toHaveLength(1);
     expect(loaded.activeClassId).toBe('class-1');
+    expect(loaded.classes[0].roomNumber).toBe('القاعة 12');
   });
 
   it('loadCoreState retains students and grades matching classes via classMatches', async () => {
@@ -1237,4 +1248,3 @@ describe('delta sync engine', () => {
     expect(profileOp?.payload.stateName).toBe('وهران');
   });
 });
-

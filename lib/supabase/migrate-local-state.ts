@@ -54,6 +54,7 @@ export async function migrateLocalCoreData(
     weekly_hours: getWeeklyHours(item.level),
     academic_year: state.profile.academicYear || null,
     notes: null,
+    room_number: item.roomNumber || null,
     color: item.color || null,
   }));
 

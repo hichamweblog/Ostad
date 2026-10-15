@@ -10,6 +10,7 @@ export interface RosterImportClass {
   name: string;
   level: GradeLevel;
   stream: string;
+  roomNumber?: string;
   /** لون تمييز القسم (يُختار تلقائياً إن لم يرفقه المستورد) */
   color?: string;
 }
@@ -51,6 +52,7 @@ export async function commitRosterImportBatch(
       level: c.level,
       stream: c.stream || '',
       section: c.stream || '',
+      roomNumber: c.roomNumber?.trim() || null,
       color,
     };
   });
@@ -183,6 +185,7 @@ export async function commitRosterImportBatch(
     section: c.section || null,
     weekly_hours: getWeeklyHours(c.level),
     academic_year: null,
+    room_number: c.roomNumber?.trim() || null,
     color: c.color || DEFAULT_CLASS_COLOR,
     updated_by: userId,
   }));
@@ -265,6 +268,7 @@ export async function commitRosterImportBatch(
       name: c.name,
       level: c.level,
       stream: c.stream,
+      roomNumber: c.roomNumber || undefined,
       color: c.color,
     })),
     students: mappedStudents.map((s) => ({

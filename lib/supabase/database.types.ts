@@ -151,6 +151,7 @@ export interface Database {
           weekly_hours: number;
           academic_year: string | null;
           notes: string | null;
+          room_number: string | null;
           color: string | null;
           revision: number;
           created_at: string;

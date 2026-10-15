@@ -62,7 +62,7 @@ Supabase، بينما تُحمّل النسخة السحابية الحالية 
 | --- | --- | --- |
 | `profile` | `profiles` (الأسماء العربية/الإنجليزية، البريد، الهاتف، بيانات التعيين/الميلاد/الأسرة/الجنس) | metadata للمراجعة؛ الصورة تحتاج Storage/outbox؛ trigger لتحديث `sync_updated_at` |
 | `calendarSettings`, `theme`, `dashboardStyle`, `sidebarCollapsed`, `onboardingDismissed`, `activeClassId`, `activeTrimester` | `app_settings` | revision وconflict؛ trigger خادمي موحد |
-| `classes` | `classes` (`color` persisted — لون تمييز مختلف لكل قسم يُسند تلقائياً عند الإنشاء أو الاستيراد) | tombstone |
+| `classes` | `classes` (`color` و`room_number` persisted — لون التمييز والقاعة يُحفظان في صف القسم عند التعديل اليدوي أو الاستيراد) | tombstone؛ التحويل typed في `core-sync` يرفع ويقرأ كل حقول عقد القسم؛ اختبار round-trip في `__tests__/sync.test.ts` |
 | `students` | `students` | tombstone؛ الاستيراد الجماعي يمر عبر `import_roster_batch` مع outbox كضمان لاحق |
 | `timetable` | `timetable_slots` | tombstone؛ تغيير القسم النشط يغيّر العرض/الاختيار فقط ولا يحذف أو يعيد كتابة صفوف التوقيت |
 | `sessions` | `sessions` (حقل تدوين موحد يجمع المنجز والواجبات والملاحظات مع دعم `customTopic` لترقيم حصص الوحدة مثل (1) و(2)؛ `summary` و`assignments` لعقد المحرر؛ `partNumber` من 1 إلى 5 لتجزئة الوحدة؛ `sessionStatus` و`cancellationReason` لتوثيق الحصة الملغاة بسبب — تُحفظ هذه الحقول داخل `teacher_notes` JSON فتُزامن وتعود دون هجرة مخطط) | tombstone؛ يرتبط بالحضور والسلوك؛ التعديل يمر عبر نفس revision/outbox/conflict |

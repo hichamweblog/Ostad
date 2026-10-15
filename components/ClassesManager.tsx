@@ -541,6 +541,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         name: classObj.name,
         level: classObj.level,
         stream: classObj.stream,
+        roomNumber: classObj.roomNumber,
         color: classObj.color,
       });
 
@@ -777,6 +778,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         name: classObj.name,
         level: classObj.level,
         stream: classObj.stream,
+        roomNumber: classObj.roomNumber,
         color: classObj.color,
       });
 
