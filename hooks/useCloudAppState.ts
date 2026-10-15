@@ -13,6 +13,7 @@ import { flushMemorandaOutbox } from '@/lib/supabase/memoranda-storage';
 
 /** Quiet period before a burst of realtime events triggers one workspace load. */
 const REALTIME_REFRESH_COALESCE_MS = 250;
+const CLOUD_SYNC_TIMEOUT_MS = 20_000;
 import { createCoalescer } from '@/lib/coalescer';
 import {
   SYNCHRONIZED_TABLES,
@@ -193,6 +194,29 @@ async function hasAuthenticatedOwner(
  */
 const activeFlushes = new Map<string, Promise<boolean>>();
 const retryTimers = new Map<string, number>();
+
+/**
+ * A cloud request must not keep an edit modal blocked forever. The durable outbox
+ * remains authoritative when this deadline is reached, so the scheduled retry can
+ * finish the upload without losing the user's edit.
+ */
+function withCloudSyncTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error('انتهت مهلة مزامنة السحابة. تم الاحتفاظ بالتعديل وسيُعاد رفعه تلقائياً.'));
+    }, CLOUD_SYNC_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /** A manual flush waits for an in-flight flush, then retries any entries still pending. */
 export async function flushSyncOutbox(
@@ -678,7 +702,7 @@ export function useCloudAppState(user: User | null) {
         if (saveGeneration !== saveGenerationRef.current) return false;
         const pending = await listSyncOutbox(user.id);
         if (!enqueued && pending.length === 0) return true;
-        return flushSyncOutbox(client, user.id, syncingRef, (error) => {
+        return withCloudSyncTimeout(flushSyncOutbox(client, user.id, syncingRef, (error) => {
           if (isLocalOnlyCloudError(error)) {
             setCloudStatus('local-only');
             return;
@@ -688,7 +712,7 @@ export function useCloudAppState(user: User | null) {
           setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
           void registerConflict(error);
           console.error('Cloud state save failed:', message);
-        }, force, abortControllerRef.current?.signal);
+        }, force, abortControllerRef.current?.signal));
       })
       .then(async (flushed) => {
         if (!flushed || (await listSyncOutbox(user.id)).length > 0) return;
@@ -1053,7 +1077,7 @@ export function useCloudAppState(user: User | null) {
         void refreshSyncStatus();
         return;
       }
-      const flushed = await flushSyncOutbox(client, user.id, syncingRef, (error) => {
+      const flushed = await withCloudSyncTimeout(flushSyncOutbox(client, user.id, syncingRef, (error) => {
         if (isLocalOnlyCloudError(error)) {
           setCloudStatus('local-only');
           return;
@@ -1063,7 +1087,7 @@ export function useCloudAppState(user: User | null) {
         setCloudStatus(error instanceof Error && error.name === 'SyncConflictError' ? 'conflict' : 'sync-failed');
         void registerConflict(error);
         console.error('Cloud state save failed:', message);
-      }, true);
+      }, true));
 
       if (flushed && (await listSyncOutbox(user.id)).length === 0 && latestStateRef.current === nextState) {
         lastSyncedStateRef.current = nextState;
