@@ -1,5 +1,5 @@
 /**
- * The single place that decides what survives a merge. (SYNC-REVIEW.md §5.1)
+ * The single place that decides what survives a merge. (See AGENTS.md §4.)
  *
  * Contract, in one sentence: **Postgres is authoritative; a local record survives only when
  * the outbox still holds unacknowledged work for it and no tombstone marks it deleted.**

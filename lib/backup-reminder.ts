@@ -1,6 +1,6 @@
 /**
  * Remembers when the teacher last exported a backup, so the app can nudge them before the
- * only copy of their work gets too old (SYNC-REVIEW.md §5.8).
+ * only copy of their work gets too old (the backup contract in AGENTS.md).
  *
  * Stored outside the app cache on purpose: it must survive `purgeLocalUserData` (clearing the
  * reminder would re-nudge immediately) and it is per-owner, since two teachers can share a

@@ -47,7 +47,7 @@ describe('§1 Realtime deletes can be filtered by owner (schema contract)', () =
   it('gives every synchronized table a full replica identity', () => {
     // Without `replica identity full` the old record of a DELETE carries only the primary
     // key, so Realtime can never match an `owner_id=eq.<uid>` filter and the delete event
-    // never reaches the client (SYNC-REVIEW.md 3.4). Either form counts: a literal
+    // never reaches the client (the synchronization contract in AGENTS.md). Either form counts: a literal
     // statement or the migration loop that applies it to every published table.
     const missing = SYNCHRONIZED_TABLES.filter((table) => {
       const literal = new RegExp(

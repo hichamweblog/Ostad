@@ -12,7 +12,7 @@ import {
 } from '@/lib/sync-reconcile';
 
 /**
- * The single merge seam (SYNC-REVIEW.md §5.1). Every path — initial load, Realtime refresh,
+ * The single merge seam (AGENTS.md §4). Every path — initial load, Realtime refresh,
  * retry, restore, full re-sync — routes through these functions, so the rules are tested once
  * here and cannot quietly differ per entity.
  */

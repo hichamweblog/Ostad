@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The acceptance matrix from SYNC-REVIEW.md §6, asserted against the real modules.
+ * The acceptance matrix from AGENTS.md §6, asserted against the real modules.
  *
  * Rows that need two browsers or a live Supabase instance are covered at the boundary that
  * actually decides the outcome (the reconciliation, the queue and the purge); rows that are
