@@ -25,6 +25,7 @@ import {
   getSyncOperationsForState,
   getSyncOperationsDelta,
   enqueueSyncDelta,
+  orderSyncOperations,
   recordsShallowEqual,
 } from '@/lib/sync-outbox';
 import { getDeletedRecordIds, isAuthenticatedOwner } from '@/hooks/useCloudAppState';
@@ -218,6 +219,22 @@ describe('sync outbox', () => {
       expect.objectContaining({ entity: 'behavior', recordId: 'session-1:student-2:disruptions' }),
       expect.objectContaining({ entity: 'behavior', recordId: 'session-1:student-3:goodParticipation' }),
     ]));
+  });
+
+  it('orders relational writes after their parent session and deletes before their parent', () => {
+    const operations: SyncOperation[] = [
+      { id: 'attendance:a', entity: 'attendance', action: 'upsert', recordId: 'a' },
+      { id: 'session:s', entity: 'session', action: 'upsert', recordId: 's' },
+      { id: 'session:s-delete', entity: 'session', action: 'delete', recordId: 's' },
+      { id: 'attendance:a-delete', entity: 'attendance', action: 'delete', recordId: 'a' },
+    ];
+
+    expect(orderSyncOperations(operations).map(operation => operation.id)).toEqual([
+      'session:s',
+      'attendance:a',
+      'attendance:a-delete',
+      'session:s-delete',
+    ]);
   });
 
   it('preserves relational tombstones when attendance or behavior is removed', () => {

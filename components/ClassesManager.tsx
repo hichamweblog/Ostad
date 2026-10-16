@@ -98,6 +98,18 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const [importNotification, setImportNotification] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<ParsedDigitizationResult | null>(null);
   const [importConflicts, setImportConflicts] = useState<ImportConflict[]>([]);
+
+  useEffect(() => {
+    if (!isClassModalOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsClassModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isClassModalOpen]);
   const [mergePair, setMergePair] = useState<StudentMergePair | null>(null);
 
   // Moumtaze Import States

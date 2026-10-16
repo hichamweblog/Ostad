@@ -70,6 +70,55 @@ export function getSyncDeviceId(): string {
   return id;
 }
 
+/**
+ * Relational rows must be written after their parents and removed before them.
+ * Keeping this ordering at the operation boundary makes legacy and manually
+ * constructed outbox entries safe as well as state-derived deltas.
+ */
+export function orderSyncOperations(operations: SyncOperation[]): SyncOperation[] {
+  const upsertOrder: Record<SyncEntity, number> = {
+    class: 10,
+    student: 20,
+    timetable: 30,
+    session: 40,
+    grade: 50,
+    lessonProgress: 60,
+    customUnit: 60,
+    lessonPlan: 60,
+    dashboardTask: 60,
+    profile: 70,
+    settings: 70,
+    attendance: 80,
+    behavior: 90,
+  };
+  const deleteOrder: Record<SyncEntity, number> = {
+    attendance: 10,
+    behavior: 20,
+    grade: 30,
+    timetable: 40,
+    lessonProgress: 50,
+    customUnit: 50,
+    lessonPlan: 50,
+    dashboardTask: 50,
+    session: 60,
+    student: 70,
+    class: 80,
+    profile: 90,
+    settings: 90,
+  };
+
+  return operations
+    .map((operation, index) => ({
+      operation,
+      index,
+      rank: operation.action === 'delete'
+        ? 100 + deleteOrder[operation.entity]
+        : upsertOrder[operation.entity],
+    }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ operation }) => operation);
+}
+
 export function getSyncOperationsForState(state: AppState): SyncOperation[] {
   const collections: Array<[SyncEntity, Array<{ id: string }>, boolean]> = [
     ['class', state.classes, true], ['student', state.students, true], ['grade', state.grades, true],
@@ -137,7 +186,7 @@ export function getSyncOperationsForState(state: AppState): SyncOperation[] {
     if ((!collections.some(([kind]) => kind === entity) && !relationalEntity) || !recordId) continue;
     operations.push({ id: `delete:${entity}:${recordId}`, entity, action: 'delete', recordId });
   }
-  return operations;
+  return orderSyncOperations(operations);
 }
 
 function stableStringify(obj: any): string {
@@ -403,7 +452,7 @@ export function getSyncOperationsDelta(
     }
   }
 
-  return operations;
+  return orderSyncOperations(operations);
 }
 
 /** Compatibility wrapper: it now stores row operations, never a whole snapshot. */

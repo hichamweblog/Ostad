@@ -4,7 +4,7 @@ import { normalizeCalendarSettings } from '@/lib/academic-calendar';
 import type { ClassLessonProgress, ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
 import type { Database } from './database.types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
-import { enqueueSyncState, replayOutboxEntriesOnState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
+import { enqueueSyncState, orderSyncOperations, replayOutboxEntriesOnState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
 import {
   BEHAVIOR_FIELDS,
   reconcileEntityList,
@@ -901,7 +901,7 @@ export async function saveCoreState(client: Client, ownerId: string, state: AppS
     const current = pending.find(item => item.id === id);
     if (!current) throw new Error('Unable to create sync operations');
     const workspace = await workspaceId(client as AnyClient, ownerId);
-    for (const operation of current.operations) await applyOperation(client as AnyClient, ownerId, workspace, operation, metadata);
+    for (const operation of orderSyncOperations(current.operations)) await applyOperation(client as AnyClient, ownerId, workspace, operation, metadata);
     await (await import('@/lib/sync-outbox')).removeSyncOutboxEntry(id);
   } catch (error) { if (schemaError(error)) throw localOnly(); throw error; }
 }
@@ -916,7 +916,7 @@ export async function applySyncOutboxEntry(client: Client, ownerId: string, entr
       allowTombstoneOverride: entry.allowTombstoneOverride === true,
     };
 
-    for (const operation of entry.operations) {
+    for (const operation of orderSyncOperations(entry.operations)) {
       await applyOperation(client as AnyClient, ownerId, workspace, operation, metadata);
     }
   } catch (error) {

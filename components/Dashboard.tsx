@@ -354,7 +354,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-[var(--text-secondary)]">
                 {isFriday ? (
                   nextUpcoming
-                    ? `عطلة نهاية أسبوع مباركة وطيبة. لا توجد حصص دراسية اليوم؛ أولى حصص الأسبوع القادم يوم ${nextUpcoming.dayName} مع قسم ${nextUpcoming.classRoom?.name || 'القسم'} (${nextUpcoming.slot.startTime} - ${nextUpcoming.slot.endTime}).`
+                    ? `عطلة نهاية أسبوع مباركة وطيبة. لا توجد حصص دراسية اليوم؛ أولى حصص الأسبوع القادم يوم ${nextUpcoming.dayName} مع ${nextUpcoming.classRoom?.name || 'القسم'} (${nextUpcoming.slot.startTime} - ${nextUpcoming.slot.endTime}).`
                     : 'عطلة نهاية أسبوع مباركة وطيبة. لا توجد حصص مبرمجة اليوم، يمكنك استغلال هذا الوقت للتحضير البيداغوجي وتجهيز المذكرات.'
                 ) : isSaturday ? (
                   nextUpcoming
