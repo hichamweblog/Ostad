@@ -42,6 +42,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   useEffect(() => {
     let active = true;
+    // 1. Handle code in query params (PKCE flow)
     const callbackCode = new URLSearchParams(window.location.search).get('code');
     if (callbackCode && window.location.pathname === '/') {
       const callbackUrl = new URL('/auth/callback', window.location.origin);
@@ -52,6 +53,37 @@ export function AuthGate({ children }: AuthGateProps) {
       return () => {
         active = false;
       };
+    }
+
+    // 2. Handle access_token and refresh_token in hash fragment (implicit / magiclink flow)
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      if (accessToken && refreshToken) {
+        const client = createSupabaseBrowserClient();
+        if (client) {
+          void client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+            .then(({ data, error }) => {
+              if (!active) return;
+              if (!error && data.session?.user) {
+                setUser(data.session.user);
+                setLoading(false);
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.hash = '';
+                cleanUrl.searchParams.delete('auth');
+                cleanUrl.searchParams.delete('reason');
+                window.history.replaceState(null, '', cleanUrl.pathname + (cleanUrl.search || ''));
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to set session from hash:', err);
+            });
+        }
+      }
     }
 
     const unsubscribe = subscribeToAuthState((nextUser) => {

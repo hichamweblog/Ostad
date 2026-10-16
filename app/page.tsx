@@ -306,7 +306,7 @@ function AppContent({
                 : 'جاري التحميل...'}
             </p>
             {(state.classes.length > 0 || state.students.length > 0) && (
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-slate-600 mt-1">
                 بياناتك محفوظة في السحابة ولا تظهر هنا إلا بعد اكتمال التحقق.
               </p>
             )}
@@ -473,11 +473,11 @@ function AppContent({
                 {state.profile.schoolName}{state.profile.stateName ? ` - ${state.profile.stateName}` : ''}
               </div>
             ) : (
-              <div className="text-slate-400 font-medium text-xs mt-1">
+              <div className="text-slate-600 font-medium text-xs mt-1">
                 الطور الثانوي • وزارة التربية الوطنية
               </div>
             )}
-            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+            <div className="text-xs text-slate-600 font-mono mt-0.5">
               2026 - 2027
             </div>
           </div>

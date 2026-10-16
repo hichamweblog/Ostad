@@ -381,7 +381,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  {/* Time Pill */}
  <div className="w-16 text-center py-2 px-1 rounded-xl bg-slate-100 font-mono text-[11px] font-black text-slate-800 shrink-0 border border-slate-200/80">
  <div>{slot.startTime}</div>
- <div className="text-[9px] text-slate-400 font-normal">إلى</div>
+ <div className="text-[9px] text-slate-500 font-medium">إلى</div>
  <div>{slot.endTime}</div>
  </div>
 
@@ -398,8 +398,8 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <p className="text-xs text-slate-500 truncate mt-0.5">
  {slotClass?.stream ||''}
  </p>
- <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1">
- <MapPin className="w-3 h-3 text-slate-400"/>
+ <div className="flex items-center gap-1.5 text-[11px] text-slate-600 mt-1">
+ <MapPin className="w-3 h-3 text-slate-500"/>
  <span>{slot.room || slotClass?.roomNumber ||'القاعة'}</span>
  </div>
  </div>
@@ -497,12 +497,12 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </div>
  </div>
 
- <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200/40 mt-1">
+ <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200/40 mt-1">
  <span className="flex items-center gap-0.5">
- <MapPin className="w-2.5 h-2.5 text-slate-400"/>
+ <MapPin className="w-2.5 h-2.5 text-slate-500"/>
  {slot.room || slotClass.roomNumber ||'القاعة'}
  </span>
- <span className="font-mono text-[9px] text-slate-400">
+ <span className="font-mono text-[9px] text-slate-600 font-medium">
  {slot.startTime}–{slot.endTime}
  </span>
  </div>

@@ -638,9 +638,9 @@ export const ProfessionalProfile: React.FC<ProfessionalProfileProps> = ({
         {/* Save Button */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-100 ">
           {savedSuccess ? (
-            <span className="flex items-center gap-1.5 text-xs text-slate-400 (--primary)] font-bold bg-[var(--primary-soft)]  px-3 py-1.5 rounded-lg border border-[var(--primary)]/20 ">
-              <CheckCircle2 className="w-4 h-4 text-slate-400" />
-              تم حفظ البيانات بنجاح في الذاكرة المحلية!
+            <span className="flex items-center gap-1.5 text-xs text-[var(--primary)] font-bold bg-[var(--primary-soft)] px-3 py-1.5 rounded-lg border border-[var(--primary)]/20">
+              <CheckCircle2 className="w-4 h-4 text-[var(--primary)]" />
+              تم حفظ البيانات بنجاح!
             </span>
           ) : (
             <span />

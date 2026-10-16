@@ -460,7 +460,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <section className="order-3 rounded-2xl border border-[var(--primary)]/25 bg-white p-4 shadow-xs" aria-labelledby="resume-work-title">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div id="resume-work-title" className="text-[11px] font-bold text-[var(--text-tertiary)]">متابعة آخر عمل</div>
+              <div id="resume-work-title" className="text-[11px] font-bold text-[var(--text-secondary)]">متابعة آخر عمل</div>
               <div className="mt-1 text-sm font-black text-[var(--text-primary)]">
                 {state.lastWorkspace.route === 'grades' ? 'دفتر النقاط' : state.lastWorkspace.route === 'sessions' ? 'دفتر النصوص' : 'الحضور'}
                 {' — '}
