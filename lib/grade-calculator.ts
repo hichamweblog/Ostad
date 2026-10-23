@@ -5,7 +5,7 @@ import { ContinuousEvaluationRules, CouncilStatistics, Student, StudentGrade } f
  * 3 السلوك والانضباط | 3 المواظبة والحضور | 6 الكراس وأدوات التعلم | 8 المشاركة والنشاط.
  *
  * النموذج المعتمد:
- * – المواظبة خصم مباشر 0.5 عن كل غياب غير مبرر؛ التأخر يُسجّل ولا يُخصم.
+ * – المواظبة خصم مباشر 0.5 عن كل غياب غير مبرر؛ التأخر لا يُخصم.
  * – السلوك خصم 0.5 عن كل مخالفة، من المخالفة الأولى.
  * – الكراس حالة مباشرة من 6: 6 أو 4 أو 2 أو 0، في مراقبة واحدة بالفصل.
  * – المشاركة = توثيق آلي (4) فوق الحصص الموثّقة فقط + تقدير الأستاذ (4).
@@ -39,6 +39,7 @@ export interface SessionBehaviourStats {
   absent?: number;
   late?: number;
   disruptions?: number;
+  /** بيانات يومية قديمة؛ لا تدخل في نقطة الكراس. */
   unwritten?: number;
   poorPart?: number;
   goodPart?: number;
@@ -149,22 +150,13 @@ export function calculateEvaluationBreakdown(
     attendanceMax,
   );
 
-  // 3) الكراس — درجات الجولات مباشرة من 6 (6/4/2/0)، بلا تحويل من مقياس 5.
-  //    جولة واحدة افتراضياً؛ وإن لم تُنفَّذ تبقى علامات «لم يكتب» دليلاً احتياطياً
-  //    بخصم مباشر من 6 أيضاً، أما غياب الدليلين فيجعل العنصر غير متاح.
+  // 3) الكراس — المراقبة الفصلية هي المصدر الوحيد: 6/4/2/0 مباشرة.
+  //    لا تتحول الملاحظات اليومية القديمة إلى درجة، وبلا مراقبة يبقى العنصر ناقصاً.
   const notebookRounds = Math.min(2, Math.max(1, Math.round(ruleValue(rules?.notebookRounds, 1))));
   const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, notebookRounds);
-  const hasRounds = rounds.length > 0;
-  const fallbackNotebook = hasRounds
-    ? null
-    : positiveCount(stats.unwritten) > 0
-      ? notebookMax - positiveCount(stats.unwritten) * ruleValue(rules?.unwrittenLessonDeduction, 0.5)
-      : null;
-  const notebook = hasRounds
+  const notebook = rounds.length > 0
     ? clampScore(rounds.reduce((sum, score) => sum + score, 0) / rounds.length, notebookMax)
-    : fallbackNotebook === null
-      ? null
-      : clampScore(fallbackNotebook, notebookMax);
+    : null;
 
   // 4) المشاركة والنشاط = توثيق آلي (4) + تقدير الأستاذ (4).
   //    يبلغ التوثيق سقفه عند 30% من الحصص الموثّقة؛ وما دون ذلك يُحسب

@@ -37,6 +37,9 @@ describe('notebook states', () => {
       'ناقص أو غير منظم',
       'منعدم أو لم يحضر الكراس',
     ]);
+    expect(NOTEBOOK_SCORE_CHOICES.map(choice => choice.shortLabel)).toEqual([
+      'مكتمل', 'جيد', 'ناقص', 'منعدم',
+    ]);
   });
 
   it('gathers checks spread over several sessions of the same round', () => {

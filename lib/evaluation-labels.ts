@@ -36,21 +36,21 @@ export const EVALUATION_CRITERIA: EvaluationCriterionMeta[] = [
     label: 'المواظبة والحضور',
     short: 'المواظبة',
     maxKey: 'attendanceMax',
-    hint: 'خصم 0.5 عن كل غياب غير مبرر؛ التأخر والغياب المبرر دون خصم.',
+    hint: '0.5 عن كل غياب غير مبرر.',
   },
   {
     key: 'notebook',
     label: 'الكراس وأدوات التعلم',
     short: 'الكراس',
     maxKey: 'notebookMax',
-    hint: 'مراقبة واحدة في الفصل بأربع حالات مباشرة: 6 أو 4 أو 2 أو 0.',
+    hint: 'مراقبة فصلية: 6 أو 4 أو 2 أو 0.',
   },
   {
     key: 'participation',
     label: 'المشاركة الصفية',
     short: 'المشاركة',
     maxKey: 'participationMax',
-    hint: 'توثيق آلي (4) عند 30% من الحصص الموثّقة + تقدير الأستاذ (4).',
+    hint: 'توثيق 4 عند 30% + تقدير 4.',
   },
 ];
 

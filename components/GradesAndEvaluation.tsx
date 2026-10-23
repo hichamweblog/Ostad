@@ -515,17 +515,17 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   );
   const studentStatsMap: Record<string, {
     absent: number; late: number; excused: number;
-    disruptions: number; unwritten: number; poorPart: number; goodPart: number;
+    disruptions: number; poorPart: number; goodPart: number;
   }> = {};
 
   for (const s of classStudents) {
-    studentStatsMap[s.id] = { absent: 0, late: 0, excused: 0, disruptions: 0, unwritten: 0, poorPart: 0, goodPart: 0 };
+    studentStatsMap[s.id] = { absent: 0, late: 0, excused: 0, disruptions: 0, poorPart: 0, goodPart: 0 };
   }
 
   for (const session of classSessions) {
     if (session.attendance) {
       for (const [studentId, status] of Object.entries(session.attendance)) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, late: 0, excused: 0, disruptions: 0, unwritten: 0, poorPart: 0, goodPart: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, late: 0, excused: 0, disruptions: 0, poorPart: 0, goodPart: 0 };
         if (status === 'ABSENT') studentStatsMap[studentId].absent++;
         else if (status === 'LATE') studentStatsMap[studentId].late++;
         else if (status === 'EXCUSED') studentStatsMap[studentId].excused++;
@@ -534,11 +534,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     if (session.disruptions) {
       for (const studentId of session.disruptions) {
         if (studentStatsMap[studentId]) studentStatsMap[studentId].disruptions++;
-      }
-    }
-    if (session.unwrittenLessons) {
-      for (const studentId of session.unwrittenLessons) {
-        if (studentStatsMap[studentId]) studentStatsMap[studentId].unwritten++;
       }
     }
     if (session.poorParticipation) {
@@ -657,7 +652,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       }
       return next;
     });
-    setToastMessage('تم تطبيق التقديرات المقترحة (وما عدّلته) على القسم. راجع النقاط ثم احفظ.');
+    setToastMessage('طُبّقت التقديرات على القسم.');
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 4000);
     setShowReview(false);
@@ -725,7 +720,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       }
       return next;
     });
-    setToastMessage(`تم تطبيق التقديرات والإرشادات آلياً لـ (${count}) تلميذ حسب نقاطهم ومعدلاتهم بنجاح!`);
+    setToastMessage(`طُبّقت التقديرات والإرشادات على ${count} تلميذاً.`);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3500);
   };
@@ -1539,15 +1534,15 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           <div className="space-y-1.5">
             <span className="block font-bold text-slate-900">شرح العناصر:</span>
             <ul className="list-inside list-disc space-y-1 text-slate-600">
-              <li><strong>التقويم المستمر (على 20):</strong> {criterionLabel('behavior')} 3، {criterionLabel('attendance')} 3، {criterionLabel('notebook')} 6، المشاركة والنشاط 8.</li>
-              <li><strong>المواظبة (على 3):</strong> خصم مباشر 0.5 عن كل غياب غير مبرر، بحد أدنى 0. التأخر يُسجّل للمتابعة فقط، والغياب المبرر دون خصم.</li>
-              <li><strong>السلوك (على 3):</strong> خصم 0.5 عن كل مخالفة من الأولى؛ ست مخالفات تستهلك العنصر كاملاً.</li>
-              <li><strong>الكراس (على 6):</strong> مراقبة واحدة في الفصل بأربع حالات مباشرة: مكتمل ومنظم 6، جيد 4، ناقص أو غير منظم 2، منعدم 0.</li>
-              <li><strong>المشاركة والنشاط (على 8):</strong> 4 نقاط توثيق آلي تكتمل عند المشاركة في 30% من الحصص الموثقة، وما دونها يُحسب تناسبياً ويُقرّب لأقرب 0.5؛ و4 نقاط تقدير الأستاذ: مبادر ومتميز 4، متوسط 2، سلبي 0.</li>
-              <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً جزاءً على نقص التسجيل.</li>
-              <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
-              <li><strong>الاختبار الفصلي (على 20):</strong> اختبار موحد يضاعف بمعامل 2 طبقاً للقرارات الوزارية المنظمة للتقويم في الطور الثانوي.</li>
-              <li><strong>معامل المادة:</strong> ثابت (2) في كافة السنوات والشعب (علمي، رياضي، تقني رياضي، تسيير واقتصاد، آداب وفلسفة، لغات أجنبية).</li>
+              <li><strong>التقويم المستمر:</strong> سلوك 3 + مواظبة 3 + كراس 6 + مشاركة 8.</li>
+              <li><strong>المواظبة:</strong> 0.5 عن كل غياب غير مبرر.</li>
+              <li><strong>السلوك:</strong> 0.5 عن كل مخالفة.</li>
+              <li><strong>الكراس:</strong> مراقبة فصلية: 6 أو 4 أو 2 أو 0.</li>
+              <li><strong>المشاركة:</strong> توثيق 4 يكتمل عند 30% + تقدير 4 (4 أو 2 أو 0).</li>
+              <li><strong>بلا دليل:</strong> يُستبعد العنصر ولا يُصفر.</li>
+              <li><strong>الفرض:</strong> علامة واحدة على 20.</li>
+              <li><strong>الاختبار:</strong> على 20 ويُضاعف.</li>
+              <li><strong>معامل المادة:</strong> 2.</li>
             </ul>
           </div>
         </div>
@@ -1573,16 +1568,11 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <h3 id="grade-review-title" className="text-base font-black text-[var(--text-primary)]">
               مراجعة التقويم المستمر
             </h3>
-            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
-              الأوزان: السلوك 3 · المواظبة 3 · الكراس 6 · المشاركة والنشاط 8 (منها 4 توثيق و4 تقدير).
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+              الافتراضي: متوسط 2/4. لا يُحفظ قبل «تطبيق على القسم».
             </p>
-            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-              يظهر «متوسط (2/4)» افتراضياً لمن لا تقدير محفوظاً له؛ عدّل حالات التميز أو السلبية ثم اضغط «تطبيق على القسم». لن يُحفظ الاقتراح بمجرد فتح النافذة.
-            </p>
-            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-              {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
-              الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
-              {' '}تلميذاً تمت مراقبة كراسه.
+            <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+              الحصص: {classSessions.length} · الموثّقة: {documentedSessionsCount} · الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
             </p>
           </div>
           <button
@@ -1668,7 +1658,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
         <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-            العنصر بلا أدلة يُستبعد ويُعاد توزيع وزنه، فلا صفر جزاءً على نقص التسجيل.
+            العنصر بلا دليل يُستبعد ولا يُصفر.
           </p>
           <div className="flex gap-2">
             <button

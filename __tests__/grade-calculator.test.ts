@@ -116,10 +116,11 @@ describe('calculateEvaluationBreakdown (3/3/6/8 with 4+4 participation)', () => 
     expect(calculateEvaluationBreakdown({ notebookScores: [0, 0] }, twoRounds).notebook).toBe(0);
   });
 
-  it('uses a direct 0–6 fallback only when no notebook round exists', () => {
-    expect(calculateEvaluationBreakdown({ unwritten: 1 }, rules).notebook).toBe(5.5);
-    expect(calculateEvaluationBreakdown({ unwritten: 12 }, rules).notebook).toBe(0);
-    expect(calculateEvaluationBreakdown({ unwritten: 1, notebookScores: [4] }, rules).notebook).toBe(4);
+  it('uses only the termly inspection and ignores legacy daily notebook notes', () => {
+    expect(calculateEvaluationBreakdown({ notebookScores: [4] }, rules).notebook).toBe(4);
+    expect(calculateEvaluationBreakdown({ notebookScores: [0] }, rules).notebook).toBe(0);
+    expect(calculateEvaluationBreakdown({ unwritten: 12 }, rules).notebook).toBeNull();
+    expect(calculateEvaluationBreakdown({ unwritten: 12 }, rules).missing).toContain('notebook');
     expect(calculateEvaluationBreakdown({}, rules).notebook).toBeNull();
   });
 
