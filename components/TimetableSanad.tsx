@@ -430,6 +430,12 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <div className="hidden lg:block print:block bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
  <div className="overflow-x-auto">
  <table className="w-full text-right border-collapse min-w-[850px]"id="timetable-matrix-table">
+<caption className="hidden print:table-caption text-right pb-1">
+  <div className="text-xs font-bold text-slate-900">
+    المؤسسة: {state.profile.schoolName || 'الثانوية'} — الموسم الدراسي: {state.profile.academicYear || '2026/2027'} — الأستاذ(ة): {state.profile.name || 'أستاذ المادة'}
+  </div>
+  <div className="text-sm font-black underline underline-offset-2">جدول التوقيت الأسبوعي</div>
+</caption>
  <thead>
  {/* Period Headers Row */}
  <tr className="bg-slate-50/80 border-b border-slate-200 text-xs text-slate-600 font-bold">

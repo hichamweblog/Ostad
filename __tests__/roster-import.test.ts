@@ -111,6 +111,40 @@ describe('multi-sheet roster import', () => {
     expect(result.classes[1].className).toBe('قسم 2');
   });
 
+  it('keeps Latin names that merely contain a header word', async () => {
+    const file = buildWorkbookFile([
+      {
+        name: '2AS1',
+        rows: [
+          ['Nom', 'Prénom'],
+          ['Benali', 'Noman'],
+          ['Cherif', 'Amel'],
+        ],
+      },
+    ]);
+
+    const result = await parseDigitizationFile(file);
+    expect(result.classes[0].students.map(s => s.fullName)).toEqual(['Benali Noman', 'Cherif Amel']);
+  });
+
+  it('cleans the detected school and section names from a merged title row', async () => {
+    const file = buildWorkbookFile([
+      {
+        name: '2 ع ت 1',
+        rows: [
+          ['ثانوية الإمام مالك', 'الموسم الدراسي: 2026/2027'],
+          ['القسم: 2 ع ت 1 مادة العلوم الإسلامية'],
+          ['اللقب', 'الاسم'],
+          ['بن علي', 'محمد'],
+        ],
+      },
+    ]);
+
+    const result = await parseDigitizationFile(file);
+    expect(result.schoolName).toBe('ثانوية الإمام مالك');
+    expect(result.classes[0].className).toBe('2 ع ت 1');
+  });
+
   it('summarises every sheet so the teacher can see what will be imported', async () => {
     const file = buildWorkbookFile([
       { name: '2 ع ت 1', rows: officialSheet },

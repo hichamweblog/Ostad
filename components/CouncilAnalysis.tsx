@@ -294,6 +294,31 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
       </div>
 
       <div id="council-analysis-doc" className="space-y-6">
+        {/* ترويسة رسمية للورقة المطبوعة فقط — نفس ترويسة نسخة Word. */}
+        <div className="hidden print:block border-b-2 border-slate-900 pb-1">
+          <div className="flex items-start justify-between gap-3 text-xs font-bold text-slate-900">
+            <div className="leading-5">
+              المؤسسة: {state.profile.schoolName || 'ثانوية التعليم الثانوي'}
+              <br />
+              المادة: العلوم الإسلامية (المعامل: 2)
+            </div>
+            <div className="text-center">
+              <div className="text-sm font-black underline underline-offset-2">
+                بطاقة التحليل الإحصائي لنتائج مادة العلوم الإسلامية لمجلس القسم
+              </div>
+              <div className="mt-0.5">
+                القسم: {activeClass?.name || 'جميع الأقسام'} ({activeClass?.stream || '—'})
+              </div>
+            </div>
+            <div className="text-left leading-5">
+              السنة الدراسية: {state.profile.academicYear || '2026/2027'}
+              <br />
+              الأستاذ(ة): {state.profile.name || 'أستاذ المادة'}
+              <br />
+              الفصل: {trimesterLabel(selectedTrimester)}
+            </div>
+          </div>
+        </div>
         {stats.evaluatedCount === 0 && (
           <div className="no-print flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2 text-amber-900">

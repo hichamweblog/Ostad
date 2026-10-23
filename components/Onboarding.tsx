@@ -210,7 +210,7 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
                 </div>
               </div>
               <p className="text-xs text-slate-500">
-سنفتح لك شاشة الأقسام مباشرة لتبدأ باستيراد بيانات الرقمنة أو إضافة قسم يدوياً.
+سنفتح لك شاشة الأقسام مباشرة لتبدأ باستيراد قوائم التلاميذ من ملف Excel أو إضافة قسم يدوياً.
               </p>
             </div>
           )}

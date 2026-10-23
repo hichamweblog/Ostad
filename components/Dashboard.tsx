@@ -678,7 +678,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ) : (
             <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-subtle)] p-5 text-center">
               <p className="text-xs font-bold text-[var(--text-primary)]">لم تتم إضافة أقسام بعد</p>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">أضف الأقسام يدوياً أو استوردها من ملف الرقمنة.</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">أضف الأقسام يدوياً أو استورد قوائمها من ملف Excel (كل الأوراق تُقرأ تلقائياً).</p>
               <button
                 type="button"
                 onClick={() => onNavigate('classes')}

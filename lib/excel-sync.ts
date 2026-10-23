@@ -130,11 +130,14 @@ export function cleanStudentName(value: unknown): string {
     .trim();
 }
 
-const NAME_HEADER_WORDS =
-  /(اللقب|الاسم|التعريف|matricule|nom|prenom|prénom|name|birth|naissance|تاريخ|الميلاد|التقويم|الفرض|فروض|الاختبار|التقدير|ملاحظ|الرقم|المستوى|الشعبه|الشعبة|القسم|الفوج|المؤسسه|المؤسسة|الاستاذ|الأستاذ|الماده|المادة|الجنس|العدد|المجموع|رقم)/i;
+const ARABIC_HEADER_WORDS =
+  /(اللقب|الاسم|التعريف|تاريخ|الميلاد|التقويم|الفرض|فروض|الاختبار|التقدير|ملاحظ|الرقم|المستوى|الشعبه|القسم|الفوج|المؤسسه|الاستاذ|الماده|الجنس|العدد|المجموع|رقم)/;
+/** Latin words must match as whole words: «Noman» is a first name, «Nom» is a header. */
+const LATIN_HEADER_WORDS = /\b(matricule|nom|prenom|prénom|name|birth|naissance)\b/i;
 
 function looksLikeHeaderish(value: unknown): boolean {
-  return NAME_HEADER_WORDS.test(normalizeArabicText(value));
+  const text = normalizeArabicText(value);
+  return ARABIC_HEADER_WORDS.test(text) || LATIN_HEADER_WORDS.test(text);
 }
 
 /** كلمات تظهر في أعمدة التقديرات أو الحضور وليست أسماء. */
@@ -223,7 +226,7 @@ export function detectRosterLayout(data: any[][]): RosterLayout | null {
         cols.regNumberCol = c;
         return;
       }
-      if (/تاريخ\s*الميلاد|تاريخ\s*الميلاد|date\s*de\s*naissance|naissance/i.test(raw) && cols.birthDateCol === -1) {
+      if (/تاريخ\s*الميلاد|date\s*de\s*naissance|naissance/i.test(raw) && cols.birthDateCol === -1) {
         cols.birthDateCol = c;
         return;
       }
@@ -371,7 +374,12 @@ export function extractClassNameFromRows(rows: any[][], limit = 12): string {
       const labelled = text.match(
         /(?:الفوج\s*(?:التربوي)?|القسم\s*(?:التربوي)?)\s*[:：]\s*([^\n,،|]{2,40})/i,
       );
-      if (labelled?.[1]) return labelled[1].trim();
+      if (!labelled?.[1]) continue;
+      const cleaned = labelled[1]
+        .replace(/\s+(?:مادة|المادة|الماده|الأستاذ|الاستاذ|المؤسسة|المؤسسه|السنة|الموسم|عدد|التلاميذ)\s*.*$/i, '')
+        .replace(/[.،,;:]+$/, '')
+        .trim();
+      if (cleaned.length >= 2) return cleaned;
     }
   }
   return '';
@@ -639,8 +647,13 @@ export async function parseDigitizationFile(
       // Extract School Name (ثانوية ...)
       if (!detectedSchoolName && /ثانوية\s+([^\n\r,]+)/i.test(rowText)) {
         const m = rowText.match(/ثانوية\s+([^,:|\n\r]{3,60}(?:\([^)]+\))?)/i);
-        if (m && m[1]) {
-          detectedSchoolName = `ثانوية ${m[1].trim()}`;
+        // غالباً يكمل السطر بعنوان آخر («الموسم الدراسي» أو «مديرية التربية»)، فتُقطع عنده.
+        const cleanedSchoolName = m?.[1]
+          ?.replace(/\s+(?:السنة|الموسم|مديرية|الأستاذ|الاستاذ|الأستاذة|المادة|الماده|المؤسسة|المؤسسه|القسم|الفوج|رقم)\s*.*$/i, '')
+          .replace(/[.،,;:]+$/, '')
+          .trim();
+        if (cleanedSchoolName && cleanedSchoolName.length >= 3) {
+          detectedSchoolName = `ثانوية ${cleanedSchoolName}`;
         }
       }
 
@@ -728,6 +741,9 @@ export async function parseDigitizationFile(
     let blankStreak = 0;
 
     for (let i = layout.dataStartRowIndex; i < data.length; i++) {
+      // A very long sheet must not freeze the tab: the wall-clock budget is checked
+      // while walking the rows, not only once per worksheet.
+      if ((i & 511) === 0) assertTimeBudget(parseStartedAt);
       const row = data[i] || [];
       const rawName =
         layout.fullNameCol >= 0

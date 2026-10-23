@@ -858,6 +858,24 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
           {/* Conditional View: Table vs Seating Plan */}
           <div id="attendance-doc">
+            {/* ترويسة الورقة المطبوعة فقط: الشاشة لها ترويسة التطبيق، والورقة تحتاج ترويسة رسمية. */}
+            <div className="hidden print:block mb-2 border-b border-slate-900 pb-1">
+              <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-900">
+                <span>المؤسسة: {state.profile.schoolName || 'الثانوية'}</span>
+                <span>السنة الدراسية: {state.profile.academicYear || '2026/2027'}</span>
+                <span>القسم: {activeClass?.name || '—'} — العلوم الإسلامية</span>
+              </div>
+              <div className="mt-1 text-center text-sm font-black underline underline-offset-2">
+                ورقة الحضور والمواظبة — {trimesterLabel(activeTrimester)}
+              </div>
+              <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-700">
+                <span>
+                  الحصة: {activeSession?.date || '—'} ({activeSession?.startTime || '—'} - {activeSession?.endTime || '—'})
+                </span>
+                <span>عدد التلاميذ: {classStudents.length}</span>
+                <span>الأستاذ(ة): {state.profile.name || '—'}</span>
+              </div>
+            </div>
           <div className="space-y-3">
               {/* 1. Mobile-First Card View (Screens < 768px): ZERO Horizontal Scrolling */}
               <div className="block md:hidden print:hidden space-y-2.5">

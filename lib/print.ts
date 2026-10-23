@@ -40,7 +40,7 @@ function collectStyles(): string {
  * Print-only stylesheet. It is written into the frame *after* the app sheets so
  * it always wins, and it only targets `.print-sheet`, never the app itself.
  */
-const PRINT_CSS = `
+export const PRINT_CSS = `
 @page { margin: 7mm 7mm 8mm; }
 html, body { background: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
 body { direction: rtl !important; text-align: right !important; font-size: 9.5pt !important; line-height: 1.3 !important; }

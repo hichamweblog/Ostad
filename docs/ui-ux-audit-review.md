@@ -1180,6 +1180,10 @@ export default Page;
 | ترتيب الدفتر اليومي من الأقدم إلى الأحدث | ✅ المعاينة وWord ودفتر النصوص | `DocumentsExport` + `SessionCahier` |
 | حذف «(يُدمج فيها إحضار الأدوات…)» | ✅ | `SettingsSanad` |
 | خصم السلوك 0.5 من أول مخالفة | ✅ حقل واحد، وتطبيع الثنائية القديمة 0.25/0.5 | `lib/grade-calculator.ts` + `lib/academic-calendar.ts` |
+| ترويسة رسمية في الورقة المطبوعة | ✅ الحضور والمجالس وجدول التوقيت تُطبع بترويسة المؤسسة/القسم/الفصل | `AttendanceSanad` + `CouncilAnalysis` + `TimetableSanad` |
+| تطهير اسم المؤسسة والقسم المكتشف | ✅ قطع عند العنوان التالي («الموسم»، «المادة»…) بدل تخزين جملة مدموجة | `lib/excel-sync.ts` |
+| أسماء لاتينية مثل «Noman» | ✅ كلمات العناوين اللاتينية تُطابق ككلمات كاملة لا كأجزاء | `lib/excel-sync.ts` |
+| توافق اختيار الملف | ✅ المدخلات تقبل ما يقبله المحلل (xlsx/xls/xlsm/xlsb) وسقف 15 ميغابايت | `ClassesManager` |
 
 **التحقق بعد الموجة التاسعة:**
 
@@ -1187,6 +1191,6 @@ export default Page;
 |---|---|
 | `npx tsc --noEmit --noUnusedLocals` | ✅ بلا أخطاء |
 | `npm run lint` | ✅ بلا تحذيرات |
-| `npx vitest run` | ✅ 365 اختبارًا في 24 ملفًا |
+| `npx vitest run` | ✅ 372 اختبارًا في 25 ملفًا |
 | `npm run build` | ✅ جميع المسارات |
 | `next start` + HTTP | ✅ 16 مسارًا كلها 200 |

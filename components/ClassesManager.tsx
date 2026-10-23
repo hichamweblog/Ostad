@@ -253,7 +253,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const handleConfirmDigitizationImport = () => {
     if (!pendingImport) return;
     if (selectedPendingClasses.length === 0) {
-      setImportNotification('لم تختر أي ورقة للاستيراد. حدّد ورقة واحدة على الأقل ثم أكّد.');
+      showToast('لم تختر أي ورقة للاستيراد. حدّد ورقة واحدة على الأقل ثم أكّد.', 'warning');
       return;
     }
     // Only the checked worksheets are imported; the administration ones are never parsed at all.
@@ -641,8 +641,8 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setImportNotification('حجم الملف كبير جداً. الحد الأقصى للاستيراد هو 20 ميغابايت.');
+    if (file.size > 15 * 1024 * 1024) {
+      setImportNotification('حجم الملف كبير جداً. الحد الأقصى للاستيراد هو 15 ميغابايت.');
       e.target.value = '';
       return;
     }
@@ -1377,11 +1377,21 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
               يُستورد القسم وأسماء التلاميذ فقط؛ أوراق الطاقم الإداري والأساتذة تُستثنى تلقائياً. وسيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين.
             </p>
+            {selectedPendingClasses.length === 0 && (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs font-bold text-rose-800">
+                حدّد ورقة واحدة على الأقل لتتمكن من التأكيد.
+              </p>
+            )}
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setPendingImport(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
                 إلغاء
               </button>
-              <button type="button" onClick={handleConfirmDigitizationImport} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white hover:opacity-90">
+              <button
+                type="button"
+                onClick={handleConfirmDigitizationImport}
+                disabled={selectedPendingClasses.length === 0}
+                className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 تأكيد الاستيراد
               </button>
             </div>
@@ -1397,7 +1407,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           <input
             type="file"
             ref={fileInputRef}
-            accept=".xlsx, .xls, .csv"
+            accept=".xlsx,.xls,.xlsm,.xlsb"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -1652,10 +1662,10 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* File Input for Excel/CSV - Digitization */}
+              {/* File input for the roster importer (Excel workbooks, any number of sheets). */}
               <input
                 type="file" ref={fileInputRef}
-                accept=".xlsx, .xls, .csv" onChange={handleFileUpload}
+                accept=".xlsx,.xls,.xlsm,.xlsb" onChange={handleFileUpload}
                 className="hidden" />
 
               {/* File Input for Excel - Moumtaze */}
