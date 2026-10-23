@@ -777,21 +777,21 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.behaviorMax} / 20
                 </td>
-                <td className="px-3 py-2">خصم {calendarSettings.evaluationRules.disruptionDeduction ?? 0.5} عن كل مخالفة، من الأولى.</td>
+                <td className="px-3 py-2">{calendarSettings.evaluationRules.disruptionDeduction ?? 0.5} عن كل مخالفة.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">{criterionLabel('attendance')}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.attendanceMax} / 20
                 </td>
-                <td className="px-3 py-2">خصم مباشر 0.5 عن كل غياب غير مبرر؛ التأخر للمتابعة فقط، والمبرر دون خصم.</td>
+                <td className="px-3 py-2">0.5 عن كل غياب غير مبرر.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">{criterionLabel('notebook')}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.notebookMax} / 20
                 </td>
-                <td className="px-3 py-2">مراقبة واحدة في الفصل بأربع حالات مباشرة: 6 أو 4 أو 2 أو 0.</td>
+                <td className="px-3 py-2">مراقبة فصلية: 6 أو 4 أو 2 أو 0.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">المشاركة والنشاط</td>
@@ -799,9 +799,9 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                   {calendarSettings.evaluationRules.participationMax} / 20
                 </td>
                 <td className="px-3 py-2">
-                  {calendarSettings.evaluationRules.participationRecordedMax ?? 4} توثيق آلي على الحصص الموثّقة فقط
+                  توثيق {calendarSettings.evaluationRules.participationRecordedMax ?? 4}
                   {' + '}
-                  {calendarSettings.evaluationRules.participationJudgementMax ?? 4} تقدير الأستاذ بثلاث حالات: 4 أو 2 أو 0.
+                  تقدير {calendarSettings.evaluationRules.participationJudgementMax ?? 4} (4 أو 2 أو 0).
                 </td>
               </tr>
             </tbody>
@@ -834,11 +834,11 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               }}
               className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
-            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.5 من أصل 3، من المخالفة الأولى.</span>
+            <span className="mt-1 block text-xs text-slate-500">الافتراضي: 0.5.</span>
           </div>
           <div>
             <label htmlFor="participation-target" className="mb-1 block text-xs font-bold text-slate-700">
-              نسبة المشاركة المطلوبة من الحصص الموثّقة (%)
+              هدف التوثيق (%)
             </label>
             <input
               id="participation-target"
@@ -859,13 +859,11 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
             <span className="mt-1 block text-xs text-slate-500">
-              تكتمل نقطة التوثيق (4) عند 30%؛ وما دونها يُحسب تناسبياً ويُقرّب إلى أقرب 0.5.
+              4/4 عند 30%؛ والباقي بالتناسب لأقرب 0.5.
             </span>
           </div>
           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs leading-6 text-[var(--text-secondary)]">
-            <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> الكراس بلا مراقبة،
-            والمشاركة بلا توثيق أو تقدير، يُستبعدان ويُعاد توزيع وزنهما؛ فلا يتحول نقص التسجيل
-            إلى صفر. السلوك والمواظبة يعملان بالاستثناء: لا مخالفة أو غياب غير مبرر يعني لا خصم.
+            <strong className="text-[var(--text-primary)]">بلا دليل:</strong> يُستبعد الجزء الناقص ولا يُصفر.
           </div>
         </div>
 

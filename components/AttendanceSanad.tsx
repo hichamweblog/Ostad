@@ -101,7 +101,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   type BehaviourStats = {
     absent: number;
     late: number;
-    unwrittenLessons: number;
     disruptions: number;
     goodParticipation: number;
     poorParticipation: number;
@@ -109,7 +108,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const emptyStats = (): BehaviourStats => ({
     absent: 0,
     late: 0,
-    unwrittenLessons: 0,
     disruptions: 0,
     goodParticipation: 0,
     poorParticipation: 0,
@@ -126,12 +124,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
         if (status === 'ABSENT') studentStatsMap[studentId].absent++;
         else if (status === 'LATE') studentStatsMap[studentId].late++;
-      }
-    }
-    if (session.unwrittenLessons) {
-      for (const studentId of session.unwrittenLessons) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
-        studentStatsMap[studentId].unwrittenLessons++;
       }
     }
     if (session.disruptions) {
@@ -169,7 +161,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         absent: stats.absent,
         late: stats.late,
         disruptions: stats.disruptions,
-        unwritten: stats.unwrittenLessons,
         poorPart: stats.poorParticipation,
         goodPart: stats.goodParticipation,
         sessionsCount: scoredSessions.length,
@@ -213,12 +204,12 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
   const handleSaveNotebookRound = async () => {
     if (!activeSession) {
-      showToast('أنشئ حصة أولاً ثم سجّل مراقبة الكراس داخلها.', 'warning');
+      showToast('أنشئ حصة أولاً.', 'warning');
       return;
     }
     const updates = pendingNotebookUpdates;
     if (updates.length === 0) {
-      showToast('لم تختر أي تلميذ بعد.', 'warning');
+      showToast('لا توجد تغييرات.', 'warning');
       return;
     }
     try {
@@ -231,19 +222,15 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             : session,
         ),
       }));
-      const remaining = classStudents.filter(student => !notebookDraft[student.id]).length;
-      const roundLabel = notebookRounds > 1 ? ` في المراقبة ${notebookRound}` : '';
+      const remaining = classStudents.filter(student => notebookDraft[student.id] === undefined).length;
       showToast(
-        `تم حفظ مراقبة ${updates.length} كراس${roundLabel}` +
-          (remaining > 0
-            ? `؛ بقي ${remaining} تلميذاً تُكملهم في حصة أخرى.`
-            : '؛ اكتملت مراقبة الكراس لهذا الفصل.'),
+        remaining > 0 ? `حُفظت التغييرات؛ بقي ${remaining}.` : 'اكتملت مراقبة الكراس.',
         'success',
       );
       setIsNotebookOpen(false);
     } catch (error) {
       console.error('Notebook round save failed:', error);
-      showToast('تعذر حفظ مراقبة الكراس في السحابة.', 'error');
+      showToast('تعذر حفظ مراقبة الكراس.', 'error');
     }
   };
 
@@ -266,7 +253,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     }
   };
 
-  const handleToggleBehavior = async (studentId: string, behaviorType: 'disruptions' | 'unwrittenLessons' | 'poorParticipation' | 'goodParticipation') => {
+  const handleToggleBehavior = async (studentId: string, behaviorType: 'disruptions' | 'poorParticipation' | 'goodParticipation') => {
     if (!activeSession) return;
 
     try {
@@ -551,18 +538,16 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         const isGood = activeSession?.goodParticipation?.includes(student.id);
         const isPoor = activeSession?.poorParticipation?.includes(student.id);
         const isDisruptive = activeSession?.disruptions?.includes(student.id);
-        const isNoLessons = activeSession?.unwrittenLessons?.includes(student.id);
 
         const behaviorParts: string[] = [];
         if (isGood) behaviorParts.push('مشارك ونشيط');
         if (isPoor) behaviorParts.push('مستوى ضعيف يحتاج متابعة');
-        if (isNoLessons) behaviorParts.push(EVALUATION_EVENT_LABELS.unwrittenLesson);
         if (isDisruptive) behaviorParts.push('سلوك غير منضبط');
 
         const statusLabel =
           status === 'ABSENT' ? '<span style="color: #dc2626; font-weight: bold;">غائب</span>' : status === 'LATE' ? '<span style="color: #d97706; font-weight: bold;">متأخر</span>' : status === 'EXCUSED' ? '<span style="color: #2563eb; font-weight: bold;">مبرر</span>' : '<span style="color: #16a34a;">حاضر</span>';
 
-        const statsText = `غ: ${stats.absent} | ${EVALUATION_EVENT_LABELS.disruption}: ${stats.disruptions} | ${EVALUATION_EVENT_LABELS.unwrittenLesson}: ${stats.unwrittenLessons}`;
+        const statsText = `غ: ${stats.absent} | ${EVALUATION_EVENT_LABELS.disruption}: ${stats.disruptions}`;
           
           return `
             <tr>
@@ -912,10 +897,10 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                           </span>
                           <span
                             className={`px-2 py-0.5 rounded-lg border ${
-                              stats.disruptions > 0 || stats.unwrittenLessons > 0
+                              stats.disruptions > 0
                                 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200' }`}
-                            title="مجموع ملاحظات السلوك والكراس" >
-                            سلوك: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                            title="مجموع ملاحظات السلوك" >
+                            سلوك: {stats.disruptions}
                           </span>
                           <span
                             className={`px-2 py-0.5 rounded-lg border font-mono ${
@@ -923,7 +908,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                 ? 'bg-[var(--primary-soft)] text-[var(--primary-ink)] border-[var(--primary)]/30'
                                 : 'bg-slate-50 text-slate-400 border-slate-200'
                             }`}
-                            title="التوثيق الآلي: يُحتسب على الحصص الموثّقة فقط (من 4)"
+                            title="التوثيق الآلي من 4"
                           >
                             مشاركة: {participationPoints.toFixed(1)}/{participationMax}
                           </span>
@@ -931,7 +916,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                       </div>
 
                       {/* Unified Attendance & Behavior Buttons (Mobile) */}
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleAbsence(student.id)}
@@ -943,16 +928,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                 </button>
                                 {attendanceMode === 'detailed' && (
                                   <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
-                                  aria-pressed={Boolean(activeSession.unwrittenLessons?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                                    activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس أو أهمل الكراس وأدوات التعلم" >
-                                  الكراس -
-                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
@@ -996,7 +971,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                         <th className="p-3 text-center">مجموع السلوك</th>
                         <th className="p-3 text-center">
                           نقطة المشاركة
-                          <span className="block text-xs font-normal text-slate-400">توثيق على الحصص الموثّقة (من 4)</span>
+                          <span className="block text-xs font-normal text-slate-400">التوثيق (من 4)</span>
                         </th>
                       </tr>
                     </thead>
@@ -1035,16 +1010,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   <>
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
-                                  aria-pressed={Boolean(activeSession.unwrittenLessons?.includes(student.id))}
-                                  className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                                    activeSession.unwrittenLessons?.includes(student.id)
-                                      ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس أو أهمل الكراس وأدوات التعلم" >
-                                  الكراس -
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
@@ -1077,7 +1042,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             </td>
                             {/* Cumulative Delays */}
                             <td className="p-3 text-center font-bold text-slate-700">
-                              سلوك: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                              سلوك: {stats.disruptions}
                             </td>
                             {/* Participation points (automatic, starting from 0) */}
                             <td className="p-3 text-center font-bold font-mono text-sm border-r border-slate-100 bg-slate-50/50">
@@ -1094,18 +1059,12 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               </div>
             </div>
 
-              {/* Seating Guide Legend */}
-              <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-600 font-medium">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-bold text-slate-900 ml-1">دليل الحالات:</span>
-                  <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-xs whitespace-nowrap">الغياب -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-xs whitespace-nowrap">الكراس -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-xs whitespace-nowrap">سلوك -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold text-xs whitespace-nowrap">مشاركة +</span>
-                </div>
-                <div className="text-xs text-slate-500">
-                  زر «الغياب» هو الوحيد لتسجيل الحضور: يعمل من الضغطة الأولى، وإعادة الضغط عليه وهو نشط تعيد «حاضر». تُضاف 4 نقاط تقدير المشاركة في «مراجعة التقويم».
-                </div>
+              {/* Button legend */}
+              <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-3 text-xs font-bold">
+                <span className="ml-1 text-slate-900">الأزرار:</span>
+                <span className="whitespace-nowrap rounded bg-rose-100 px-1.5 py-0.5 text-rose-800">الغياب -</span>
+                <span className="whitespace-nowrap rounded bg-slate-200 px-1.5 py-0.5 text-slate-800">سلوك -</span>
+                <span className="whitespace-nowrap rounded bg-[var(--primary-soft)] px-1.5 py-0.5 text-[var(--primary-ink)]">مشاركة +</span>
               </div>
           </div>
         </div>
@@ -1147,24 +1106,24 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         </div>
       </AccessibleDialog>
 
-      {/* مراقبة الكراس — تصحيح سريع لدفعة من التلاميذ في الحصة الحالية */}
+      {/* مراقبة الكراس الفصلية */}
       <AccessibleDialog
         open={isNotebookOpen}
         titleId="notebook-round-title"
         onClose={() => setIsNotebookOpen(false)}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col gap-3 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 text-right shadow-xl sm:p-5"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col gap-3 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-right shadow-xl sm:p-4"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h3 id="notebook-round-title" className="text-base font-black text-[var(--text-primary)]">
               {notebookRounds > 1 ? `مراقبة الكراس ${notebookRound}` : 'مراقبة الكراس'}
             </h3>
-            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
-              {notebookRounds > 1
-                ? `افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`
-                : notebookNeedsReview
-                  ? 'اكتملت المراقبة لهذا الفصل. يمكنك تعديل أي درجة ثم الحفظ؛ ولا حاجة لمراقبة ثانية.'
-                  : `مراقبة واحدة في الفصل: افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`}
+            <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+              {notebookNeedsReview
+                ? 'اكتملت المراقبة؛ يمكنك التعديل.'
+                : notebookRounds > 1
+                  ? `المراقبة ${notebookRound} من ${notebookRounds}.`
+                  : 'مراقبة فصلية؛ أكمل الباقي في حصص لاحقة.'}
             </p>
           </div>
           <span className="shrink-0 rounded-lg bg-[var(--primary-soft)] px-2 py-1 font-mono text-xs font-bold text-[var(--primary-ink)]">
@@ -1172,51 +1131,44 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           </span>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
+        <div className="min-h-0 flex-1 divide-y divide-[var(--border-subtle)] overflow-y-auto rounded-xl border border-[var(--border-subtle)] bg-white px-2">
           {classStudents.map(student => {
             const selected = notebookDraft[student.id];
-            const checkedInRound = notebookChecks[student.id]?.[notebookRound];
             const otherRound = otherRoundInSession(student.id);
             return (
-              <div key={student.id} className="rounded-xl border border-[var(--border-subtle)] bg-white p-2.5">
+              <div key={student.id} className="py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-xs font-bold text-[var(--text-primary)]">
                     <span className="me-1.5 font-mono text-[var(--text-tertiary)]">{student.numberInList}</span>
                     {student.fullName}
                   </span>
                   {otherRound && (
-                    <span className="shrink-0 rounded bg-[var(--bg-page)] px-1.5 py-0.5 text-xs text-[var(--text-tertiary)]">
-                      سُجّل سابقاً
-                    </span>
-                  )}
-                  {!otherRound && checkedInRound && selected === undefined && (
-                    <span className="shrink-0 rounded bg-[var(--bg-page)] px-1.5 py-0.5 text-xs text-[var(--text-tertiary)]">
-                      سُجّل {checkedInRound.score}
-                    </span>
+                    <span className="shrink-0 text-xs text-[var(--text-tertiary)]">سُجّل</span>
                   )}
                 </div>
-                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                <div className="mt-1 grid grid-cols-4 gap-1">
                   {NOTEBOOK_SCORE_CHOICES.map(choice => {
                     const isSelected = selected === choice.score;
                     return (
                       <button
                         key={choice.score}
                         type="button"
+                        aria-label={`${choice.label}، ${choice.score} من 6`}
                         aria-pressed={isSelected}
-                        title={choice.hint}
+                        title={choice.label}
                         disabled={otherRound !== null}
                         onClick={() => {
                           triggerHapticFeedback();
                           setNotebookDraft(prev => ({ ...prev, [student.id]: choice.score }));
                         }}
-                        className={`flex min-h-11 flex-col items-center justify-center rounded-lg border px-2 py-1.5 text-center text-xs font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                        className={`flex min-h-11 min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-1 text-center text-[11px] font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:text-xs ${
                           isSelected
                             ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
                             : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]'
                         }`}
                       >
-                        <span>{choice.label}</span>
-                        <span className="mt-0.5 whitespace-nowrap font-mono text-xs">{choice.score} / 6</span>
+                        <span className="truncate">{choice.shortLabel}</span>
+                        <span className="mt-0.5 font-mono">{choice.score}</span>
                       </button>
                     );
                   })}
@@ -1226,7 +1178,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           })}
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:justify-end">
+        <div className="flex items-center justify-end gap-2 border-t border-[var(--border-subtle)] pt-2">
           <button
             type="button"
             onClick={() => setIsNotebookOpen(false)}
@@ -1238,9 +1190,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             type="button"
             onClick={() => void handleSaveNotebookRound()}
             disabled={pendingNotebookUpdates.length === 0}
-            className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            حفظ {pendingNotebookUpdates.length} درجة
+            حفظ{pendingNotebookUpdates.length > 0 ? ` (${pendingNotebookUpdates.length})` : ''}
           </button>
         </div>
       </AccessibleDialog>
@@ -1280,8 +1232,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         </div>
 
         <p className="mt-4 rounded-xl bg-[var(--bg-surface-subtle)] px-3 py-2 text-xs leading-5 text-[var(--text-secondary)]">
-          بعد الإنهاء تُنقل إلى دفتر النصوص لتوثيق الحصة. يمكنك تعديل الحضور لاحقًا من سجل الحصص،
-          لكن المخالفات والملاحظات المسجّلة هنا هي ما سيُحتسب في {trimesterLabel(activeTrimester)}.
+          بعد الإنهاء يفتح دفتر النصوص.
         </p>
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

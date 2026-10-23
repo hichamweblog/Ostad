@@ -30,11 +30,11 @@ export function normalizeNotebookRounds(value: unknown): NotebookRound {
 }
 
 /** أربع حالات لفظية تتحول مباشرة إلى نقاط من 6، بلا إدخال رقمي أو ضرب في 1.2. */
-export const NOTEBOOK_SCORE_CHOICES: { score: number; label: string; hint: string }[] = [
-  { score: 6, label: 'مكتمل ومنظم', hint: 'الكراس وأدوات التعلم كاملة ومنظمة — 6/6' },
-  { score: 4, label: 'جيد، مع نقص طفيف', hint: 'نقص طفيف في الأدوات أو التنظيم — 4/6' },
-  { score: 2, label: 'ناقص أو غير منظم', hint: 'نقص واضح أو ضعف في تنظيم الكراس — 2/6' },
-  { score: 0, label: 'منعدم أو لم يحضر الكراس', hint: 'الكراس غير موجود أو شبه فارغ — 0/6' },
+export const NOTEBOOK_SCORE_CHOICES: { score: number; label: string; shortLabel: string; hint: string }[] = [
+  { score: 6, label: 'مكتمل ومنظم', shortLabel: 'مكتمل', hint: 'الكراس وأدوات التعلم كاملة ومنظمة — 6/6' },
+  { score: 4, label: 'جيد، مع نقص طفيف', shortLabel: 'جيد', hint: 'نقص طفيف في الأدوات أو التنظيم — 4/6' },
+  { score: 2, label: 'ناقص أو غير منظم', shortLabel: 'ناقص', hint: 'نقص واضح أو ضعف في تنظيم الكراس — 2/6' },
+  { score: 0, label: 'منعدم أو لم يحضر الكراس', shortLabel: 'منعدم', hint: 'الكراس غير موجود أو شبه فارغ — 0/6' },
 ];
 
 export function clampNotebookScore(value: unknown): number {
