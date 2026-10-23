@@ -79,6 +79,25 @@ export function normalizeSessionPart(part: number | undefined | null): number {
 }
 
 /**
+ * A unit whose whole programme fits in a single session (hourly volume of one hour) must not be
+ * numbered in the notebook: writing 'الوحدة (1)' for a one-session unit confuses the journal.
+ */
+export function isSingleSessionUnit(hourlyVolume: number | undefined | null): boolean {
+  if (hourlyVolume === null || hourlyVolume === undefined) return false;
+  const hours = Number(hourlyVolume);
+  if (!Number.isFinite(hours)) return false;
+  return Math.round(hours) <= 1;
+}
+
+/**
+ * Removes the leftover ' (1)' suffix from a stored title of a single-session unit, so older
+ * records are displayed consistently with the new numbering rule.
+ */
+export function stripSingleSessionSuffix(title: string): string {
+  return title.replace(/\s*\(\s*1\s*\)\s*$/, '').trim();
+}
+
+/**
  * Reads the part number back off a session: the explicit field first, then the `(n)` suffix the
  * notebook writes into `customTopic` (the only place older builds stored it).
  */
@@ -93,11 +112,13 @@ export function buildSessionTitle(
   unitTitle: string | undefined,
   partNumber: number,
   status: { cancelled: boolean; reason?: string },
+  options?: { singleSession?: boolean },
 ): string {
   if (status.cancelled) {
     const reason = status.reason?.trim() || DEFAULT_CANCELLATION_REASON;
     return unitTitle ? `حصة ملغاة (${reason}) — ${unitTitle}` : `حصة ملغاة (${reason})`;
   }
+  if (unitTitle && options?.singleSession) return unitTitle;
   return unitTitle ? `${unitTitle} (${partNumber})` : `حصة تعليمية (${partNumber})`;
 }
 

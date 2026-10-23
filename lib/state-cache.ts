@@ -1,5 +1,5 @@
 import { get, set, keys, del } from 'idb-keyval';
-import { getEmptyState, isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from './storage';
+import {  isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from './storage';
 import { normalizeCalendarSettings } from './academic-calendar';
 
 /** Applies the calendar-settings migration to a state read straight from the cache. */

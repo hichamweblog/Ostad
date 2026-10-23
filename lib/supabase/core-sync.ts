@@ -1,12 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEmptyState, isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from '@/lib/storage';
 import { normalizeCalendarSettings } from '@/lib/academic-calendar';
-import type { ClassLessonProgress, ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
+import type { ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
 import type { Database } from './database.types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
 import { enqueueSyncState, orderSyncOperations, replayOutboxEntriesOnState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
 import {
-  BEHAVIOR_FIELDS,
   reconcileEntityList,
   reconcileSessionMarks,
   type ReconciliationContext,
@@ -215,10 +214,11 @@ function toRow(entity: SyncEntity, payload: any, ownerId: string, workspace: str
         class_id: classId(payload.classId),
         trimester,
         continuous_eval: clamp(payload.continuousEval, 0, 20),
-        behavior_score: clamp(payload.behaviorScore, 0, 5),
-        attendance_score: clamp(payload.attendanceScore, 0, 5),
-        notebook_score: clamp(payload.notebookScore, 0, 5),
-        participation_score: clamp(payload.participationScore, 0, 5),
+        // أوزان القرار الوزاري: 3 / 3 / 6 / 8 — أي تجاوز يعني بيانات فاسدة فنوقف الرفع.
+        behavior_score: clamp(payload.behaviorScore, 0, 3),
+        attendance_score: clamp(payload.attendanceScore, 0, 3),
+        notebook_score: clamp(payload.notebookScore, 0, 6),
+        participation_score: clamp(payload.participationScore, 0, 8),
         quiz: clamp(payload.quiz, 0, 20),
         exam: clamp(payload.exam, 0, 20),
         calculated_average: clamp(payload.calculatedAverage, 0, 20),
@@ -415,9 +415,6 @@ export async function loadCoreState(
         .filter((row) => typeof row.entity_type === 'string' && typeof row.entity_id === 'string')
         .map((row) => `${row.entity_type}:${row.entity_id}`),
     );
-    const isTombstoned = (entity: SyncEntity, ...ids: string[]): boolean =>
-      ids.some((id) => tombstonedKeys.has(`${entity}:${id}`));
-
     let maxRevision = 0;
     for (const [, result] of results) {
       for (const row of result.data || []) {
@@ -491,7 +488,6 @@ export async function loadCoreState(
     const remoteSessions: SessionRecord[] = by('session')
       .map((r: any) => fromRow('session', r))
       .filter(Boolean);
-    const sessionsById = new Map(remoteSessions.map((session) => [session.id, session]));
     const localSessionsById = new Map((localState.sessions || []).map((s) => [s.id, s]));
     // Pending attendance/behaviour marks must survive the load; everything else comes
     // from the cloud so a deletion made elsewhere cannot reappear here.

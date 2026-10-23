@@ -757,3 +757,87 @@ describe('§7 a preference or a missing column cannot freeze the queue', () => {
     expect((upserts[1].value as Record<string, unknown>).teacher_notes).toContain('موثقة');
   });
 });
+
+describe('§6 notebook rounds: the new field must survive the cloud round-trip', () => {
+  function writeClient() {
+    const calls: Array<{ table: string; method: string; value?: unknown }> = [];
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: ownerId } } }) },
+      rpc: async () => ({ data: classId, error: null }),
+      from(table: string) {
+        const chain: any = {
+          select: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          then: (resolve: any) => Promise.resolve({ data: [], error: null }).then(resolve),
+          maybeSingle: async () => ({ data: null, error: null }),
+          insert: async () => ({ data: null, error: null }),
+          upsert: async (value: unknown) => {
+            calls.push({ table, method: 'upsert', value });
+            return { data: null, error: null };
+          },
+          delete: () => chain,
+        };
+        return chain;
+      },
+    };
+    return { client: client as any, calls };
+  }
+
+  it('writes notebookChecks inside sessions.teacher_notes and restores them on load', async () => {
+    const checks: NonNullable<SessionRecord['notebookChecks']> = {
+      [studentId]: { round: 1, score: 4, at: '2026-10-12T09:15:00.000Z' },
+      'another-student': { round: 2, score: 5, at: '2026-10-12T09:16:00.000Z' },
+    };
+    const entry: SyncOutboxEntry = {
+      id: 'entry-notebook-round',
+      ownerId,
+      revision: 6,
+      updatedAt: '2026-10-12T09:20:00.000Z',
+      createdAt: '2026-10-12T09:20:00.000Z',
+      operations: [{
+        id: `session:${sessionId}`,
+        entity: 'session',
+        action: 'upsert',
+        recordId: sessionId,
+        payload: makeSession({ notebookChecks: checks, attendance: { [studentId]: 'PRESENT' } }),
+      }],
+    };
+
+    const { client, calls } = writeClient();
+    await applySyncOutboxEntry(client, ownerId, entry, 'device-phone');
+
+    const written = calls.find((call) => call.table === 'sessions' && call.method === 'upsert')?.value as Record<string, unknown>;
+    expect(written).toBeDefined();
+    // الجولة تُخزَّن داخل JSON الحصة، فلا حاجة إلى عمود أو جدول جديد.
+    expect(JSON.parse(String(written.teacher_notes)).notebookChecks).toEqual(checks);
+
+    const loaded = await loadCoreState(
+      makeClient({
+        classes: [{ id: classId, name: 'قسم', level: '3AS', section: '', sync_revision: 2 }],
+        sessions: [written],
+      }),
+      getEmptyState(),
+    );
+
+    expect(loaded.sessions).toHaveLength(1);
+    // جولات الكراس تُستعاد من JSON الحصة، بينما الحضور يُعاد بناؤه من جدول
+    // attendance كما في كل تحميل (السحابة هي خط الأساس للعلامات).
+    expect(loaded.sessions[0].notebookChecks).toEqual(checks);
+  });
+
+  it('keeps notebookChecks while the cloud baseline rewrites attendance and behaviour', () => {
+    const sessions = [{
+      id: sessionId,
+      classId,
+      date: '2026-10-12',
+      attendance: {},
+      notebookChecks: { [studentId]: { round: 1 as const, score: 2.5, at: '2026-10-12T09:15:00.000Z' } },
+    }];
+    reconcileSessionMarks(sessions, new Map(), [], [], context());
+
+    expect(sessions[0].notebookChecks).toEqual({
+      [studentId]: { round: 1, score: 2.5, at: '2026-10-12T09:15:00.000Z' },
+    });
+  });
+});

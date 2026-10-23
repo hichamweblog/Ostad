@@ -49,11 +49,11 @@ function makeGrade(partial: Partial<StudentGrade> = {}): StudentGrade {
     studentId,
     classId,
     trimester: 1,
-    continuousEval: 15,
-    behaviorScore: 5,
-    attendanceScore: 4.5,
+    continuousEval: 17,
+    behaviorScore: 3,
+    attendanceScore: 2.5,
     notebookScore: 5,
-    participationScore: 4,
+    participationScore: 6.5,
     quiz: 14,
     exam: 16,
     calculatedAverage: 15,
@@ -290,13 +290,47 @@ describe('§3 flush: the server receives every grade column, reusing the cloud r
     expect(payload.quiz).toBe(15);
     expect(payload.exam).toBe(17);
     expect(payload.remarks).toBe('ملاحظة الأستاذ');
-    expect(payload.behavior_score).toBe(5);
-    expect(payload.attendance_score).toBe(4.5);
+    expect(payload.behavior_score).toBe(3);
+    expect(payload.attendance_score).toBe(2.5);
     expect(payload.notebook_score).toBe(5);
-    expect(payload.participation_score).toBe(4);
+    expect(payload.participation_score).toBe(6.5);
     expect(payload.estimation).toBe('جيد جداً');
     expect(payload.student_id).toBe(studentId);
     expect(payload.trimester).toBe(1);
+  });
+
+  it('accepts the decree maxima (3/3/6/8) and stops anything above them', async () => {
+    const baseline = baseState();
+    const maxed = {
+      ...baseline,
+      grades: [
+        makeGrade({
+          behaviorScore: 3,
+          attendanceScore: 3,
+          notebookScore: 6,
+          participationScore: 8,
+        }),
+      ],
+    };
+    await enqueueSyncDelta(ownerId, baseline, maxed, 2, new Date().toISOString());
+    const entry = (await listSyncOutbox(ownerId)).find((item) =>
+      item.operations.some((op) => op.entity === 'grade'),
+    );
+
+    const { client, upserts } = makeRecordingClient({});
+    await applySyncOutboxEntry(client, ownerId, entry!, 'device-phone');
+    expect(upserts[0].payload.notebook_score).toBe(6);
+    expect(upserts[0].payload.participation_score).toBe(8);
+
+    const invalid = { ...baseline, grades: [makeGrade({ participationScore: 9 })] };
+    await enqueueSyncDelta(ownerId, baseline, invalid, 3, new Date().toISOString());
+    const invalidEntry = (await listSyncOutbox(ownerId)).find((item) =>
+      item.operations.some((op) => op.entity === 'grade'),
+    );
+    const failing = makeRecordingClient({ grades: new Error('should not reach the server') });
+    await expect(
+      applySyncOutboxEntry(failing.client, ownerId, invalidEntry!, 'device-phone'),
+    ).rejects.toThrow(/قيمة نقطة غير صالحة/);
   });
 
   it('redirects the upsert to the existing cloud row for the same student+trimester', async () => {

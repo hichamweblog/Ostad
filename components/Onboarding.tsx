@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { AccessibleDialog } from './AccessibleDialog';
-import { X, ArrowLeft, Users, School, Sparkles } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Users, School, Sparkles } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete?: () => void;
@@ -218,12 +218,24 @@ export function Onboarding({ onComplete, onOpenSetup }: OnboardingProps) {
 
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-50 flex items-center justify-between gap-3">
-          <button
-            onClick={handleSkip}
-            className="min-h-11 px-3 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
-          >
-            تخطي
-          </button>
+          <div className="flex items-center gap-1">
+            {step > 0 && (
+              <button
+                onClick={() => setStep(step - 1)}
+                disabled={isSaving}
+                className="flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+              >
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                السابق
+              </button>
+            )}
+            <button
+              onClick={handleSkip}
+              className="min-h-11 px-3 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
+            >
+              {step > 0 ? 'إنهاء التهيئة' : 'تخطي'}
+            </button>
+          </div>
 
           <button
             onClick={handleNext}

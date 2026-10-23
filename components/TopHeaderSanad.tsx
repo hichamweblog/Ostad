@@ -5,7 +5,6 @@ import { AlertCircle, Calendar, CheckCircle2, Cloud, Menu, RefreshCw, Search } f
 import React, { useEffect } from "react";
 import { PWAInstallButton } from "./PWAInstallButton";
 import { SanadTab } from "./SidebarSanad";
-import { selectActiveClass, selectStudentsByClass } from "@/lib/state-selectors";
 import type { CloudSyncStatus } from "@/hooks/useCloudAppState";
 
 interface TopHeaderSanadProps {
@@ -33,7 +32,7 @@ const TAB_TITLES: Record<SanadTab, { title: string; subtitle?: string }> = {
   },
   attendance: {
     title: "التقويم المستمر والحضور",
-    subtitle: "معايير التقويم المستمر (السلوك، الكراس، المشاركة، الغيابات)",
+    subtitle: "الحضور والسلوك والمواظبة والكراس والمشاركة",
   },
   grades: {
     title: "دفتر النقاط",
@@ -76,10 +75,8 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
   onRetrySync,
   onOpenConflict,
 }) => {
-  const { state } = useAppState();
+  const { state, pendingCount, lastSyncedAt } = useAppState();
   const currentInfo = TAB_TITLES[currentTab] || { title: "معين" };
-  const activeClass = selectActiveClass(state);
-  const activeClassStudentCount = selectStudentsByClass(state, activeClass?.id ?? null).length;
 
   // Algerian date formatting
   const today = new Date();
@@ -107,6 +104,17 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
     "ديسمبر",
   ];
   const gregorianDate = `${dayNames[today.getDay()]} ${today.getDate()} ${monthNames[today.getMonth()]} ${today.getFullYear()} م`;
+  // مؤشر الحفظ: «جارٍ الحفظ» عند وجود تغييرات في الطابور، وإلا «محفوظ» مع الوقت.
+  const savedAtLabel = (() => {
+    if (!lastSyncedAt) return null;
+    const date = new Date(lastSyncedAt);
+    if (Number.isNaN(date.getTime())) return null;
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  })();
+  const saveHint = pendingCount > 0
+    ? `جارٍ حفظ ${pendingCount} تغيير…`
+    : savedAtLabel ? `محفوظ ${savedAtLabel}` : null;
+
   const syncStatus = {
     loading: { label: "جاري التحميل", className: "text-[var(--text-secondary)]" },
     ready: { label: "متزامن", className: "text-[var(--success)]" },
@@ -158,14 +166,9 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
               {currentInfo.title}
             </h1>
             {currentInfo.subtitle && (
-              <p className="text-[10px] text-[var(--text-tertiary)] hidden sm:block truncate leading-tight">
+              <p className="text-xs text-[var(--text-tertiary)] hidden sm:block truncate leading-tight">
                 {currentInfo.subtitle}
               </p>
-            )}
-            {activeClass && currentTab !== "dashboard" && (
-              <div className="text-[10px] text-[var(--primary)] font-bold truncate mt-0.5">
-                القسم الحالي: {activeClass.name} • {activeClassStudentCount} تلميذاً
-              </div>
             )}
           </div>
         </div>
@@ -178,7 +181,7 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
               <Calendar className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
               <span>{gregorianDate}</span>
             </div>
-            <div className="text-[11px] font-amiri font-bold text-[var(--primary)]">
+            <div className="text-xs font-amiri font-bold text-[var(--primary)]">
               {hijriDate}
             </div>
           </div>
@@ -190,14 +193,14 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
             title="بحث شامل (Ctrl+K)">
             <Search className="w-4 h-4 text-[var(--text-secondary)]" />
             <span className="hidden sm:inline font-medium">بحث</span>
-            <kbd className="hidden lg:inline-block px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-[10px] font-mono text-[var(--text-secondary)]">
+            <kbd className="hidden lg:inline-block px-1.5 py-0.5 rounded bg-[var(--bg-surface-subtle)] border border-[var(--border-default)] text-xs font-mono text-[var(--text-secondary)]">
               Ctrl+K
             </kbd>
           </button>
 
           <PWAInstallButton />
           <div
-            className={`flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-bold ${syncStatus.className} border-current/20 bg-[var(--bg-surface-subtle)]`}
+            className={`flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-bold ${syncStatus.className} border-current/20 bg-[var(--bg-surface-subtle)]`}
             title={syncError || syncStatus.label}
             aria-live="polite">
             {cloudStatus === "ready" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> :
@@ -205,6 +208,9 @@ export const TopHeaderSanad: React.FC<TopHeaderSanadProps> = ({
               cloudStatus === "sync-failed" || cloudStatus === "conflict" ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> :
               <Cloud className="h-3.5 w-3.5 shrink-0" />}
             <span className="hidden sm:inline">{syncStatus.label}</span>
+            {cloudStatus === "ready" && saveHint && (
+              <span className="hidden md:inline text-[var(--text-tertiary)] font-medium">· {saveHint}</span>
+            )}
             {cloudStatus === "conflict" && onOpenConflict && (
               <button type="button" onClick={onOpenConflict} className="min-h-8 px-1 underline underline-offset-2 shrink-0 cursor-pointer">
                 مراجعة

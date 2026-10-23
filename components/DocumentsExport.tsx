@@ -3,24 +3,21 @@
 import React, { useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { exportToDocx } from '@/lib/utils';
+import { buildDocxBlob } from '@/lib/docx-exporter';
+import { printElement } from '@/lib/print';
 import { showToast } from '@/components/Toast';
-import { AppState } from '@/lib/storage';
 import { SessionRecord } from '@/lib/types';
 import { getMergedCurriculumUnits } from '@/lib/curriculum-data';
 import { calculateCouncilStatistics, calculateStudentAverage } from '@/lib/grade-calculator';
 import { getDefaultEstimation } from '@/lib/pedagogical-evaluations';
 import { isSessionDocumented } from '@/lib/session-flow';
+import { filterByTrimester } from '@/lib/academic-calendar';
 import Link from 'next/link';
 import {
   FileText,
-  CheckCircle2,
-  Layers,
-  FileSpreadsheet,
-  FileCheck2,
-  Calendar,
-  Sparkles,
   Download,
   Share2,
+  Printer,
   AlertCircle
 } from 'lucide-react';
 
@@ -42,6 +39,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
   const ecoPaperMode = true;
 
   const activeClass = state.classes.find(c => c.id === selectedClassId);
+  const hasGradesForTerm = state.grades.some(
+    g => g.classId === selectedClassId && g.trimester === selectedTrimester &&
+      (g.continuousEval !== null || g.quiz !== null || g.exam !== null),
+  );
   const classStudents = state.students
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
@@ -57,11 +58,14 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     return session.customTopic?.trim() || `حصة ملغاة${reason ? ` (${reason})` : ''}`;
   };
 
+  // Official documents are per-term: never mix rows from another term.
   const classPastSessions = useMemo(() => {
-    return state.sessions
-      .filter(s => s.classId === selectedClassId && isSessionDocumented(s))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
-  }, [state.sessions, selectedClassId]);
+    return filterByTrimester(
+      state.sessions.filter(s => s.classId === selectedClassId && isSessionDocumented(s)),
+      state.calendarSettings?.termDates,
+      selectedTrimester,
+    ).sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  }, [state.sessions, selectedClassId, selectedTrimester, state.calendarSettings?.termDates]);
 
   const getSessionNotes = (session: SessionRecord): string => {
     if (session.notes) return session.notes;
@@ -106,21 +110,53 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     }
   };
 
+  /**
+   * Shares the real .docx file when the device supports file sharing
+   * (Web Share Level 2), and falls back to text → download otherwise.
+   */
   const handleShare = async () => {
-    const title = getDocTitle();
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      await navigator.share({
-        title,
-        text: `${title} — ${activeClass?.name || 'القسم'}`,
+    const doc = buildWordDocument();
+    const fileName = `${doc.filename}.docx`;
+
+    try {
+      if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+        showToast('المشاركة غير متاحة على هذا الجهاز. سنزيل نسخة .docx بدلاً منها.', 'warning');
+        exportToDocx(doc.html, doc.filename);
+        return;
+      }
+
+      const blob = await buildDocxBlob(doc.html, { title: doc.title });
+      const file = new File([blob], fileName, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
-      return;
+      const shareData: ShareData = { title: doc.title, files: [file] };
+
+      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share(shareData);
+        showToast('تم فتح نافذة المشاركة بملف الوثيقة (.docx).', 'success');
+        return;
+      }
+
+      await navigator.share({ title: doc.title, text: `${doc.title} — ${activeClass?.name || 'القسم'}` });
+    } catch (error) {
+      // A cancelled share sheet is not an error worth a red toast.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.error('Share failed:', error);
+      showToast('تعذّرت المشاركة. أزلنا لك نسخة .docx بدلاً منها.', 'warning');
+      exportToDocx(doc.html, doc.filename);
     }
-    showToast('المشاركة غير متاحة على هذا الجهاز. استخدم تصدير الوثيقة إلى doc.', 'warning');
   };
 
-  // Export to Microsoft Word document (.docx)
+  const handlePrint = () => {
+    const doc = buildWordDocument();
+    if (!printElement('documents-pedagogical-view', { title: doc.title, landscape: docType === 'GRADES_ROSTER' })) {
+      showToast('تعذّر تجهيز معاينة الطباعة. أعد المحاولة.', 'error');
+    }
+  };
+
+  // Builds the Word document body once; export, share and print all reuse it.
   // OOXML uses bidiVisual for tables: the first logical column is rendered on the right.
-  const handleExportDoc = () => {
+  const buildWordDocument = (): { html: string; filename: string; title: string } => {
     const docTitle = getDocTitle();
     const className = activeClass?.name || 'فوج';
     const establishment = state.profile.schoolName || 'الثانوية';
@@ -413,16 +449,22 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       ${'</html>'}
     `;
 
-    exportToDocx(
-      wordHtml,
-      `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}`,
-    );
+    return {
+      html: wordHtml,
+      filename: `الوثائق_البيداغوجية_${docTitle.replace(/\s+/g, '_')}_${className}`,
+      title: `${docTitle} — ${className}`,
+    };
+  };
+
+  const handleExportDoc = () => {
+    const doc = buildWordDocument();
+    exportToDocx(doc.html, doc.filename);
   };
 
   return (
     <div className="space-y-6 w-full max-w-[30rem] md:max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6" id="documents-pedagogical-view">
       {/* 1. Header Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs">
+      <div className="no-print flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs">
         {/* Mobile-friendly derived document actions */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
@@ -434,6 +476,15 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             <span>مشاركة</span>
           </button>
           <button
+            type="button"
+            onClick={handlePrint}
+            className="flex min-h-11 items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border-default)] text-[var(--text-primary)] text-xs font-bold hover:bg-[var(--bg-surface-subtle)] transition-colors cursor-pointer"
+            title="معاينة الطباعة ثم الطباعة أو الحفظ بصيغة PDF"
+          >
+            <Printer className="w-4 h-4" aria-hidden="true" />
+            <span>معاينة وطباعة</span>
+          </button>
+          <button
             type="button" onClick={handleExportDoc}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer" title="تصدير الوثيقة" id="btn-export-doc-word" >
             <Download className="w-4 h-4" />
@@ -443,7 +494,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       </div>
 
       {/* 2. Document Selection Ribbons & Class/Trimester Selectors */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/90">
+      <div className="no-print flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/90">
         {/* Document Tabs */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
@@ -493,7 +544,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             <span>القسم:</span>
             <select
               value={selectedClassId}
-              onChange={e => setSelectedClassId(e.target.value)}
+              onChange={e => {
+                setSelectedClassId(e.target.value);
+                onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }));
+              }}
               className="bg-white px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer shadow-2xs" >
               {state.classes.map(c => (
                 <option key={c.id} value={c.id}>
@@ -508,7 +562,11 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
               <span>الفصل:</span>
               <select
                 value={selectedTrimester}
-                onChange={e => setSelectedTrimester(Number(e.target.value) as 1 | 2 | 3)}
+                onChange={e => {
+                  const next = Number(e.target.value) as 1 | 2 | 3;
+                  setSelectedTrimester(next);
+                  onUpdateState(prev => ({ ...prev, activeTrimester: next }));
+                }}
                 className="bg-white px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer shadow-2xs" >
                 <option value={1}>الفصل الأول</option>
                 <option value={2}>الفصل الثاني</option>
@@ -518,6 +576,21 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
           )}
         </div>
       </div>
+
+      {/* Missing grades warning: an official document full of zeros looks broken */}
+      {!hasGradesForTerm && (docType === 'GRADES_ROSTER' || docType === 'COUNCIL_FORM') && (
+        <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <span className="leading-6">
+              <strong>لا توجد نقاط لهذا القسم في هذا الفصل.</strong> ستُصدَّر الوثيقة بأعمدة فارغة.
+            </span>
+          </div>
+          <Link href="/grades" className="min-h-9 shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 font-bold text-white hover:bg-amber-800">
+            إدخال النقاط
+          </Link>
+        </div>
+      )}
 
       {/* Institutional Profile Incomplete Warning Banner */}
       {!state.profile.schoolName && (
@@ -542,7 +615,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 rounded-2xl shadow-sm text-center">
           <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
           <h3 className="text-sm font-bold text-blue-900 mb-1">{getDocTitle()}</h3>
-          <p className="text-[10px] text-blue-700 mb-3">حمل الوثيقة جاهزة للطباعة والتعديل بصيغة Word</p>
+          <p className="text-xs text-blue-700 mb-3">حمل الوثيقة جاهزة للطباعة والتعديل بصيغة Word</p>
           <button
             type="button" onClick={handleExportDoc}
             className="w-full flex justify-center items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md active:scale-95 transition-all"
@@ -590,10 +663,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-xs font-black text-[var(--text-primary)]">{sessionTitleForDoc(session, unit?.title)}</div>
-                        <div className="mt-1 text-[11px] font-semibold text-[var(--text-tertiary)]">{session.date} • {session.startTime} - {session.endTime}</div>
+                        <div className="mt-1 text-xs font-semibold text-[var(--text-tertiary)]">{session.date} • {session.startTime} - {session.endTime}</div>
                       </div>
                       {isSessionCancelled(session) && (
-                        <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                        <span className="shrink-0 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                           ملغاة
                         </span>
                       )}
@@ -631,20 +704,20 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
                       return (
                         <tr key={ses.id} className="break-inside-avoid">
-                          <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-[11px]'}`}>
+                          <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
                             <div className="font-bold">{ses.date}</div>
-                            <div className="text-[9px] text-slate-600">{ses.startTime} – {ses.endTime}</div>
+                            <div className="text-xs text-slate-600">{ses.startTime} – {ses.endTime}</div>
                           </td>
-                          <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-xs'}`}>
+                          <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
                             {sessionTitleForDoc(ses, unit?.title)}
                           </td>
-                          <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
+                          <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-xs leading-tight' : 'p-1.5 text-xs'}`}>
                             {ses.accomplishments || '-'}
                           </td>
-                          <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
+                          <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-xs leading-tight' : 'p-1.5 text-xs'}`}>
                             {ses.nextSteps || '-'}
                           </td>
-                          <td className={`border border-slate-900 whitespace-pre-line ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
+                          <td className={`border border-slate-900 whitespace-pre-line ${ecoPaperMode ? 'p-1 text-xs leading-tight' : 'p-1.5 text-xs'}`}>
                             {getSessionNotes(ses) || '-'}
                           </td>
                         </tr>
@@ -683,22 +756,22 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
                     return (
                       <tr key={unit.id} className="break-inside-avoid">
-                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5'}`}>
+                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5'}`}>
                           {String(unit.unitNumber || idx + 1).padStart(2, '0')}
                         </td>
-                        <td className={`border border-slate-900 font-medium text-emerald-950 ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-[11px]'}`}>
+                        <td className={`border border-slate-900 font-medium text-emerald-950 ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
                           {unit.domain}
                         </td>
-                        <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-xs'}`}>
+                        <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
                           {unit.title}
                         </td>
-                        <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-[10px] leading-tight' : 'p-1.5 text-xs'}`}>
+                        <td className={`border border-slate-900 ${ecoPaperMode ? 'p-1 text-xs leading-tight' : 'p-1.5 text-xs'}`}>
                           {unit.targetedCompetence || '-'}
                         </td>
-                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5'}`}>
+                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5'}`}>
                           {unit.hourlyVolume || 2} سا
                         </td>
-                        <td className={`border border-slate-900 text-center font-bold ${ecoPaperMode ? 'p-1 text-[10px]' : 'p-1.5 text-[11px]'}`}>
+                        <td className={`border border-slate-900 text-center font-bold ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
                           {isDone ? 'أُنجز' : 'مخطط'}
                         </td>
                       </tr>
@@ -746,31 +819,31 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
                     return (
                       <tr key={student.id} className="break-inside-avoid">
-                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {student.numberInList}
                         </td>
-                        <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {student.fullName}
                         </td>
-                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {g?.continuousEval ?? '-'}
                         </td>
-                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {g?.quiz ?? '-'}
                         </td>
-                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 text-center font-mono ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {g?.exam ?? '-'}
                         </td>
-                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-[10px]' : 'p-1'}`}>
+                        <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1'}`}>
                           {avg !== null ? avg.toFixed(2) : '-'}
                         </td>
-                        <td className={`border border-slate-900 text-center font-semibold ${ecoPaperMode ? 'py-0.5 px-1 text-[9px]' : 'p-1 text-[10px]'}`}>
+                        <td className={`border border-slate-900 text-center font-semibold ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1 text-xs'}`}>
                           {(() => {
                             const est = g?.estimation || defaultEstimation;
                             return (est === 'غير مقوم' || est === 'غير مقوّم' || est === '-') ? '' : est;
                           })()}
                         </td>
-                        <td className={`border border-slate-900 ${ecoPaperMode ? 'py-0.5 px-1 text-[9px]' : 'p-1 text-[10px]'}`}>
+                        <td className={`border border-slate-900 ${ecoPaperMode ? 'py-0.5 px-1 text-xs' : 'p-1 text-xs'}`}>
                           {g?.remarks || g?.guidance || '-'}
                         </td>
                       </tr>
@@ -873,10 +946,10 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                 <tbody>
                   {classStudents.map(student => (
                     <tr key={student.id} className="break-inside-avoid">
-                      <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-1 px-1.5 text-[10px]' : 'p-2'}`}>
+                      <td className={`border border-slate-900 text-center font-mono font-bold ${ecoPaperMode ? 'py-1 px-1.5 text-xs' : 'p-2'}`}>
                         {student.numberInList}
                       </td>
-                      <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'py-1 px-1.5 text-[10px]' : 'p-2'}`}>
+                      <td className={`border border-slate-900 font-bold ${ecoPaperMode ? 'py-1 px-1.5 text-xs' : 'p-2'}`}>
                         {student.fullName}
                       </td>
                       <td className={`border border-slate-900 ${ecoPaperMode ? 'py-1 px-1.5' : 'p-2'}`}></td>

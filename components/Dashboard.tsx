@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, {  useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
-import { AppState, exportBackupJSON, isDemoState } from '@/lib/storage';
+import {  exportBackupJSON, isDemoState } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/date-utils';
 import { resolveOrCreateSession, isSessionDocumented } from '@/lib/session-flow';
 import {
@@ -36,32 +36,43 @@ import {
   ArrowLeft,
   CalendarDays,
   CalendarRange,
-  Printer,
+  Download,
   Edit3,
   BarChart3,
   Plus,
   Trash2,
   CheckSquare,
   Square,
-  Download,
-  ExternalLink,
-  ShieldCheck
+
 } from 'lucide-react';
 
 interface DashboardProps {
   onNavigate: (tab: SanadTab) => void;
 }
 
+
+/** Human, Arabic relative time for the "resume work" card. */
+const relativeWorkTime = (iso?: string): string | null => {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return 'الآن';
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'أمس';
+  if (days < 30) return `منذ ${days} يوماً`;
+  return null;
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate,
 }) => {
   const { state, updateState: onUpdateState, resetWorkspace } = useAppState();
-  const defaultTasks: UrgentTask[] = [
-      { id: 't-1', text: 'تصدير قائمة التلاميذ (2 ع ت) للرقمنة', done: false },
-      { id: 't-2', text: 'تجهيز مذكرة الفقه وأصوله (الربا)', done: true },
-      { id: 't-3', text: 'تحليل نتائج مجلس قسم 3 آداب وفلسفة', done: false }
-    ];
-  const tasks = state.dashboardTasks || defaultTasks;
+  // لا تُعرض مهام وهمية: أي مهمة لم يكتبها الأستاذ ليست مهمته.
+  const tasks: UrgentTask[] = state.dashboardTasks ?? [];
 
   const [newTaskText, setNewTaskText] = useState('');
   const [showTaskInput, setShowTaskInput] = useState(false);
@@ -303,10 +314,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   className="text-right rounded-xl border border-white/20 bg-black/10 hover:bg-white/15 p-3 cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
                   <div className="flex items-center gap-2 text-xs font-bold">
-                    {step.done ? <CheckCircle2 className="w-4 h-4 text-emerald-200" aria-hidden="true" /> : <span className="w-4 h-4 rounded-full border border-white/70 text-[10px] flex items-center justify-center">{index + 1}</span>}
+                    {step.done ? <CheckCircle2 className="w-4 h-4 text-emerald-200" aria-hidden="true" /> : <span className="w-4 h-4 rounded-full border border-white/70 text-xs flex items-center justify-center">{index + 1}</span>}
                     <span>{step.label}</span>
                   </div>
-                  <div className="text-[10px] text-white/70 mt-1">{step.done ? 'مكتمل' : 'ابدأ الآن ←'}</div>
+                  <div className="text-xs text-white/70 mt-1">{step.done ? 'مكتمل' : 'ابدأ الآن ←'}</div>
                 </button>
               ))}
             </div>
@@ -334,12 +345,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* 1. Today Command Center */}
       <section className="order-2 overflow-hidden rounded-3xl border border-[var(--primary)]/20 bg-gradient-to-br from-[var(--bg-surface)] via-[var(--primary-soft)]/55 to-white p-5 shadow-xs" aria-labelledby="dashboard-today-title">
         <div className="grid gap-5 lg:grid-cols-[1fr_22rem] lg:items-center">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-white/80 px-3 py-1 text-[11px] font-bold text-[var(--primary)]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-white/80 px-3 py-1 text-xs font-bold text-[var(--primary)]">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{dateFormatted}</span>
             </div>
@@ -407,6 +418,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <Edit3 className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
                     حصص اليوم
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleQuickBackup}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-default)] bg-white px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+                    title="تنزيل نسخة احتياطية كاملة بصيغة JSON"
+                  >
+                    <Download className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
+                    نسخة احتياطية
+                  </button>
                 </>
               )}
             </div>
@@ -415,7 +435,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="rounded-2xl border border-white/80 bg-white/85 p-4 shadow-xs backdrop-blur">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
               <div>
-                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">
+                <div className="text-xs font-bold text-[var(--text-tertiary)]">
                   {isWeekend ? 'الحصة القادمة' : 'القسم/الحصة التالية'}
                 </div>
                 <div className="mt-1 text-base font-black text-[var(--text-primary)]">
@@ -424,7 +444,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     : (activeSlotClass?.name || activeClass?.name || 'لم يحدد قسم بعد')}
                 </div>
               </div>
-              <div className="rounded-xl bg-[var(--primary-soft)] p-3 text-[var(--primary)]">
+              <div className="rounded-xl bg-[var(--primary-soft)] p-3 text-[var(--primary-ink)]">
                 <Clock className="h-5 w-5" aria-hidden="true" />
               </div>
             </div>
@@ -433,13 +453,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="font-mono text-sm font-black text-[var(--text-primary)]">
                   {isWeekend ? 'عطلة' : todaySlots.length}
                 </div>
-                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                <div className="mt-0.5 text-xs text-[var(--text-secondary)]">
                   {isWeekend ? 'نهاية الأسبوع' : 'حصص اليوم'}
                 </div>
               </div>
               <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
                 <div className="font-mono text-sm font-black text-[var(--text-primary)]">{state.students.length}</div>
-                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">تلاميذ</div>
+                <div className="mt-0.5 text-xs text-[var(--text-secondary)]">تلاميذ</div>
               </div>
               <div className="rounded-xl bg-[var(--bg-surface-subtle)] p-2">
                 <div className="font-mono text-sm font-black text-[var(--text-primary)]">
@@ -447,7 +467,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     ? nextUpcoming.slot.startTime
                     : (activeSlot ? activeSlot.startTime : currentTimeStr)}
                 </div>
-                <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                <div className="mt-0.5 text-xs text-[var(--text-secondary)]">
                   {isWeekend && nextUpcoming ? 'توقيت الحصة' : 'التوقيت'}
                 </div>
               </div>
@@ -460,11 +480,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <section className="order-3 rounded-2xl border border-[var(--primary)]/25 bg-white p-4 shadow-xs" aria-labelledby="resume-work-title">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div id="resume-work-title" className="text-[11px] font-bold text-[var(--text-secondary)]">متابعة آخر عمل</div>
+              <div id="resume-work-title" className="text-xs font-bold text-[var(--text-secondary)]">متابعة آخر عمل</div>
               <div className="mt-1 text-sm font-black text-[var(--text-primary)]">
                 {state.lastWorkspace.route === 'grades' ? 'دفتر النقاط' : state.lastWorkspace.route === 'sessions' ? 'دفتر النصوص' : 'الحضور'}
                 {' — '}
                 {state.classes.find(item => item.id === state.lastWorkspace?.classId)?.name}
+                {relativeWorkTime(state.lastWorkspace.updatedAt) && (
+                  <span className="ms-2 text-xs font-bold text-[var(--text-tertiary)]">
+                    ({relativeWorkTime(state.lastWorkspace.updatedAt)})
+                  </span>
+                )}
               </div>
             </div>
             <button
@@ -487,16 +512,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* 3. Compact Stat Cards — الأقسام | التلاميذ | حصص اليوم | الدفتر */}
       <div className="order-3 mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         <button onClick={() => onNavigate('classes')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
-          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><LayoutGrid className="w-4 h-4" /></div>
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary-ink)] flex items-center justify-center group-hover:scale-110 transition-transform"><LayoutGrid className="w-4 h-4" /></div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الأقسام</div>
+            <div className="text-xs font-bold text-slate-500 leading-none mb-1">الأقسام</div>
             <div className="text-sm font-black text-slate-900 leading-none">{state.classes.length}</div>
           </div>
         </button>
         <button onClick={() => onNavigate('students')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
-          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><Users className="w-4 h-4" /></div>
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary-ink)] flex items-center justify-center group-hover:scale-110 transition-transform"><Users className="w-4 h-4" /></div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">التلاميذ</div>
+            <div className="text-xs font-bold text-slate-500 leading-none mb-1">التلاميذ</div>
             <div className="text-sm font-black text-slate-900 leading-none">{state.students.length}</div>
           </div>
         </button>
@@ -510,9 +535,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
           className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group"
         >
-          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
+          <div className="w-9 h-9 shrink-0 rounded-full bg-[var(--primary-soft)] text-[var(--primary-ink)] flex items-center justify-center group-hover:scale-110 transition-transform"><CalendarDays className="w-4 h-4" /></div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">
+            <div className="text-xs font-bold text-slate-500 leading-none mb-1">
               {isWeekend ? 'اليوم' : 'حصص اليوم'}
             </div>
             <div className="text-sm font-black text-slate-900 leading-none">
@@ -523,7 +548,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <button onClick={() => onNavigate('sessions')} className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-white p-3 text-right shadow-xs transition-colors hover:bg-slate-50 cursor-pointer group">
           <div className="w-9 h-9 shrink-0 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Edit3 className="w-4 h-4" /></div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold text-slate-500 leading-none mb-1">الدفتر</div>
+            <div className="text-xs font-bold text-slate-500 leading-none mb-1">الدفتر</div>
             <div className="text-sm font-black text-slate-900 leading-none">{state.sessions.length}</div>
           </div>
         </button>
@@ -536,7 +561,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               الخطوة التالية المقترحة
             </h2>
             <p className="text-xs font-bold text-[var(--primary)] mt-1">{nextAction.label}</p>
-            <p className="text-[11px] text-[var(--text-secondary)] mt-1">{nextAction.description}</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">{nextAction.description}</p>
           </div>
           <button
             type="button"
@@ -556,7 +581,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <h2 id="dashboard-classes-title" className="font-black text-sm text-[var(--text-primary)]">
                 القسم النشط
               </h2>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-1">
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
                 الإجراءات اليومية للقسم الذي تعمل عليه الآن
               </p>
             </div>
@@ -601,7 +626,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-black text-[var(--text-primary)]">{activeClass.name}</div>
-                    <div className="text-[11px] text-[var(--text-secondary)] mt-1">
+                    <div className="text-xs text-[var(--text-secondary)] mt-1">
                       {activeClass.stream} • {activeClassStudents.length} تلميذاً
                     </div>
                   </div>
@@ -610,18 +635,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="grid grid-cols-3 gap-2 mt-4">
                   <div className="rounded-lg bg-white/75 px-2 py-2 text-center">
                     <div className="text-lg font-black text-[var(--text-primary)]">{activeClassSessions.length}</div>
-                    <div className="text-[10px] text-[var(--text-secondary)]">حصص موثقة</div>
+                    <div className="text-xs text-[var(--text-secondary)]">حصص موثقة</div>
                   </div>
                   <div className="rounded-lg bg-white/75 px-2 py-2 text-center">
                     <div className="text-lg font-black text-[var(--text-primary)]">{activeClassCompletedUnits}</div>
-                    <div className="text-[10px] text-[var(--text-secondary)]">وحدات منجزة</div>
+                    <div className="text-xs text-[var(--text-secondary)]">وحدات منجزة</div>
                   </div>
                   <div className="rounded-lg bg-white/75 px-2 py-2 text-center">
                     <div className="text-lg font-black text-[var(--text-primary)]">{activeClassSlots.length}</div>
-                    <div className="text-[10px] text-[var(--text-secondary)]">حصص أسبوعية</div>
+                    <div className="text-xs text-[var(--text-secondary)]">حصص أسبوعية</div>
                   </div>
                 </div>
-                <div className="mt-3 rounded-lg bg-white/60 px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+                <div className="mt-3 rounded-lg bg-white/60 px-3 py-2 text-xs text-[var(--text-secondary)]">
                   <span className="font-bold text-[var(--text-primary)]">آخر نشاط: </span>
                   {activeClassSessions[0]
                     ? `${activeClassSessions[0].date} — ${(activeClassSessions[0].accomplishments || 'حصة موثقة').slice(0, 100)}`
@@ -633,7 +658,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   { label: 'الحضور', tab: 'attendance' as SanadTab, icon: CheckCircle2 },
                   { label: 'دفتر النصوص', tab: 'sessions' as SanadTab, icon: Edit3 },
                   { label: 'النقاط', tab: 'grades' as SanadTab, icon: BarChart3 },
-                  { label: 'التلاميذ', tab: 'classes' as SanadTab, icon: Users }
+                  { label: 'التلاميذ', tab: 'students' as SanadTab, icon: Users }
                 ].map(action => {
                   const Icon = action.icon;
                   return (
@@ -653,7 +678,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ) : (
             <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-subtle)] p-5 text-center">
               <p className="text-xs font-bold text-[var(--text-primary)]">لم تتم إضافة أقسام بعد</p>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-1">أضف الأقسام يدوياً أو استوردها من ملف الرقمنة.</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">أضف الأقسام يدوياً أو استوردها من ملف الرقمنة.</p>
               <button
                 type="button"
                 onClick={() => onNavigate('classes')}
@@ -765,7 +790,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <span className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'}</span>
                         <span className="text-[var(--text-secondary)] hidden sm:inline">{cls?.stream}</span>
                       </div>
-                      <span className={`text-[11px] px-2 py-0.5 rounded ${
+                      <span className={`text-xs px-2 py-0.5 rounded ${
                         isCurrent ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-secondary)]' }`}>
                         {isCurrent ? 'الحصة الحالية' : 'مجدولة'}
                       </span>
@@ -805,12 +830,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div key={ses.id} className="py-3 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
                       <div>
                         <div className="font-bold text-[var(--text-primary)]">{cls?.name || 'قسم'} • {ses.customTopic || 'حصة عادية'}</div>
-                        <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
+                        <div className="text-xs text-[var(--text-secondary)] mt-0.5">{ses.date} ({ses.startTime} - {ses.endTime})</div>
                       </div>
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
                         isCancelled
                           ? 'text-rose-700 bg-rose-50 border border-rose-200'
-                          : 'text-[var(--primary)] bg-[var(--primary-soft)]'
+                          : 'text-[var(--primary-ink)] bg-[var(--primary-soft)]'
                       }`}>
                         {isCancelled ? 'ملغاة' : 'موثقة'}
                       </span>
@@ -909,6 +934,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
             )}
 
             <div className="space-y-2 text-xs">
+              {tasks.length === 0 && (
+                <div className="rounded-xl border border-dashed border-[var(--border-default)] p-4 text-center">
+                  <p className="text-xs font-bold text-[var(--text-secondary)]">لا توجد مهام بعد</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    أضف ما تريد تذكّره لاحقًا: تصدير قائمة، تحضير مذكرة، مراجعة نتائج…
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowTaskInput(true)}
+                    className="mt-2 min-h-9 rounded-lg bg-[var(--primary-soft)] px-3 text-xs font-bold text-[var(--primary-ink)]"
+                  >
+                    إضافة مهمة
+                  </button>
+                </div>
+              )}
               {tasks.map(task => (
                 <div
                   key={task.id}
@@ -981,7 +1021,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           )}
                         </div>
                         {slot.room && (
-                          <div className="text-[11px] text-slate-500">
+                          <div className="text-xs text-slate-500">
                             القاعة: {slot.room}
                           </div>
                         )}
@@ -989,7 +1029,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                       <div className="flex items-center gap-2">
                         {isRecorded ? (
-                          <span className="text-[11px] font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-1 rounded-lg">
+                          <span className="text-xs font-bold text-[var(--primary-ink)] bg-[var(--primary-soft)] px-2.5 py-1 rounded-lg">
                             تم التدوين ✓
                           </span>
                         ) : null}

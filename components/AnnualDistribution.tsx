@@ -6,10 +6,10 @@ import {
   getWeeklyHours,
   loadAllCurriculum,
 } from "@/lib/curriculum-data";
-import { AppState } from "@/lib/storage";
 import { CurriculumUnit, GradeLevel } from "@/lib/types";
 import { exportToDocx } from "@/lib/utils";
 import { Layers, Printer } from "lucide-react";
+import { printElement } from "@/lib/print";
 import React, { useEffect, useState } from "react";
 
 interface AnnualDistributionProps {
@@ -177,9 +177,8 @@ export const getUnitSchedule = (
   }
 };
 
-export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
-}) => {
-  const { state, updateState: onUpdateState } = useAppState();
+export const AnnualDistribution: React.FC<AnnualDistributionProps> = () => {
+  const { state } = useAppState();
   const activeClass = state.classes.find(c => c.id === state.activeClassId);
   const [prevActiveClassId, setPrevActiveClassId] = useState(state.activeClassId);
   const [selectedLevel, setSelectedLevel] = useState<GradeLevel>(activeClass?.level || "3AS");
@@ -424,8 +423,16 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
           onClick={handleExportWord}
           className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
           title="تصدير التوزيع السنوي كاملاً إلى ملف وورد منسق وجاهز للطباعة">
-          <Printer className="w-4 h-4 text-slate-500" />
+          <Printer className="w-4 h-4 text-slate-500" aria-hidden="true" />
           <span>تصدير إلى ملف docx</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => printElement('annual-dist-doc', { title: 'التوزيع السنوي' })}
+          className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 cursor-pointer"
+          title="معاينة التوزيع السنوي ثم طباعته أو حفظه PDF">
+          <Printer className="w-4 h-4 text-slate-500" aria-hidden="true" />
+          <span>معاينة وطباعة</span>
         </button>
       </div>
 
@@ -434,7 +441,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
         id="annual-dist-doc"
         className="bg-white border border-slate-200/90 rounded-xl p-6 shadow-xs space-y-5">
         {!curriculumLoaded && (
-          <div className="rounded-xl border border-[var(--primary-soft)] bg-[var(--primary-soft)]/40 px-4 py-3 text-center text-sm font-bold text-[var(--primary)]">
+          <div className="rounded-xl border border-[var(--primary-soft)] bg-[var(--primary-soft)]/40 px-4 py-3 text-center text-sm font-bold text-[var(--primary-ink)]">
             جار تحميل محتوى التوزيع السنوي...
           </div>
         )}
@@ -496,7 +503,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                   <span>{sec.title}</span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-[var(--primary)] bg-white/90 px-2 py-0.5 rounded-md border border-[var(--primary)]/20">
+                  <span className="text-xs font-bold text-[var(--primary)] bg-white/90 px-2 py-0.5 rounded-md border border-[var(--primary)]/20">
                     {sec.units.length}{" "}
                     {[1, 11].includes(sec.units.length)
                       ? "وحدة تعليمية"
@@ -512,7 +519,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
                         <th className="p-2.5 w-12 text-center">الرقم</th>
-                        <th className="p-2.5 w-28 text-center bg-[var(--primary-soft)]/50 text-[var(--primary)]">
+                        <th className="p-2.5 w-28 text-center bg-[var(--primary-soft)]/50 text-[var(--primary-ink)]">
                           الشهر / الأسبوع
                         </th>
                         <th className="p-2.5 w-32">الميدان</th>
@@ -560,22 +567,22 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                             {/* Integrated Month & Week Column */}
                             <td className="p-2.5 text-center whitespace-nowrap bg-[var(--primary-soft)]/30 border-x border-emerald-100/50">
                               <div className="inline-flex flex-col items-center">
-                                <span className="px-2 py-0.5 rounded bg-white text-[var(--primary)] border border-[var(--primary)]/20 font-bold text-[11px] shadow-2xs">
+                                <span className="px-2 py-0.5 rounded bg-white text-[var(--primary)] border border-[var(--primary)]/20 font-bold text-xs shadow-2xs">
                                   {sched.monthName}
                                 </span>
-                                <span className="text-[10px] text-slate-600 font-mono mt-0.5">
+                                <span className="text-xs text-slate-600 font-mono mt-0.5">
                                   {sched.weekName}
                                 </span>
                               </div>
                             </td>
-                            <td className="p-2.5 font-semibold text-[var(--primary)] text-[11px]">
+                            <td className="p-2.5 font-semibold text-[var(--primary)] text-xs">
                               {unit.domain}
                             </td>
                             <td className="p-2.5 font-bold text-slate-900">
                               <div className="flex items-center justify-between gap-2">
                                 <span>{unit.title}</span>
                                 {isUnitCompleted && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] text-[10px] font-bold border border-[var(--primary)]/20 shrink-0">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--primary-ink)] text-xs font-bold border border-[var(--primary)]/20 shrink-0">
                                     أُنجزت ✓
                                   </span>
                                 )}
@@ -585,7 +592,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                               {unit.hourlyVolume} سا
                             </td>
                             {/* Competence Text (نص الكفاءة المستهدفة) */}
-                            <td className="p-2.5 text-slate-800 text-[11px] leading-relaxed">
+                            <td className="p-2.5 text-slate-800 text-xs leading-relaxed">
                               {unit.targetedCompetence ? (
                                 <p className="font-medium text-slate-700">
                                   {unit.targetedCompetence}
@@ -634,25 +641,25 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                       className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded bg-[var(--primary-soft)] text-[var(--primary)] border border-[var(--primary)]/20 flex items-center justify-center text-xs font-bold">
+                          <span className="w-6 h-6 rounded bg-[var(--primary-soft)] text-[var(--primary-ink)] border border-[var(--primary)]/20 flex items-center justify-center text-xs font-bold">
                             {String(unit.unitNumber).padStart(2, "0")}
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-[var(--primary-soft)]/50 text-[var(--primary)] border border-emerald-100 font-bold text-[10px]">
+                          <span className="px-2 py-0.5 rounded bg-[var(--primary-soft)]/50 text-[var(--primary-ink)] border border-emerald-100 font-bold text-xs">
                             {sched.monthName} • {sched.weekName}
                           </span>
                         </div>
-                        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">
+                        <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold">
                           {unit.hourlyVolume} سا
                         </span>
                       </div>
 
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary-soft)] px-1.5 py-0.5 rounded">
+                          <span className="text-xs font-semibold text-[var(--primary-ink)] bg-[var(--primary-soft)] px-1.5 py-0.5 rounded">
                             {unit.domain}
                           </span>
                           {isUnitCompleted && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--primary)] text-[10px] font-bold border border-[var(--primary)]/20">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--primary-ink)] text-xs font-bold border border-[var(--primary)]/20">
                               أُنجزت ✓
                             </span>
                           )}
@@ -663,7 +670,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = ({
                       </div>
 
                       <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
-                        <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
+                        <p className="text-xs text-slate-700 leading-relaxed font-medium">
                           <span className="font-bold text-slate-900 ml-1">
                             الكفاءة:
                           </span>

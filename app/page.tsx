@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import type { User } from "@supabase/supabase-js";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -9,6 +9,7 @@ import { useCloudAppState } from "@/hooks/useCloudAppState";
 import { AppStateProvider } from "@/hooks/app-state-context";
 import { SidebarSanad, SanadTab } from "@/components/SidebarSanad";
 import { TopHeaderSanad } from "@/components/TopHeaderSanad";
+import { GlobalContextBar } from "@/components/GlobalContextBar";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { SyncConflictDialog } from "@/components/SyncConflictDialog";
 import { SignOutDialog } from "@/components/SignOutDialog";
@@ -16,11 +17,8 @@ import { exportBackupJSON } from "@/lib/storage";
 import { purgeLocalUserData } from "@/lib/local-user-data";
 import { AuthGate } from "@/components/AuthGate";
 import { restoreProgressMessage } from "@/lib/sync-status";
-import { ComingSoon } from "@/components/ComingSoon";
 import { CurriculumUnit } from "@/lib/types";
 import { Onboarding } from "@/components/Onboarding";
-
-const MAINTENANCE_MODE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
 const ViewLoading = () => (
   <div className="flex min-h-64 items-center justify-center" aria-live="polite">
@@ -306,7 +304,7 @@ function AppContent({
                 : 'جاري التحميل...'}
             </p>
             {(state.classes.length > 0 || state.students.length > 0) && (
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 بياناتك محفوظة في السحابة ولا تظهر هنا إلا بعد اكتمال التحقق.
               </p>
             )}
@@ -378,6 +376,9 @@ function AppContent({
           onRetrySync={retrySync}
           onOpenConflict={() => setIsConflictOpen(true)}
         />
+
+        {/* Global class + trimester context: one source of truth for every view */}
+        <GlobalContextBar />
 
         {/* View Content Area (with bottom padding for Mobile Navigation bar) */}
         <main

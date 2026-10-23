@@ -2,15 +2,18 @@
 
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
+import { useDialogA11y } from '@/hooks/use-dialog-a11y';
+import { ClassFormDialog } from './classes/ClassFormDialog';
+import { StudentFormDialog } from './classes/StudentFormDialog';
 import React, { useEffect, useState, useRef } from 'react';
-import { CLASS_COLORS, DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
+import { DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
 import { AppState } from '@/lib/storage';
 import { SanadTab } from './SidebarSanad';
-import { ClassRoom, GradeLevel, Student, StudentGrade, TimetableSlot } from '@/lib/types';
+import { ClassRoom, GradeLevel, Student, StudentGrade } from '@/lib/types';
 import { isSchoolSummaryOrFooterRow } from '@/lib/excel-sync';
 import type { ParsedDigitizationResult } from '@/lib/excel-sync';
 import type { ParsedMoumtazeResult } from '@/lib/moumtaze-sync';
-import { commitRosterImportBatch, type RosterImportClass, type RosterImportStudent } from '@/lib/supabase/roster-import';
+import {  type RosterImportClass, type RosterImportStudent } from '@/lib/supabase/roster-import';
 import { isSameClass, isSameStudentName, getCanonicalClassName, getStudentNameKey } from '@/lib/name-normalizer';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -18,8 +21,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Calendar,
-  Clock,
   FileSpreadsheet,
   Upload,
   Download,
@@ -29,9 +30,6 @@ import {
   AlertTriangle,
   Sparkles,
   ClipboardPaste,
-  UserCheck,
-  CheckSquare,
-  Square,
   Building2,
   Check,
   RotateCcw
@@ -60,7 +58,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   initialSubTab = 'classes',
 }) => {
   const { state, updateState: onUpdateState, updateStateAndWait, commitRosterImport } = useAppState();
-  const [activeSubTab, setActiveSubTab] = useState<'classes' | 'timetable' | 'students'>(initialSubTab);
+  const [activeSubTab] = useState<'classes' | 'students'>(initialSubTab);
   const [classSearch, setClassSearch] = useState('');
   const [classLevelFilter, setClassLevelFilter] = useState<GradeLevel | 'ALL'>('ALL');
 
@@ -69,8 +67,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const [editingClass, setEditingClass] = useState<Partial<ClassRoom> | null>(null);
 
   // Modal states for Timetable slot
-  const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<Partial<TimetableSlot> | null>(null);
 
   // Modal states for Student
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
@@ -116,11 +112,23 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const [isMoumtazeModalOpen, setIsMoumtazeModalOpen] = useState(false);
   const [moumtazeData, setMoumtazeData] = useState<ParsedMoumtazeResult | null>(null);
   const [selectedMoumtazeClassIds, setSelectedMoumtazeClassIds] = useState<string[]>([]);
-  const [isParsingMoumtaze, setIsParsingMoumtaze] = useState(false);
+  const [, setIsParsingMoumtaze] = useState(false);
   const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
-  const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+  const pasteDialogRef = useDialogA11y(isPasteModalOpen, () => setIsPasteModalOpen(false));
+  const moumtazeDialogRef = useDialogA11y(isMoumtazeModalOpen, () => setIsMoumtazeModalOpen(false));
+  const deleteDialogRef = useDialogA11y(
+    Boolean(deleteConfirmDialog?.isOpen),
+    () => setDeleteConfirmDialog(null),
+  );
+  const importConflictsRef = useDialogA11y(importConflicts.length > 0, () => setImportConflicts([]));
+  const mergeDialogRef = useDialogA11y(Boolean(mergePair), () => setMergePair(null));
+  const pendingImportRef = useDialogA11y(Boolean(pendingImport), () => setPendingImport(null));
+  const importSheetRef = useDialogA11y(isImportSheetOpen, () => setIsImportSheetOpen(false));
+  const [isSaving, setIsSaving] = useState(false);
+  const [classFormError, setClassFormError] = useState<string | null>(null);
+  const [studentFormError, setStudentFormError] = useState<string | null>(null);
+
   const activeClassObj = state.classes.find(c => c.id === selectedClassId);
 
   useEffect(() => {
@@ -381,20 +389,29 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       stream: 'علوم تجريبية',
       roomNumber: 'القاعة 01',
       color: pickClassColor(state.classes.map(c => c.color)) });
+    setClassFormError(null);
     setIsClassModalOpen(true);
   };
 
   const handleOpenEditClass = (cls: ClassRoom) => {
     setEditingClass({ ...cls });
+    setClassFormError(null);
     setIsClassModalOpen(true);
   };
 
   const handleSaveClass = async () => {
-    if (!editingClass || !editingClass.name) return;
+    if (!editingClass) return;
+    const trimmedName = editingClass.name?.trim();
+    if (!trimmedName) {
+      // بدل العودة الصامتة: رسالة صريحة تحت الحقل مع aria-invalid.
+      setClassFormError('اسم القسم مطلوب. اكتب مثلًا: «3 علوم تجريبية 1».');
+      return;
+    }
+    setClassFormError(null);
     if (isSaving) return; // Prevent double-submit
     
     // Unify class name on manual save
-    const canonicalName = getCanonicalClassName(editingClass.name);
+    const canonicalName = getCanonicalClassName(trimmedName);
     const classId = editingClass.id || uuidv4();
     const classToSave = { ...editingClass, id: classId, name: canonicalName };
 
@@ -434,63 +451,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     });
   };
 
-  // ---------------------------------------------
-  // Timetable Operations
-  // ---------------------------------------------
-  const handleOpenAddSlot = (dayOfWeek: number) => {
-    const validDay = (dayOfWeek >= 0 && dayOfWeek <= 4 ? dayOfWeek : 0) as 0 | 1 | 2 | 3 | 4;
-    setEditingSlot({
-      id: uuidv4(),
-      classId: state.classes[0]?.id || '',
-      dayOfWeek: validDay,
-      startTime: '08:00',
-      endTime: '09:00',
-      room: state.classes[0]?.roomNumber?.replace('القاعة ', '') || '01' });
-    setIsSlotModalOpen(true);
-  };
-
-  const handleSaveSlot = async () => {
-    if (!editingSlot || !editingSlot.classId) return;
-    const slotToSave = { ...editingSlot };
-    setIsSlotModalOpen(false);
-    setEditingSlot(null);
-    try {
-      await updateStateAndWait(prev => {
-        const idx = prev.timetable.findIndex(s => s.id === slotToSave.id);
-        const updatedSlots = [...prev.timetable];
-        if (idx >= 0) updatedSlots[idx] = slotToSave as TimetableSlot;
-        else updatedSlots.push(slotToSave as TimetableSlot);
-        return { ...prev, timetable: updatedSlots };
-      });
-      showToast('تم حفظ حصة التوقيت ومزامنتها مع السحابة.', 'success');
-    } catch (error: unknown) {
-      console.error('Timetable slot sync failed:', error);
-      showToast(error instanceof Error ? error.message : 'تعذر مزامنة حصة التوقيت.', 'error');
-    }
-  };
-
-  const handleDeleteSlot = async (slotId: string) => {
-    try {
-      await updateStateAndWait(prev => ({
-        ...prev,
-        timetable: prev.timetable.filter(s => s.id !== slotId)
-      }));
-      showToast('تم حذف حصة التوقيت ومزامنة الحذف مع السحابة.', 'success');
-    } catch (error: unknown) {
-      console.error('Timetable slot deletion sync failed:', error);
-      showToast(error instanceof Error ? error.message : 'تعذر مزامنة حذف حصة التوقيت.', 'error');
-    }
-  };
-
-  const promptDeleteSlot = (slot: TimetableSlot) => {
-    const cls = state.classes.find(c => c.id === slot.classId);
-    setDeleteConfirmDialog({
-      isOpen: true,
-      type: 'slot',
-      id: slot.id,
-      name: `حصة ${dayNames[slot.dayOfWeek]} ${slot.startTime} - ${slot.endTime}${cls ? ` (${cls.name})` : ''}`
-    });
-  };
 
   // ---------------------------------------------
   // Student Operations & Excel / CSV Platform Import
@@ -980,10 +940,17 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   };
 
   const handleSaveStudent = async () => {
-    if (!editingStudent || !editingStudent.fullName || !selectedClassId) return;
+    if (!editingStudent || !selectedClassId) return;
+    const trimmedStudentName = editingStudent.fullName?.trim();
+    if (!trimmedStudentName) {
+      setStudentFormError('اسم التلميذ مطلوب.');
+      return;
+    }
+    setStudentFormError(null);
     if (isSaving) return; // Prevent double-submit
     const studentToSave = {
       ...editingStudent,
+      fullName: trimmedStudentName,
       id: editingStudent.id || uuidv4(),
     };
     setIsSaving(true);
@@ -1145,8 +1112,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         showToast(error instanceof Error ? error.message : 'تعذرت مزامنة حذف القسم.', 'error');
         return;
       }
-    } else if (type === 'slot') {
-      await handleDeleteSlot(id);
     }
   };
 
@@ -1173,9 +1138,11 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           <section
             role="dialog"
             aria-modal="true"
+            ref={importConflictsRef}
+            tabIndex={-1}
             aria-labelledby="import-conflicts-title"
             dir="rtl"
-            className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl outline-none"
           >
             <div className="flex items-start justify-between gap-4 border-b border-amber-200 bg-amber-50 p-5">
               <div className="flex items-start gap-3">
@@ -1204,12 +1171,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 <article key={`${conflict.className}-${conflict.importedName}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-black text-slate-900">{conflict.importedName}</div>
-                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-slate-600">
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-slate-600">
                       القسم: {conflict.className}
                     </span>
                   </div>
                   {conflict.importedRegNumber && (
-                    <div className="mt-2 text-[11px] font-semibold text-slate-600">
+                    <div className="mt-2 text-xs font-semibold text-slate-600">
                       رقم التعريف: <span className="font-mono">{conflict.importedRegNumber}</span>
                     </div>
                   )}
@@ -1219,7 +1186,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                   </div>
                   {conflict.candidates.length > 0 && (
                     <div className="mt-3 border-t border-slate-200 pt-3">
-                      <div className="mb-2 text-[11px] font-black text-slate-700">السجلات المحتملة:</div>
+                      <div className="mb-2 text-xs font-black text-slate-700">السجلات المحتملة:</div>
                       <div className="space-y-1.5">
                         {conflict.candidates.map(candidate => (
                           <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs">
@@ -1253,11 +1220,13 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {mergePair && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4" role="presentation">
           <section
+            ref={mergeDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="student-merge-title"
             dir="rtl"
-            className="w-full max-w-xl rounded-2xl bg-white shadow-2xl"
+            className="w-full max-w-xl rounded-2xl bg-white shadow-2xl outline-none"
           >
             <div className="flex items-start justify-between gap-4 border-b border-amber-200 bg-amber-50 p-5">
               <div>
@@ -1284,16 +1253,16 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       : 'border-slate-200 bg-slate-50 hover:border-amber-300'
                   }`}
                 >
-                  <div className="text-[11px] font-bold text-slate-500">
+                  <div className="text-xs font-bold text-slate-500">
                     {index === 0 ? 'السجل الأساسي الحالي' : 'السجل الذي سيُدمج'}
                   </div>
                   <div className="mt-2 text-sm font-black text-slate-900">{student.fullName}</div>
-                  <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                  <div className="mt-2 space-y-1 text-xs text-slate-600">
                     <div>الرقم: {student.numberInList}</div>
                     <div>رقم التعريف: {student.regNumber || student.registrationNumber || 'غير متوفر'}</div>
                     <div>تاريخ الميلاد: {student.birthDate || 'غير متوفر'}</div>
                   </div>
-                  {index === 1 && <div className="mt-3 text-[11px] font-bold text-amber-800">انقر لجعله السجل الأساسي</div>}
+                  {index === 1 && <div className="mt-3 text-xs font-bold text-amber-800">انقر لجعله السجل الأساسي</div>}
                 </button>
               ))}
             </div>
@@ -1312,7 +1281,9 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {pendingImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
           <section
-            role="dialog" aria-modal="true" aria-labelledby="digitization-import-preview-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" >
+            ref={pendingImportRef}
+            tabIndex={-1}
+            role="dialog" aria-modal="true" aria-labelledby="digitization-import-preview-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl outline-none" >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div id="digitization-import-preview-title" className="text-lg font-black text-slate-900">معاينة استيراد ملف الرقمنة</div>
@@ -1372,12 +1343,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 ? `قائمة الأقسام في ${state.profile.schoolName.startsWith('ثانوية') ? state.profile.schoolName : 'ثانوية ' + state.profile.schoolName}`
                 : 'قائمة الأقسام المسندة'}
             </div>
-            <div className="text-[11px] text-slate-500 font-semibold">
+            <div className="text-xs text-slate-500 font-semibold">
               {state.classes.length} أقسام • {state.students.length} تلاميذ • {state.timetable.length} حصص مبرمجة
             </div>
             <button
               onClick={handleOpenAddClass}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 text-white text-xs font-bold shadow-xs cursor-pointer" id="btn-add-new-class" >
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer" id="btn-add-new-class" >
               <Plus className="w-4 h-4" />
               <span>إضافة قسم جديد</span>
             </button>
@@ -1481,7 +1452,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                           onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
                           showToast(`تم تفعيل ${cls.name} كقسم نشط`, 'success');
                         }}
-                        className="w-full min-h-10 py-1.5 px-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary-soft)] hover:bg-[var(--primary)] text-[var(--primary)] hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        className="w-full min-h-10 py-1.5 px-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary-soft)] hover:bg-[var(--primary)] text-[var(--primary-ink)] hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Check className="w-4 h-4" />
                         <span>تفعيل كقسم نشط</span>
@@ -1569,92 +1540,6 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         </div>
       )}
 
-      {/* --------------------------------------------- */}
-      {/* SUB-TAB 2: WEEKLY TIMETABLE */}
-      {/* --------------------------------------------- */}
-      {activeSubTab === 'timetable' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-bold text-slate-700">
-              استعمال الزمن الأسبوعي - جدول التوقيت الدراسي (الأحد إلى الخميس)
-            </div>
-            <button
-              onClick={() => handleOpenAddSlot(0)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs cursor-pointer" >
-              <Plus className="w-4 h-4" />
-              <span>إضافة حصة جديدة للجدول</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            {dayNames.map((dayName, dayIndex) => {
-              const daySlots = state.timetable
-                .filter(s => s.dayOfWeek === dayIndex)
-                .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-              return (
-                <div
-                  key={dayIndex}
-                  className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs flex flex-col" >
-                  <div className="bg-slate-100 px-3 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-900">{dayName}</span>
-                    <button
-                      onClick={() => handleOpenAddSlot(dayIndex)}
-                      className="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer" title={`إضافة حصة ليوم ${dayName}`}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="p-2 space-y-2 flex-1 min-h-[220px]">
-                    {daySlots.length === 0 ? (
-                      <div className="text-center py-8 text-[11px] text-slate-400">
-                        لا توجد حصص
-                      </div>
-                    ) : (
-                      daySlots.map(slot => {
-                        const cls = state.classes.find(c => c.id === slot.classId);
-                        return (
-                          <div
-                            key={slot.id}
-                            className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white transition-all space-y-1 relative group" >
-                            <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 font-bold">
-                              <span>
-                                {slot.startTime} – {slot.endTime}
-                              </span>
-                              <div className="flex flex-col items-center gap-1">
-                                <button
-                                  onClick={() => {
-                                    setEditingSlot(slot);
-                                    setIsSlotModalOpen(true);
-                                  }}
-                                  className="min-w-8 min-h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-[var(--primary)] hover:bg-[var(--primary-soft)] transition-colors cursor-pointer" title="تعديل الحصة" >
-                                  <Edit className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => promptDeleteSlot(slot)}
-                                  className="min-w-8 min-h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity cursor-pointer" title="حذف الحصة" >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="text-xs font-black text-slate-900">
-                              {cls?.name || 'قسم غير معروف'}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {cls?.stream} {slot.room && `(ق ${slot.room})`}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* --------------------------------------------- */}
       {/* SUB-TAB 3: STUDENTS ROSTER & DIGITAL PLATFORM */}
@@ -1722,7 +1607,8 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
 
           {isImportSheetOpen && (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center" role="presentation" onClick={() => setIsImportSheetOpen(false)}>
-              <section role="dialog" aria-modal="true" aria-label="إجراءات قوائم التلاميذ" onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-[var(--bg-surface)] p-4 shadow-2xl">
+              <section ref={importSheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="import-sheet-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-[var(--bg-surface)] p-4 shadow-2xl outline-none">
+                <h2 id="import-sheet-title" className="sr-only">إضافة أو استيراد التلاميذ</h2>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="text-sm font-black text-[var(--text-primary)]">إضافة أو استيراد التلاميذ</div>
                   <button type="button" onClick={() => setIsImportSheetOpen(false)} className="rounded-lg p-2 text-[var(--text-tertiary)] hover:bg-[var(--bg-surface-subtle)]" aria-label="إغلاق">×</button>
@@ -1744,7 +1630,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               <div className="flex items-center gap-2">
                 <span>تعداد القسم: {classStudents.length} تلميذ</span>
                 <span className="text-slate-300">|</span>
-                <span className="text-slate-500 font-normal text-[11px]">
+                <span className="text-slate-500 font-normal text-xs">
                   الترقيم تسلسلي دائماً من 1 إلى {classStudents.length}
                 </span>
               </div>
@@ -1757,7 +1643,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       primary: duplicateNameGroups[0][0],
                       duplicate: duplicateNameGroups[0][1]
                     })}
-                    className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+                    className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 hover:bg-amber-100"
                   >
                     <AlertTriangle className="h-3 w-3" />
                     <span>مراجعة التكرار ({duplicateNameGroups.length})</span>
@@ -1766,7 +1652,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 {classStudents.length > 0 && (
                   <button
                     onClick={handleResequenceCurrentClass}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium cursor-pointer transition-colors shadow-2xs" title="إعادة ضبط أرقام تلاميذ هذا القسم لتبدأ من 1 بالتسلسل دون أي انقطاع وحذف خانات المجموع إن وجدت" >
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium cursor-pointer transition-colors shadow-2xs" title="إعادة ضبط أرقام تلاميذ هذا القسم لتبدأ من 1 بالتسلسل دون أي انقطاع وحذف خانات المجموع إن وجدت" >
                     <RotateCcw className="w-3 h-3 text-slate-500" />
                     <span>إعادة ترتيب الأرقام (1 إلى {classStudents.length})</span>
                   </button>
@@ -1816,13 +1702,13 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         </td>
                         <td className="py-2.5 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
                               student.gender === 'F' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700' }`}
                           >
                             {student.gender === 'F' ? 'أنثى' : 'ذكر'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 font-mono text-slate-500 text-[11px]">
+                        <td className="py-2.5 px-4 font-mono text-slate-500 text-xs">
                           {student.registrationNumber || '-'}
                         </td>
                         <td className="py-2.5 px-4 text-center">
@@ -1862,13 +1748,13 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
                               student.gender === 'F' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700' }`}
                           >
                             {student.gender === 'F' ? 'أنثى' : 'ذكر'}
                           </span>
                           {student.registrationNumber && (
-                            <span className="font-mono text-slate-500 text-[10px]">
+                            <span className="font-mono text-slate-500 text-xs">
                               {student.registrationNumber}
                             </span>
                           )}
@@ -1902,198 +1788,32 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {/* --------------------------------------------- */}
       {/* MODAL: ADD / EDIT CLASS */}
       {/* --------------------------------------------- */}
-      {isClassModalOpen && editingClass && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">
-                {editingClass.name ? 'تعديل القسم' : 'إضافة قسم جديد'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsClassModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer rounded-lg"
-                aria-label="إغلاق النافذة" >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">تسمية القسم (مثال: 3 علوم 1):</label>
-                <input
-                  type="text" value={editingClass.name || ''}
-                  onChange={e => setEditingClass({ ...editingClass, name: e.target.value })}
-                  placeholder="3 علوم تجريبية 1" className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold focus:outline-amber-600" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">المستوى الدراسي:</label>
-                  <select
-                    value={editingClass.level || '3AS'}
-                    onChange={e => setEditingClass({ ...editingClass, level: e.target.value as GradeLevel })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold" >
-                    <option value="1AS_ARTS">1 ج.م آداب (2 سا/أسبوع)</option>
-                    <option value="1AS_SCIENCE">1 ج.م علوم وتكنولوجيا (1 سا/أسبوع)</option>
-                    <option value="2AS">السنة الثانية ثانوي 2AS (2 سا/أسبوع)</option>
-                    <option value="3AS">السنة الثالثة ثانوي بكالوريا 3AS (2 سا/أسبوع)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">الشعبة:</label>
-                  <input
-                    type="text" value={editingClass.stream || ''}
-                    onChange={e => setEditingClass({ ...editingClass, stream: e.target.value })}
-                    placeholder="علوم تجريبية / رياضيات / آداب..." className="w-full px-3 py-2 rounded-lg border border-slate-300" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">القاعة:</label>
-                  <input
-                    type="text" value={editingClass.roomNumber || ''}
-                    onChange={e => setEditingClass({ ...editingClass, roomNumber: e.target.value })}
-                    placeholder="القاعة 04" className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">لون التمييز:</label>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {CLASS_COLORS.map(color => {
-                      const isSelected = (editingClass.color || DEFAULT_CLASS_COLOR).toLowerCase() === color.toLowerCase();
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setEditingClass({ ...editingClass, color })}
-                          aria-label={`اختيار اللون ${color}`}
-                          aria-pressed={isSelected}
-                          className={`h-8 w-8 rounded-lg border-2 transition-transform hover:scale-105 cursor-pointer ${isSelected ? 'border-slate-900 scale-105' : 'border-slate-200'}`}
-                          style={{ backgroundColor: color }} />
-                      );
-                    })}
-                    <input
-                      type="color" value={editingClass.color || DEFAULT_CLASS_COLOR}
-                      onChange={e => setEditingClass({ ...editingClass, color: e.target.value })}
-                      aria-label="لون مخصص"
-                      className="h-8 w-10 rounded-lg border border-slate-300 cursor-pointer bg-white p-0.5" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => setIsClassModalOpen(false)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-700" >
-                إلغاء
-              </button>
-              <button
-                onClick={handleSaveClass}
-                disabled={isSaving}
-                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-[var(--warning-soft)]0 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold" >
-                {isSaving ? 'جارٍ الحفظ...' : 'حفظ القسم'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --------------------------------------------- */}
-      {/* MODAL: ADD / EDIT TIMETABLE SLOT */}
-      {/* --------------------------------------------- */}
-      {isSlotModalOpen && editingSlot && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">إضافة حصة إلى جدول التوقيت</h3>
-              <button onClick={() => setIsSlotModalOpen(false)} className="p-1 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">اليوم:</label>
-                <select
-                  value={editingSlot.dayOfWeek ?? 0}
-                  onChange={e => setEditingSlot({ ...editingSlot, dayOfWeek: Number(e.target.value) as 0 | 1 | 2 | 3 | 4 })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold" >
-                  {dayNames.map((name, i) => (
-                    <option key={i} value={i}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">القسم:</label>
-                <select
-                  value={editingSlot.classId || ''}
-                  onChange={e => setEditingSlot({ ...editingSlot, classId: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold" >
-                  {state.classes.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.stream})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">من الساعة:</label>
-                  <input
-                    type="time" value={editingSlot.startTime || '08:00'}
-                    onChange={e => setEditingSlot({ ...editingSlot, startTime: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">إلى الساعة:</label>
-                  <input
-                    type="time" value={editingSlot.endTime || '09:00'}
-                    onChange={e => setEditingSlot({ ...editingSlot, endTime: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">القاعة:</label>
-                <input
-                  type="text" value={editingSlot.room || ''}
-                  onChange={e => setEditingSlot({ ...editingSlot, room: e.target.value })}
-                  placeholder="04" className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => setIsSlotModalOpen(false)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-700" >
-                إلغاء
-              </button>
-              <button
-                onClick={handleSaveSlot}
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold" >
-                إضافة الحصة
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ClassFormDialog
+        open={isClassModalOpen}
+        draft={editingClass}
+        error={classFormError}
+        saving={isSaving}
+        onChange={setEditingClass}
+        onClearError={() => setClassFormError(null)}
+        onClose={() => setIsClassModalOpen(false)}
+        onSave={handleSaveClass}
+      />
 
       {/* --------------------------------------------- */}
       {/* MODAL: QUICK PASTE NAMES */}
       {/* --------------------------------------------- */}
       {isPasteModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div
+            ref={pasteDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="paste-modal-title"
+            className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 outline-none"
+          >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">
+              <h3 id="paste-modal-title" className="text-base font-black text-slate-900">
                 لصق قائمة أسماء التلاميذ سريعا
               </h3>
               <button
@@ -2137,97 +1857,43 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {/* --------------------------------------------- */}
       {/* MODAL: ADD / EDIT SINGLE STUDENT */}
       {/* --------------------------------------------- */}
-      {isStudentModalOpen && editingStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">
-                {editingStudent.fullName ? 'تعديل بيانات التلميذ' : 'إضافة تلميذ جديد'}
-              </h3>
-              <button onClick={() => setIsStudentModalOpen(false)} className="p-1 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <StudentFormDialog
+        open={isStudentModalOpen}
+        draft={editingStudent}
+        error={studentFormError}
+        saving={isSaving}
+        onChange={setEditingStudent}
+        onClearError={() => setStudentFormError(null)}
+        onClose={() => setIsStudentModalOpen(false)}
+        onSave={handleSaveStudent}
+      />
 
-            <div className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">الاسم واللقب:</label>
-                <input
-                  type="text" value={editingStudent.fullName || ''}
-                  onChange={e => setEditingStudent({ ...editingStudent, fullName: e.target.value })}
-                  placeholder="الاسم الكامل للتلميذ" className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">الرقم في القائمة:</label>
-                  <input
-                    type="number" value={editingStudent.numberInList || 1}
-                    onChange={e =>
-                      setEditingStudent({ ...editingStudent, numberInList: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">الجنس:</label>
-                  <select
-                    value={editingStudent.gender || 'M'}
-                    onChange={e =>
-                      setEditingStudent({ ...editingStudent, gender: e.target.value as 'M' | 'F' })
-                    }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300" >
-                    <option value="M">ذكر</option>
-                    <option value="F">أنثى</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">رقم التعريف / التسجيل بالرقمنة:</label>
-                <input
-                  type="text" value={editingStudent.registrationNumber || ''}
-                  onChange={e =>
-                    setEditingStudent({ ...editingStudent, registrationNumber: e.target.value })
-                  }
-                  placeholder="اختياري" className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => setIsStudentModalOpen(false)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-700" >
-                إلغاء
-              </button>
-              <button
-                onClick={handleSaveStudent}
-                disabled={isSaving}
-                className="px-4 py-2 rounded-lg bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold" >
-                {isSaving ? 'جارٍ الحفظ...' : 'حفظ'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* --------------------------------------------- */}
       {/* MODAL: DELETE CONFIRMATION DIALOG (SAFE IN-APP DIALOG) */}
       {/* --------------------------------------------- */}
       {deleteConfirmDialog && deleteConfirmDialog.isOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200" dir="rtl">
+          <div
+            ref={deleteDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+            className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 outline-none" dir="rtl"
+          >
             <div className="flex items-center gap-3 text-rose-600">
               <div className="w-10 h-10 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-rose-600" />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 id="delete-dialog-title" className="text-base font-black text-slate-900">
                   {deleteConfirmDialog.type === 'class'
                     ? 'تأكيد حذف القسم'
                     : deleteConfirmDialog.type === 'student'
                       ? 'تأكيد حذف التلميذ'
                       : 'تأكيد حذف الحصة'}
                 </h3>
-                <span className="text-[11px] text-slate-500">هذا الإجراء لا يمكن التراجع عنه</span>
+                <span className="text-xs text-slate-500">هذا الإجراء لا يمكن التراجع عنه</span>
               </div>
             </div>
 
@@ -2235,7 +1901,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
               هل أنت متأكد من رغبتك في حذف{' '}
               <strong className="text-slate-900 font-black">«{deleteConfirmDialog.name}»</strong>؟
               {deleteConfirmDialog.type === 'class' && (
-                <span className="block mt-1.5 text-rose-700 font-semibold text-[11px]">
+                <span className="block mt-1.5 text-rose-700 font-semibold text-xs">
                   ملاحظة: سيتم حذف جميع تلاميذ هذا القسم والعلامات المسجلة والحصص المرتبطة به في الجدول تلقائياً.
                 </span>
               )}
@@ -2264,7 +1930,10 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       {isMoumtazeModalOpen && moumtazeData && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden" dir="rtl" >
+            ref={moumtazeDialogRef}
+            tabIndex={-1}
+            className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden outline-none" dir="rtl"
+            role="dialog" aria-modal="true" aria-label="استيراد الأقسام من الممتاز" >
             {/* Header */}
             <div className="p-5 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2274,7 +1943,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 <div>
                   <h3 className="text-base font-black flex items-center gap-2">
                     <span>استيراد الأقسام المسندة من برنامج الممتاز</span>
-                    <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-indigo-600/60 text-indigo-100 border border-indigo-400/30">
+                    <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-indigo-600/60 text-indigo-100 border border-indigo-400/30">
                       مؤسسة
                     </span>
                   </h3>
@@ -2288,7 +1957,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     {moumtazeData.academicYear && (
                       <span className="text-slate-300">الموسم: {moumtazeData.academicYear}</span>
                     )}
-                    <span className="text-slate-400 font-mono text-[11px]">({moumtazeData.fileName})</span>
+                    <span className="text-slate-400 font-mono text-xs">({moumtazeData.fileName})</span>
                   </div>
                 </div>
               </div>
@@ -2352,13 +2021,13 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                           <h4 className="font-black text-slate-900 text-sm">{cls.className}</h4>
                         </div>
                         {cls.roomNumber && (
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--warning-soft)] text-amber-900 border border-amber-200">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-[var(--warning-soft)] text-amber-900 border border-amber-200">
                             القاعة {cls.roomNumber}
                           </span>
                         )}
                       </div>
 
-                      <div className="text-[11px] space-y-1 text-slate-600">
+                      <div className="text-xs space-y-1 text-slate-600">
                         <div className="flex justify-between">
                           <span className="text-slate-500">الشعبة:</span>
                           <span className="font-semibold text-slate-800">{cls.stream}</span>
@@ -2375,11 +2044,11 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2 py-0.5 rounded-md border border-emerald-100">
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="font-bold text-[var(--primary-ink)] bg-[var(--primary-soft)] px-2 py-0.5 rounded-md border border-emerald-100">
                           {cls.students.length} تلميذاً
                         </span>
-                        <div className="flex items-center gap-1.5 text-slate-500 text-[10px]">
+                        <div className="flex items-center gap-1.5 text-slate-500 text-xs">
                           <span>{malesCount} ذ</span>
                           <span>•</span>
                           <span>{femalesCount} إناث</span>
