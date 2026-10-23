@@ -183,17 +183,17 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       evaluationRules
     ).participationRecorded ?? 0;
 
-  // جولة تفتيش الكراس: واحدة في الفصل (ويمكن ضبطها على 2)، وتمتد على عدة حصص.
+  // مراقبة الكراس: واحدة في الفصل (ويمكن ضبطها على 2)، وتمتد على عدة حصص.
   const notebookRounds = normalizeNotebookRounds(evaluationRules?.notebookRounds);
   const notebookChecks = collectNotebookChecks(classSessions);
   const classStudentIds = classStudents.map(student => student.id);
   const notebookRound = nextOpenRound(notebookChecks, classStudentIds, notebookRounds);
   const notebookProgress = roundProgress(notebookChecks, classStudentIds, notebookRound);
-  // مع جولة واحدة: بعد اكتمالها يتحول الزر إلى مراجعة وتعديل بدل فتح جولة ثانية.
+  // بعد اكتمال المراقبة يتحول الزر إلى مراجعة وتعديل بدل فتح مراقبة ثانية.
   const notebookNeedsReview = notebookRounds === 1 && notebookProgress.complete;
-  const notebookLabel = notebookRounds > 1 ? `جولة الكراس ${notebookRound}` : 'جولة الكراس';
+  const notebookLabel = notebookRounds > 1 ? `مراقبة الكراس ${notebookRound}` : 'مراقبة الكراس';
 
-  // تلميذ سُجّل كراسه في الحصة نفسها ضمن الجولة الأخرى: لا نسمح بالكتابة فوق
+  // تلميذ سُجّل كراسه في الحصة نفسها ضمن المراقبة الأخرى: لا نسمح بالكتابة فوق
   // سجله السابق، لأن التفتيش الواحد للحصة يخص تلميذاً واحداً.
   const otherRoundInSession = (studentId: string): number | null => {
     const existing = activeSession?.notebookChecks?.[studentId];
@@ -218,7 +218,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
 
   const handleSaveNotebookRound = async () => {
     if (!activeSession) {
-      showToast('أنشئ حصة أولاً ثم سجّل جولة الكراس داخلها.', 'warning');
+      showToast('أنشئ حصة أولاً ثم سجّل مراقبة الكراس داخلها.', 'warning');
       return;
     }
     const updates = pendingNotebookUpdates;
@@ -237,18 +237,18 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         ),
       }));
       const remaining = classStudents.filter(student => !notebookDraft[student.id]).length;
-      const roundLabel = notebookRounds > 1 ? ` في الجولة ${notebookRound}` : '';
+      const roundLabel = notebookRounds > 1 ? ` في المراقبة ${notebookRound}` : '';
       showToast(
-        `تم حفظ تفتيش ${updates.length} كراس${roundLabel}` +
+        `تم حفظ مراقبة ${updates.length} كراس${roundLabel}` +
           (remaining > 0
             ? `؛ بقي ${remaining} تلميذاً تُكملهم في حصة أخرى.`
-            : '؛ اكتملت جولة الكراس لهذا الفصل.'),
+            : '؛ اكتملت مراقبة الكراس لهذا الفصل.'),
         'success',
       );
       setIsNotebookOpen(false);
     } catch (error) {
       console.error('Notebook round save failed:', error);
-      showToast('تعذر حفظ جولة الكراس في السحابة.', 'error');
+      showToast('تعذر حفظ مراقبة الكراس في السحابة.', 'error');
     }
   };
 
@@ -751,7 +751,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   type="button"
                   onClick={openNotebookRound}
                   className="flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--accent-gold)] bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-100 sm:w-auto"
-                  title="تفتيش كراس 8–10 تلاميذ في هذه الحصة؛ الجولة الواحدة تكتمل على عدة حصص"
+                  title="مراقبة كراس 8–10 تلاميذ في هذه الحصة؛ المراقبة الواحدة تكتمل على عدة حصص"
                 >
                   <span>{notebookNeedsReview ? 'مراجعة الكراس' : notebookLabel}</span>
                   <span className="rounded bg-white/80 px-1.5 font-mono text-xs">
@@ -769,11 +769,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 </button>
               </div>
             </div>
-
-            <p className="w-full text-xs text-[var(--text-secondary)]">
-              كل ما يُسجَّل هنا يُحتسب في <strong>{trimesterLabel(activeTrimester)}</strong> فقط؛
-              الفصل التالي يبدأ من صفر.
-            </p>
 
             {/* Quick Session Stats */}
             <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 text-xs w-full sm:w-auto">
@@ -865,7 +860,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           <div id="attendance-doc">
           <div className="space-y-3">
               {/* 1. Mobile-First Card View (Screens < 768px): ZERO Horizontal Scrolling */}
-              <div className="block md:hidden space-y-2.5">
+              <div className="block md:hidden print:hidden space-y-2.5">
                 {filteredStudents.map(student => {
                   const status = activeAttendance[student.id] || 'PRESENT';
                   const stats = studentStatsMap[student.id] || emptyStats();
@@ -976,7 +971,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               </div>
 
               {/* 2. Desktop Table View (Screens >= 768px) */}
-              <div className="hidden md:block bg-white border border-slate-200/90 rounded-xl shadow-xs overflow-hidden">
+              <div className="hidden md:block print:block bg-white border border-slate-200/90 rounded-xl shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs border-collapse">
                     <thead>
@@ -1139,7 +1134,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         </div>
       </AccessibleDialog>
 
-      {/* جولة الكراس — تفتيش سريع لدفعة من التلاميذ في الحصة الحالية */}
+      {/* مراقبة الكراس — تصحيح سريع لدفعة من التلاميذ في الحصة الحالية */}
       <AccessibleDialog
         open={isNotebookOpen}
         titleId="notebook-round-title"
@@ -1149,14 +1144,14 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 id="notebook-round-title" className="text-base font-black text-[var(--text-primary)]">
-              {notebookRounds > 1 ? `جولة الكراس ${notebookRound}` : 'جولة الكراس'}
+              {notebookRounds > 1 ? `مراقبة الكراس ${notebookRound}` : 'مراقبة الكراس'}
             </h3>
             <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
               {notebookRounds > 1
                 ? `افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`
                 : notebookNeedsReview
-                  ? 'اكتملت الجولة لهذا الفصل. يمكنك تعديل أي درجة ثم الحفظ؛ ولا حاجة لجولة ثانية.'
-                  : `جولة واحدة في الفصل: افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`}
+                  ? 'اكتملت المراقبة لهذا الفصل. يمكنك تعديل أي درجة ثم الحفظ؛ ولا حاجة لمراقبة ثانية.'
+                  : `مراقبة واحدة في الفصل: افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`}
             </p>
           </div>
           <span className="shrink-0 rounded-lg bg-[var(--primary-soft)] px-2 py-1 font-mono text-xs font-bold text-[var(--primary-ink)]">
@@ -1231,7 +1226,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             disabled={pendingNotebookUpdates.length === 0}
             className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            حفظ {pendingNotebookUpdates.length} تفتيشاً
+            حفظ {pendingNotebookUpdates.length} درجة
           </button>
         </div>
       </AccessibleDialog>

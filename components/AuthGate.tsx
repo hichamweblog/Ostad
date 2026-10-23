@@ -343,12 +343,10 @@ function LoginPanel() {
         بالمتابعة أنت توافق على{' '}
         <Link href="/terms" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
           شروط الاستخدام
-        </Link>{' '}
-        و{' '}
+        </Link>{' و'}
         <Link href="/privacy" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
           سياسة الخصوصية
-        </Link>
-        . يمكنك تجربة التطبيق دون حساب عبر «المتابعة دون اتصال».
+        </Link>{'.'}
       </p>
     </div>
   );

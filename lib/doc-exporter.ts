@@ -32,7 +32,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
   const indicators = unit.indicators || [];
 
   const htmlContent = `
-<html xmlns:o='urn:schemas-microsoft-com:office:office'
+<html lang="ar" dir="rtl" xmlns:o='urn:schemas-microsoft-com:office:office'
       xmlns:w='urn:schemas-microsoft-com:office:word'
       xmlns='http://www.w3.org/TR/REC-html40'>
 <head>

@@ -309,7 +309,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </div>
 
  {/* 1. Mobile-First Daily Schedule View (Screens < 1024px): ZERO Horizontal Scrolling */}
- <div className="block lg:hidden space-y-4">
+ <div className="block lg:hidden print:hidden space-y-4">
  {/* Day Selector Pills */}
  <div className="flex items-center gap-1.5 p-1.5 bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-xs">
  {DAYS.map(day => {
@@ -427,7 +427,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </div>
 
  {/* 2. Desktop Timetable Matrix (Screens >= 1024px) */}
- <div className="hidden lg:block bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+ <div className="hidden lg:block print:block bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
  <div className="overflow-x-auto">
  <table className="w-full text-right border-collapse min-w-[850px]"id="timetable-matrix-table">
  <thead>

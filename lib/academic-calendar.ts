@@ -374,6 +374,13 @@ export function normalizeCalendarSettings(
     rules.notebookMax = defaults.evaluationRules.notebookMax;
     rules.participationMax = defaults.evaluationRules.participationMax;
   }
+  // خصم السلوك: كان الافتراضي القديم 0.25 للأولى ثم 0.5 تصاعدياً. الإعداد
+  // المطابق تماماً لهذا الزوج لم يخصّصه الأستاذ، فيُرفع إلى 0.5 لكل مخالفة.
+  // أي زوج مختلف اختاره الأستاذ صراحةً ولا يُمسّ.
+  if (rules.disruptionDeduction === 0.25 && (rules.disruptionRepeatDeduction ?? 0.5) === 0.5) {
+    rules.disruptionDeduction = defaults.evaluationRules.disruptionDeduction;
+    rules.disruptionRepeatDeduction = defaults.evaluationRules.disruptionRepeatDeduction;
+  }
   // جولات الكراس: كل إعداد محفوظ قبل هذا التغيير يحمل 2 لأنها كانت القيمة
   // الافتراضية الوحيدة، ولم تُعرض أبداً في الواجهة. تُرقّى مرة واحدة إلى الافتراضي
   // الجديد (جولة واحدة). إن أُتيح اختيارها للأستاذ مستقبلاً فيجب حذف هذا السطر.

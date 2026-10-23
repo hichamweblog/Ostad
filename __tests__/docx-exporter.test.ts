@@ -164,3 +164,25 @@ describe('real export templates: nested layout, entities and photographs', () =>
     expect(xml).toContain('<w:tblHeader/>');
   });
 });
+
+describe('A4 printing polish', () => {
+  it('uses a compact 1.2 cm margin and a 10 pt default font', () => {
+    const xml = documentXml('<p>نص</p>');
+    expect(xml).toContain('<w:pgMar w:top="680" w:right="680" w:bottom="680" w:left="680"');
+    const styles = buildDocxParts('<p>نص</p>')['word/styles.xml'];
+    expect(styles).toContain('<w:sz w:val="20"/>');
+    expect(styles).toContain('<w:szCs w:val="20"/>');
+  });
+
+  it('honours an explicit page break without corrupting the paragraph order', () => {
+    const xml = documentXml('<p>أ</p><div class="print-page-break">ب</div>');
+    expect(xml).toContain('<w:pageBreakBefore/>');
+    // keepNext / pageBreakBefore must precede <w:bidi/> inside pPr.
+    expect(xml).toMatch(/<w:pPr><w:pageBreakBefore\/><w:bidi\/>/);
+  });
+
+  it('keeps a heading with the following block so it is not stranded', () => {
+    const xml = documentXml('<h2>عنوان</h2><p>محتوى</p>');
+    expect(xml).toContain('<w:keepNext/><w:keepLines/>');
+  });
+});

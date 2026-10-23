@@ -179,7 +179,8 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     participationTargetRatio: 0.25,
     // جولة كراس واحدة في الفصل، تمتد على عدة حصص.
     notebookRounds: 1,
-    disruptionDeduction: 0.25,
+    // خصم موحّد: 0.5 عن كل مخالفة من الأولى (لا تصاعد).
+    disruptionDeduction: 0.5,
     disruptionRepeatDeduction: 0.5,
     unwrittenLessonDeduction: 0.5,
     unexcusedAbsenceDeduction: 0.5,
@@ -698,7 +699,7 @@ export const INITIAL_PROGRESS: ClassLessonProgress[] = [
     status: "IN_PROGRESS",
     startedAt: "2025-11-09",
   },
-  { id: "pr-9", classId: "cls-3as-sci1", unitId: "3as-u09", status: "PLANNED" },
+  { id: "pr-9", classId: "cls-3as-sci1", unitId: "3as-u09", status: "NOT_STARTED" },
 
   {
     id: "pr-10",

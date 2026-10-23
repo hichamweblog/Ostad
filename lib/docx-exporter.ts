@@ -254,15 +254,22 @@ function paragraphXml(runsXml: string, options: {
   spacingAfter?: number;
   border?: boolean;
   keepEmpty?: boolean;
+  keepNext?: boolean;
+  pageBreakBefore?: boolean;
 } = {}): string {
-  const pPrParts: string[] = ['<w:bidi/>'];
+  // WordprocessingML requires a precise pPr child order: keepNext → pageBreakBefore →
+  // pBdr → shd → bidi → spacing → ind → jc. Getting it wrong makes Word repair the file.
+  const pPrParts: string[] = [];
+  if (options.keepNext) pPrParts.push('<w:keepNext/><w:keepLines/>');
+  if (options.pageBreakBefore) pPrParts.push('<w:pageBreakBefore/>');
   if (options.border) {
-    pPrParts.push('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="808080"/></w:pBdr>');
+    pPrParts.push('<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="64748B"/></w:pBdr>');
   }
   if (options.shading) pPrParts.push(`<w:shd w:val="clear" w:color="auto" w:fill="${options.shading}"/>`);
-  if (options.indentRight) pPrParts.push(`<w:ind w:right="${options.indentRight}"/>`);
-  const spacing = options.spacingAfter ?? 80;
+  pPrParts.push('<w:bidi/>');
+  const spacing = options.spacingAfter ?? 40;
   pPrParts.push(`<w:spacing w:after="${spacing}"/>`);
+  if (options.indentRight) pPrParts.push(`<w:ind w:right="${options.indentRight}"/>`);
   const align = options.align ?? 'right';
   const jc = align === 'center' ? 'center' : align === 'left' ? 'left' : align === 'justify' ? 'both' : 'right';
   pPrParts.push(`<w:jc w:val="${jc}"/>`);
@@ -364,7 +371,7 @@ const PAGE_TWIPS = {
   portrait: { width: 11906, height: 16838 },
   landscape: { width: 16838, height: 11906 },
 };
-const MARGIN_TWIPS = 1134; // 2 cm
+const MARGIN_TWIPS = 680; // 1.2 cm — same tight A4 frame as the print preview
 
 function tableXml(node: HtmlNode, usableWidth: number): string {
   const rows = collectRows(node);
@@ -393,7 +400,7 @@ function tableXml(node: HtmlNode, usableWidth: number): string {
   for (let col = 0; col < gridCount; col++) widths[col] = Math.round(widths[col] * usableWidth / widthSum);
 
   const borders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
-    .map((side) => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>`)
+    .map((side) => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="475569"/>`)
     .join('');
 
   const gridXml = widths.map((width) => `<w:gridCol w:w="${width}"/>`).join('');
@@ -450,7 +457,7 @@ function tableXml(node: HtmlNode, usableWidth: number): string {
   return (
     `<w:tbl><w:tblPr><w:bidiVisual/><w:tblW w:w="5000" w:type="pct"/>` +
     `<w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/>` +
-    `<w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
+    `<w:tblCellMar><w:top w:w="20" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
     `<w:tblGrid>${gridXml}</w:tblGrid>${rowXmlParts.join('')}</w:tbl>` +
     paragraphXml('', { spacingAfter: 60 })
   );
@@ -464,7 +471,7 @@ function renderCellContent(node: HtmlNode, baseStyle: RunStyle, align: CssStyle[
 }
 
 const HEADING_SIZES: Record<string, number> = {
-  h1: 32, h2: 28, h3: 24, h4: 22, h5: 22, h6: 20,
+  h1: 28, h2: 26, h3: 24, h4: 22, h5: 22, h6: 20,
 };
 
 /** Renders a block-level subtree into a list of WordprocessingML blocks. */
@@ -498,6 +505,15 @@ function renderBlocks(nodes: HtmlNode[], usableWidth: number, listDepth = 0, inh
     const tag = node.tag || '';
     const css = { ...inherited, ...parseStyleAttribute(node.attrs?.style) };
     if (node.attrs?.align && ["center", "left", "right", "justify"].includes(node.attrs.align)) css.align = node.attrs.align as CssStyle["align"];
+
+    // Explicit page break (`class="print-page-break"` or `page-break-before: always`).
+    if (
+      /(^|\s)print-page-break(\s|$)/.test(node.attrs?.class || '') ||
+      /page-break-before\s*:\s*always/i.test(node.attrs?.style || '')
+    ) {
+      flushParagraph();
+      blocks.push(paragraphXml('', { pageBreakBefore: true, spacingAfter: 0 }));
+    }
     const style = { ...runStyle, bold: css.bold || runStyle.bold, color: css.color || runStyle.color, sizeHalfPoints: css.fontSizeHalfPoints || runStyle.sizeHalfPoints };
 
     if (tag === 'table') {
@@ -539,7 +555,9 @@ function renderBlocks(nodes: HtmlNode[], usableWidth: number, listDepth = 0, inh
       blocks.push(paragraphXml(headingRuns.join(''), {
         align: css.align ?? 'center',
         shading: css.background,
-        spacingAfter: 120,
+        spacingAfter: 80,
+        // A heading must not be stranded alone at the bottom of a page.
+        keepNext: true,
       }));
       continue;
     }
@@ -586,7 +604,7 @@ const DOCUMENT_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
 
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Amiri" w:hAnsi="Amiri" w:cs="Amiri" w:eastAsia="Amiri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:bidi/><w:spacing w:after="80" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`;
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Amiri" w:hAnsi="Amiri" w:cs="Amiri" w:eastAsia="Amiri"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:bidi/><w:spacing w:after="40" w:line="260" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`;
 
 /** Builds every XML part of the .docx package for the given HTML content. */
 export function buildDocxParts(html: string, options: DocxExportOptions = {}): Record<string, string> {

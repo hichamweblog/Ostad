@@ -1549,8 +1549,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <ul className="list-inside list-disc space-y-1 text-slate-600">
               <li><strong>التقويم المستمر (على 20):</strong> السلوك والانضباط 3، المواظبة والحضور 3، الكراس والواجبات 6، المشاركة والنشاط 8 — كما في القرار الوزاري.</li>
               <li><strong>المواظبة (على 3):</strong> نسبة من حصص الفصل: كل غياب غير مبرر يُنقص النسبة بنقطة كاملة، والتأخر بنصف نقطة، ثم تُضرب النسبة في منحنى تصاعدي. الغياب المبرَّر لا يُخصم.</li>
-              <li><strong>السلوك (على 3):</strong> المخالفة الأولى 0.25 ثم 0.5 لكل مخالفة بعدها؛ فلا يهبط العنصر من أول زلة، ويُفقد كاملًا تقريباً مع التكرار.</li>
-              <li><strong>الكراس (على 6):</strong> جولة تفتيش واحدة في الفصل على مقياس 0–5، تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
+              <li><strong>السلوك (على 3):</strong> خصم 0.5 عن كل مخالفة من الأولى؛ ست مخالفات تستهلك العنصر كاملاً.</li>
+              <li><strong>الكراس (على 6):</strong> مراقبة واحدة للكراس في الفصل على مقياس 0–5، تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
               <li><strong>المشاركة والنشاط (على 8):</strong> 3 نقاط توثيق آلي تُحسب على الحصص التي وُثِّق فيها شيء فعلاً (لا على كل الحصص)، و5 نقاط تقدير الأستاذ من خمسة مستويات.</li>
               <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً أو سقفه كاملاً.</li>
               <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
@@ -1590,7 +1590,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <p className="text-xs leading-6 text-[var(--text-tertiary)]">
               {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
               الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
-              {' '}تلميذاً مُفتَّشاً.
+              {' '}تلميذاً تمت مراقبة كراسه.
             </p>
           </div>
           <button

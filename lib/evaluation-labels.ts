@@ -29,7 +29,7 @@ export const EVALUATION_CRITERIA: EvaluationCriterionMeta[] = [
     label: 'السلوك والانضباط',
     short: 'السلوك',
     maxKey: 'behaviorMax',
-    hint: 'خصم تصاعدي: المخالفة الأولى 0.25 ثم 0.5 لكل مخالفة بعدها.',
+    hint: 'خصم 0.5 عن كل مخالفة، من المخالفة الأولى.',
   },
   {
     key: 'attendance',
@@ -43,7 +43,7 @@ export const EVALUATION_CRITERIA: EvaluationCriterionMeta[] = [
     label: 'الكراس والواجبات',
     short: 'الكراس',
     maxKey: 'notebookMax',
-    hint: 'تفتيش واحد للكراس في الفصل (ويُدمج فيه إحضار الأدوات).',
+    hint: 'مراقبة واحدة للكراس في الفصل على مقياس 0–5.',
   },
   {
     key: 'participation',

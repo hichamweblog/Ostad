@@ -295,7 +295,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
 
       <div id="council-analysis-doc" className="space-y-6">
         {stats.evaluatedCount === 0 && (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <div className="no-print flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2 text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
               <span className="leading-6">
@@ -382,7 +382,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
         </div>
 
         {/* 1. Mobile Bands Cards (Screens < 768px): ZERO Horizontal Scrolling */}
-        <div className="block md:hidden space-y-2.5">
+        <div className="block md:hidden print:hidden space-y-2.5">
           {bands.map((band, idx) => {
             const pct =
               stats.evaluatedCount > 0
@@ -420,7 +420,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
         </div>
 
         {/* 2. Desktop Bands Table (Screens >= 768px) */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block print:block overflow-x-auto">
           <table className="w-full text-right text-xs border border-slate-200">
             <thead className="bg-slate-100 text-slate-900 border-b border-slate-200 font-bold">
               <tr>

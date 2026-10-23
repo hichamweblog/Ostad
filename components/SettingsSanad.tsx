@@ -776,7 +776,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.behaviorMax} / 20
                 </td>
-                <td className="px-3 py-2">خصم تصاعدي: الأولى {calendarSettings.evaluationRules.disruptionDeduction ?? 0.25} ثم {calendarSettings.evaluationRules.disruptionRepeatDeduction ?? 0.5} لكل مخالفة بعدها.</td>
+                <td className="px-3 py-2">خصم {calendarSettings.evaluationRules.disruptionDeduction ?? 0.5} عن كل مخالفة، من الأولى.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">المواظبة والحضور</td>
@@ -790,7 +790,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.notebookMax} / 20
                 </td>
-                <td className="px-3 py-2">جولة واحدة في الفصل على مقياس 0–5 (يُدمج فيها إحضار الأدوات لأن المادة بلا أدوات).</td>
+                <td className="px-3 py-2">مراقبة واحدة للكراس في الفصل على مقياس 0–5.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">المشاركة والنشاط</td>
@@ -809,52 +809,31 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label htmlFor="disruption-first" className="mb-1 block text-xs font-bold text-slate-700">
-              خصم المخالفة السلوكية الأولى
+            <label htmlFor="disruption-deduction" className="mb-1 block text-xs font-bold text-slate-700">
+              خصم كل مخالفة سلوكية
             </label>
             <input
-              id="disruption-first"
+              id="disruption-deduction"
               type="number"
               step="0.25"
               min="0"
               max="3"
-              value={calendarSettings.evaluationRules.disruptionDeduction ?? 0.25}
-              onChange={(e) =>
+              value={calendarSettings.evaluationRules.disruptionDeduction ?? 0.5}
+              onChange={(e) => {
+                const deduction = Math.max(0, parseFloat(e.target.value) || 0);
                 setCalendarSettings((prev) => ({
                   ...prev,
                   evaluationRules: {
                     ...prev.evaluationRules,
-                    disruptionDeduction: parseFloat(e.target.value) || 0,
+                    // نفس الخصم من أول مخالفة: لا تصاعد بين المخالفات.
+                    disruptionDeduction: deduction,
+                    disruptionRepeatDeduction: deduction,
                   },
-                }))
-              }
+                }));
+              }}
               className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
-            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.25 من أصل 3.</span>
-          </div>
-          <div>
-            <label htmlFor="disruption-repeat" className="mb-1 block text-xs font-bold text-slate-700">
-              خصم كل مخالفة بعد الأولى
-            </label>
-            <input
-              id="disruption-repeat"
-              type="number"
-              step="0.25"
-              min="0"
-              max="3"
-              value={calendarSettings.evaluationRules.disruptionRepeatDeduction ?? 0.5}
-              onChange={(e) =>
-                setCalendarSettings((prev) => ({
-                  ...prev,
-                  evaluationRules: {
-                    ...prev.evaluationRules,
-                    disruptionRepeatDeduction: parseFloat(e.target.value) || 0,
-                  },
-                }))
-              }
-              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.5.</span>
+            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.5 من أصل 3، من المخالفة الأولى.</span>
           </div>
           <div>
             <label htmlFor="participation-target" className="mb-1 block text-xs font-bold text-slate-700">
@@ -884,7 +863,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           </div>
           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs leading-6 text-[var(--text-secondary)]">
             <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> العنصر الذي لا توجد له
-            أدلة كافية (أقل من 5 حصص للمواظبة، أو بلا جولة كراس) يُستبعد ويُعاد توزيع وزنه على
+            أدلة كافية (أقل من 5 حصص للمواظبة، أو بلا مراقبة كراس) يُستبعد ويُعاد توزيع وزنه على
             بقية العناصر، فلا يُمنح صفر جزاءً على نقص التسجيل ولا سقفه مجاناً.
           </div>
         </div>
