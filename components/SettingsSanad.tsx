@@ -31,6 +31,7 @@ import {
   holidayTypeLabel,
   withDerivedDateStr,
 } from "@/lib/academic-calendar";
+import { criterionLabel } from "@/lib/evaluation-labels";
 import {
   AlertTriangle,
   Calendar,
@@ -751,7 +752,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               <span>التقويم المستمر</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              أوزان القرار الوزاري: السلوك 3 | المواظبة 3 | الكراس 6 | المشاركة والنشاط 8 (توثيق 3 + تقدير 5)
+              الأوزان: السلوك 3 | المواظبة 3 | الكراس وأدوات التعلم 6 | المشاركة والنشاط 8 (توثيق 4 + تقدير 4)
             </p>
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/30 text-[var(--accent-navy)] text-xs font-bold w-fit">
@@ -766,41 +767,41 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
             <thead className="bg-slate-50 text-slate-700">
               <tr>
                 <th scope="col" className="px-3 py-2 font-bold">العنصر</th>
-                <th scope="col" className="px-3 py-2 font-bold">الوزن</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2 font-bold">الوزن</th>
                 <th scope="col" className="px-3 py-2 font-bold">كيف يُحتسب</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600">
               <tr>
-                <td className="px-3 py-2 font-bold text-slate-800">السلوك والانضباط</td>
-                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                <td className="px-3 py-2 font-bold text-slate-800">{criterionLabel('behavior')}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.behaviorMax} / 20
                 </td>
                 <td className="px-3 py-2">خصم {calendarSettings.evaluationRules.disruptionDeduction ?? 0.5} عن كل مخالفة، من الأولى.</td>
               </tr>
               <tr>
-                <td className="px-3 py-2 font-bold text-slate-800">المواظبة والحضور</td>
-                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                <td className="px-3 py-2 font-bold text-slate-800">{criterionLabel('attendance')}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.attendanceMax} / 20
                 </td>
-                <td className="px-3 py-2">نسبة من حصص الفصل: الغياب غير المبرر يساوي وحدة، والتأخر نصف وحدة، والمبرَّر لا يُخصم.</td>
+                <td className="px-3 py-2">خصم مباشر 0.5 عن كل غياب غير مبرر؛ التأخر للمتابعة فقط، والمبرر دون خصم.</td>
               </tr>
               <tr>
-                <td className="px-3 py-2 font-bold text-slate-800">الكراس والواجبات</td>
-                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                <td className="px-3 py-2 font-bold text-slate-800">{criterionLabel('notebook')}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.notebookMax} / 20
                 </td>
-                <td className="px-3 py-2">مراقبة واحدة للكراس في الفصل على مقياس 0–5.</td>
+                <td className="px-3 py-2">مراقبة واحدة في الفصل بأربع حالات مباشرة: 6 أو 4 أو 2 أو 0.</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">المشاركة والنشاط</td>
-                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.participationMax} / 20
                 </td>
                 <td className="px-3 py-2">
-                  {calendarSettings.evaluationRules.participationRecordedMax ?? 3} توثيق آلي على الحصص الموثّقة فقط
+                  {calendarSettings.evaluationRules.participationRecordedMax ?? 4} توثيق آلي على الحصص الموثّقة فقط
                   {' + '}
-                  {calendarSettings.evaluationRules.participationJudgementMax ?? 5} تقدير الأستاذ (العمل الفردي والفوجي والمبادرة).
+                  {calendarSettings.evaluationRules.participationJudgementMax ?? 4} تقدير الأستاذ بثلاث حالات: 4 أو 2 أو 0.
                 </td>
               </tr>
             </tbody>
@@ -845,26 +846,26 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               step="5"
               min="5"
               max="100"
-              value={Math.round((calendarSettings.evaluationRules.participationTargetRatio ?? 0.25) * 100)}
+              value={Math.round((calendarSettings.evaluationRules.participationTargetRatio ?? 0.3) * 100)}
               onChange={(e) =>
                 setCalendarSettings((prev) => ({
                   ...prev,
                   evaluationRules: {
                     ...prev.evaluationRules,
-                    participationTargetRatio: Math.min(1, Math.max(0.05, (parseFloat(e.target.value) || 25) / 100)),
+                    participationTargetRatio: Math.min(1, Math.max(0.05, (parseFloat(e.target.value) || 30) / 100)),
                   },
                 }))
               }
               className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
             <span className="mt-1 block text-xs text-slate-500">
-              من يشارك في ربع الحصص الموثّقة يحصل على كامل نقطة التوثيق (3).
+              تكتمل نقطة التوثيق (4) عند 30%؛ وما دونها يُحسب تناسبياً ويُقرّب إلى أقرب 0.5.
             </span>
           </div>
           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs leading-6 text-[var(--text-secondary)]">
-            <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> العنصر الذي لا توجد له
-            أدلة كافية (أقل من 5 حصص للمواظبة، أو بلا مراقبة كراس) يُستبعد ويُعاد توزيع وزنه على
-            بقية العناصر، فلا يُمنح صفر جزاءً على نقص التسجيل ولا سقفه مجاناً.
+            <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> الكراس بلا مراقبة،
+            والمشاركة بلا توثيق أو تقدير، يُستبعدان ويُعاد توزيع وزنهما؛ فلا يتحول نقص التسجيل
+            إلى صفر. السلوك والمواظبة يعملان بالاستثناء: لا مخالفة أو غياب غير مبرر يعني لا خصم.
           </div>
         </div>
 

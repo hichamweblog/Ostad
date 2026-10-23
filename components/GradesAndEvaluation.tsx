@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { calculateEvaluationBreakdown, calculateStudentAverage } from '@/lib/grade-calculator';
 import { filterByTrimester } from '@/lib/academic-calendar';
-import { EVALUATION_CRITERIA, criterionMax } from '@/lib/evaluation-labels';
+import { EVALUATION_CRITERIA, criterionLabel, criterionMax } from '@/lib/evaluation-labels';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
 import { normalizeGradeInput as normalizeNumerals } from '@/lib/grade-input';
@@ -226,7 +226,7 @@ export interface GradeDraftEntry {
   estimation: string;
   guidance: string;
   remarks: string;
-  /** تقدير الأستاذ للمشاركة والنشاط (0–5) — يُحفظ في participationScore. */
+  /** تقدير الأستاذ للمشاركة والنشاط (0 أو 2 أو 4) — يُحفظ في participationScore. */
   participationJudgement: string;
 }
 
@@ -277,7 +277,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
   const [showFormulaModal, setShowFormulaModal] = useState(false);
   const [showReview, setShowReview] = useState(false);
-  // تقديرات جلسة المراجعة الحالية فقط — تُملأ بالاقتراح الآلي أو المحفوظ،
+  // تقديرات جلسة المراجعة الحالية فقط — تُملأ بالاقتراح الافتراضي أو المحفوظ،
   // ولا تُكتب في الحالة إلا بزر «تطبيق على القسم».
   const [reviewJudgements, setReviewJudgements] = useState<Record<string, string>>({});
   const [saveToast, setSaveToast] = useState(false);
@@ -563,7 +563,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   /**
    * One shared breakdown drives the suggested mark, the tooltip and the saved value.
    * Auto components come from the notebook (attendance + behaviour + participation
-   * evidence); the teacher's 0–5 judgement is added on top of the documented part.
+   * evidence); the teacher's 0–4 judgement is added on top of the documented part.
    */
   const evaluationRules = state.calendarSettings?.evaluationRules;
   const notebookRounds = normalizeNotebookRounds(evaluationRules?.notebookRounds);
@@ -591,16 +591,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
   const autoBreakdownFor = (studentId: string) => breakdownFor(studentId);
 
-  /** اقتراح تقدير المشاركة من أدلة التوثيق؛ لا يُحفظ حتى يضغط الأستاذ «تطبيق». */
-  const suggestedJudgementFor = (studentId: string): string => {
-    const suggestion = suggestParticipationJudgement({
-      goodPart: studentStatsMap[studentId]?.goodPart ?? 0,
-      poorPart: studentStatsMap[studentId]?.poorPart ?? 0,
-      documentedSessions: documentedSessionsCount,
-      targetRatio: evaluationRules?.participationTargetRatio,
-    });
-    return suggestion === null ? '' : String(suggestion);
-  };
+  /** «متوسط 2/4» اقتراح محايد عند المراجعة؛ لا يُحفظ حتى يضغط الأستاذ «تطبيق». */
+  const suggestedJudgement = (): string => String(suggestParticipationJudgement());
 
   const calcAutoContinuousEval = (studentId: string): number => autoBreakdownFor(studentId).total;
 
@@ -636,14 +628,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   };
 
   /**
-   * يفتح المراجعة وقد ملأ كل صف: التقدير المحفوظ إن وُجد، وإلا الاقتراح الآلي.
+   * يفتح المراجعة وقد ملأ كل صف: التقدير المحفوظ إن وُجد، وإلا «متوسط 2/4».
    * الاقتراح يظهر في القائمة فقط ولا يمسّ الحالة، فيمكن إغلاق النافذة دون أثر.
    */
   const openReview = () => {
     const seeded: Record<string, string> = {};
     for (const student of classStudents) {
       const stored = gradesDraft[student.id]?.participationJudgement || '';
-      seeded[student.id] = stored || suggestedJudgementFor(student.id);
+      seeded[student.id] = stored || suggestedJudgement();
     }
     setReviewJudgements(seeded);
     setShowReview(true);
@@ -771,7 +763,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           estimation: estVal,
           guidance: guidanceVal,
           // المكوّنات تُحفظ كما احتُسبت كي تعكس السحابة النموذج نفسه، مع بقاء
-          // المشاركة في العمود المخصّص لها: الجزء التقديري (0–5) الذي اختاره الأستاذ.
+          // المشاركة في العمود المخصّص لها: الجزء التقديري (0 أو 2 أو 4) الذي اختاره الأستاذ.
           behaviorScore: breakdown.behavior,
           attendanceScore: breakdown.attendance,
           notebookScore: breakdown.notebook,
@@ -1092,7 +1084,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <button
               onClick={openReview}
               className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--primary)]/30 bg-white px-3.5 py-2 text-xs font-bold text-[var(--primary-ink)] shadow-2xs transition-colors hover:bg-[var(--primary-soft)]"
-              title="مراجعة مكوّنات التقويم لكل تلميذ؛ التقدير مقترح آلياً ويمكن تعديله">
+              title="مراجعة مكوّنات التقويم لكل تلميذ؛ الاقتراح الافتراضي متوسط 2/4 ويمكن تعديله">
               <ListFilter className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>مراجعة التقويم</span>
             </button>
@@ -1547,12 +1539,12 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           <div className="space-y-1.5">
             <span className="block font-bold text-slate-900">شرح العناصر:</span>
             <ul className="list-inside list-disc space-y-1 text-slate-600">
-              <li><strong>التقويم المستمر (على 20):</strong> السلوك والانضباط 3، المواظبة والحضور 3، الكراس والواجبات 6، المشاركة والنشاط 8 — كما في القرار الوزاري.</li>
-              <li><strong>المواظبة (على 3):</strong> نسبة من حصص الفصل: كل غياب غير مبرر يُنقص النسبة بنقطة كاملة، والتأخر بنصف نقطة، ثم تُضرب النسبة في منحنى تصاعدي. الغياب المبرَّر لا يُخصم.</li>
+              <li><strong>التقويم المستمر (على 20):</strong> {criterionLabel('behavior')} 3، {criterionLabel('attendance')} 3، {criterionLabel('notebook')} 6، المشاركة والنشاط 8.</li>
+              <li><strong>المواظبة (على 3):</strong> خصم مباشر 0.5 عن كل غياب غير مبرر، بحد أدنى 0. التأخر يُسجّل للمتابعة فقط، والغياب المبرر دون خصم.</li>
               <li><strong>السلوك (على 3):</strong> خصم 0.5 عن كل مخالفة من الأولى؛ ست مخالفات تستهلك العنصر كاملاً.</li>
-              <li><strong>الكراس (على 6):</strong> مراقبة واحدة للكراس في الفصل على مقياس 0–5، تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
-              <li><strong>المشاركة والنشاط (على 8):</strong> 3 نقاط توثيق آلي تُحسب على الحصص التي وُثِّق فيها شيء فعلاً (لا على كل الحصص)، و5 نقاط تقدير الأستاذ من خمسة مستويات.</li>
-              <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً أو سقفه كاملاً.</li>
+              <li><strong>الكراس (على 6):</strong> مراقبة واحدة في الفصل بأربع حالات مباشرة: مكتمل ومنظم 6، جيد 4، ناقص أو غير منظم 2، منعدم 0.</li>
+              <li><strong>المشاركة والنشاط (على 8):</strong> 4 نقاط توثيق آلي تكتمل عند المشاركة في 30% من الحصص الموثقة، وما دونها يُحسب تناسبياً ويُقرّب لأقرب 0.5؛ و4 نقاط تقدير الأستاذ: مبادر ومتميز 4، متوسط 2، سلبي 0.</li>
+              <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً جزاءً على نقص التسجيل.</li>
               <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
               <li><strong>الاختبار الفصلي (على 20):</strong> اختبار موحد يضاعف بمعامل 2 طبقاً للقرارات الوزارية المنظمة للتقويم في الطور الثانوي.</li>
               <li><strong>معامل المادة:</strong> ثابت (2) في كافة السنوات والشعب (علمي، رياضي، تقني رياضي، تسيير واقتصاد، آداب وفلسفة، لغات أجنبية).</li>
@@ -1582,10 +1574,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               مراجعة التقويم المستمر
             </h3>
             <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
-              الأوزان: السلوك 3 · المواظبة 3 · الكراس 6 · المشاركة والنشاط 8 (منها 3 توثيق و5 تقدير).
+              الأوزان: السلوك 3 · المواظبة 3 · الكراس 6 · المشاركة والنشاط 8 (منها 4 توثيق و4 تقدير).
             </p>
             <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-              التقدير مُقترَح آلياً من مشاركاتك المسجّلة؛ عدّله من القائمة إن أردت ثم اضغط «تطبيق على القسم».
+              يظهر «متوسط (2/4)» افتراضياً لمن لا تقدير محفوظاً له؛ عدّل حالات التميز أو السلبية ثم اضغط «تطبيق على القسم». لن يُحفظ الاقتراح بمجرد فتح النافذة.
             </p>
             <p className="text-xs leading-6 text-[var(--text-tertiary)]">
               {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
@@ -1606,7 +1598,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
           {classStudents.map(student => {
             const storedJudgement = gradesDraft[student.id]?.participationJudgement || '';
-            const suggestion = suggestedJudgementFor(student.id);
+            const suggestion = suggestedJudgement();
             const judgement = reviewJudgements[student.id] ?? '';
             const showsSuggestion = storedJudgement === '' && judgement !== '' && judgement === suggestion;
             const breakdown = breakdownFor(student.id, judgement);
@@ -1642,7 +1634,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                     الكراس {missingNotebook || breakdown.notebook === null ? '—' : `${breakdown.notebook.toFixed(1)}/${criterionMax(evaluationRules, 'notebook')}`}
                   </span>
                   <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
-                    التوثيق {breakdown.participationRecorded === null ? '—' : `${breakdown.participationRecorded.toFixed(1)}/${evaluationRules?.participationRecordedMax ?? 3}`}
+                    التوثيق {breakdown.participationRecorded === null ? '—' : `${breakdown.participationRecorded.toFixed(1)}/${evaluationRules?.participationRecordedMax ?? 4}`}
                   </span>
                 </div>
 

@@ -166,17 +166,17 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     term3End: "2027-06-30",
   },
   holidays: OFFICIAL_HOLIDAYS_2026_2027,
-  // أوزان القرار الوزاري للتقويم المستمر: 3 + 3 + 6 + 8 = 20.
-  // «إحضار الأدوات» مدموج في الكراس (لا أدوات في العلوم الإسلامية)،
-  // و«النشاط داخل القسم» مدموج في المشاركة.
+  // أوزان التقويم المستمر: 3 + 3 + 6 + 8 = 20.
+  // إحضار الأدوات وتنظيم الكراس يجتمعان في «الكراس وأدوات التعلم»،
+  // والمشاركة والنشاط مقسّمة داخلياً إلى توثيق 4 وتقدير 4.
   evaluationRules: {
     behaviorMax: 3,
     attendanceMax: 3,
     notebookMax: 6,
     participationMax: 8,
-    participationRecordedMax: 3,
-    participationJudgementMax: 5,
-    participationTargetRatio: 0.25,
+    participationRecordedMax: 4,
+    participationJudgementMax: 4,
+    participationTargetRatio: 0.3,
     // جولة كراس واحدة في الفصل، تمتد على عدة حصص.
     notebookRounds: 1,
     // خصم موحّد: 0.5 عن كل مخالفة من الأولى (لا تصاعد).
@@ -184,7 +184,7 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     disruptionRepeatDeduction: 0.5,
     unwrittenLessonDeduction: 0.5,
     unexcusedAbsenceDeduction: 0.5,
-    lateDeduction: 0.5,
+    lateDeduction: 0,
     participationBonus: 0.5,
     maxScore: 20,
     showGuidanceAlerts: true,

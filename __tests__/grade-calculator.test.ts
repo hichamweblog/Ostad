@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateContinuousEvaluation,
+  calculateEvaluationBreakdown,
   calculateStudentAverage
 } from '@/lib/grade-calculator';
 
@@ -24,7 +25,6 @@ describe('calculateStudentAverage', () => {
 
   it('calculates continuous evaluation from four capped components', () => {
     expect(calculateContinuousEvaluation(3, 3, 5, 2.25)).toBe(13.25);
-    // 8 caps at 3, a negative mark clamps to 0, notebook caps at 6
     expect(calculateContinuousEvaluation(8, -1, 9, 5)).toBe(14);
   });
 });
@@ -44,131 +44,142 @@ describe('pedagogical evaluations tiers', () => {
   });
 });
 
-describe('calculateEvaluationBreakdown (decree weights 3/3/6/8)', () => {
+describe('calculateEvaluationBreakdown (3/3/6/8 with 4+4 participation)', () => {
   const rules = {
     behaviorMax: 3,
     attendanceMax: 3,
     notebookMax: 6,
     participationMax: 8,
-    participationRecordedMax: 3,
-    participationJudgementMax: 5,
-    participationTargetRatio: 0.25,
+    participationRecordedMax: 4,
+    participationJudgementMax: 4,
+    participationTargetRatio: 0.3,
     disruptionDeduction: 0.5,
     disruptionRepeatDeduction: 0.5,
+    unexcusedAbsenceDeduction: 0.5,
+    // حتى لو بقي إعداد قديم، لا يجوز أن يدخل التأخر في الحساب.
+    lateDeduction: 0.5,
   };
 
-  it('gives a student with no incidents and full evidence the full mark', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+  it('gives a student with no incidents and full evidence the full mark', () => {
     const breakdown = calculateEvaluationBreakdown(
       {
         sessionsCount: 30,
         documentedSessions: 12,
-        goodPart: 6,
-        notebookScores: [5, 5],
-        participationJudgement: 5,
+        goodPart: 4,
+        notebookScores: [6],
+        participationJudgement: 4,
       },
       rules,
     );
     expect(breakdown.behavior).toBe(3);
     expect(breakdown.attendance).toBe(3);
     expect(breakdown.notebook).toBe(6);
-    expect(breakdown.participation).toBeCloseTo(8, 5);
+    expect(breakdown.participation).toBe(8);
     expect(breakdown.total).toBe(20);
   });
 
-  it('scales attendance by the share of missed sessions, not by a flat count', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+  it('deducts a direct 0.5 per unexcused absence regardless of session count', () => {
     const tenSessions = calculateEvaluationBreakdown({ sessionsCount: 10, absent: 2 }, rules);
     const thirtySessions = calculateEvaluationBreakdown({ sessionsCount: 30, absent: 2 }, rules);
-    // 2/10 misses = 80% → 3 * 0.64; 2/30 = 93.3% → 3 * 0.87
-    expect(tenSessions.attendance).toBeLessThan(thirtySessions.attendance);
-    expect(tenSessions.attendance).toBeCloseTo(1.92, 2);
-    expect(thirtySessions.attendance).toBeCloseTo(2.61, 2);
+    expect(tenSessions.attendance).toBe(2);
+    expect(thirtySessions.attendance).toBe(2);
+    expect(calculateEvaluationBreakdown({ absent: 1 }, rules).attendance).toBe(2.5);
+    expect(calculateEvaluationBreakdown({ absent: 6 }, rules).attendance).toBe(0);
+    expect(calculateEvaluationBreakdown({ absent: 8 }, rules).attendance).toBe(0);
   });
 
-  it('deducts a flat 0.5 per incident from the very first one', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+  it('records late marks without deducting them', () => {
+    expect(calculateEvaluationBreakdown({ late: 4 }, rules).attendance).toBe(3);
+    expect(calculateEvaluationBreakdown({ absent: 1, late: 4 }, rules).attendance).toBe(2.5);
+  });
+
+  it('deducts a flat 0.5 per behaviour incident from the very first one', () => {
     expect(calculateEvaluationBreakdown({ disruptions: 1 }, rules).behavior).toBe(2.5);
     expect(calculateEvaluationBreakdown({ disruptions: 2 }, rules).behavior).toBe(2);
     expect(calculateEvaluationBreakdown({ disruptions: 6 }, rules).behavior).toBe(0);
-  });
-
-  it('applies the flat 0.5 rule with the built-in defaults too', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
     expect(calculateEvaluationBreakdown({ disruptions: 1 }).behavior).toBe(2.5);
-    expect(calculateEvaluationBreakdown({ disruptions: 3 }).behavior).toBe(1.5);
   });
 
-  it('scores the single notebook round on a 0–6 scale', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
-    expect(calculateEvaluationBreakdown({ notebookScores: [5] }, rules).notebook).toBe(6);
-    expect(calculateEvaluationBreakdown({ notebookScores: [4] }, rules).notebook).toBe(4.8);
+  it('uses the four notebook states directly on a 0–6 scale', () => {
+    expect(calculateEvaluationBreakdown({ notebookScores: [6] }, rules).notebook).toBe(6);
+    expect(calculateEvaluationBreakdown({ notebookScores: [4] }, rules).notebook).toBe(4);
+    expect(calculateEvaluationBreakdown({ notebookScores: [2] }, rules).notebook).toBe(2);
     expect(calculateEvaluationBreakdown({ notebookScores: [0] }, rules).notebook).toBe(0);
-    // جولة ثانية محفوظة من إعداد قديم لا تُخفّض الدرجة حين تكون القاعدة جولة واحدة.
-    expect(calculateEvaluationBreakdown({ notebookScores: [5, 1] }, rules).notebook).toBe(6);
+    // جولة ثانية قديمة لا تدخل عندما يكون الفصل مضبوطاً على مراقبة واحدة.
+    expect(calculateEvaluationBreakdown({ notebookScores: [6, 0] }, rules).notebook).toBe(6);
   });
 
-  it('averages both rounds only for a term configured with two', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+  it('averages direct scores only when two rounds are explicitly configured', () => {
     const twoRounds = { ...rules, notebookRounds: 2 };
-    expect(calculateEvaluationBreakdown({ notebookScores: [5, 5] }, twoRounds).notebook).toBe(6);
-    expect(calculateEvaluationBreakdown({ notebookScores: [5, 3] }, twoRounds).notebook).toBe(4.8);
+    expect(calculateEvaluationBreakdown({ notebookScores: [6, 4] }, twoRounds).notebook).toBe(5);
+    expect(calculateEvaluationBreakdown({ notebookScores: [4, 2] }, twoRounds).notebook).toBe(3);
     expect(calculateEvaluationBreakdown({ notebookScores: [0, 0] }, twoRounds).notebook).toBe(0);
   });
 
-  it('counts documented participation on documented sessions only', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
-    // 3 positives out of 12 documented sessions = 25% → full 3 points
-    expect(calculateEvaluationBreakdown({ documentedSessions: 12, goodPart: 3 }, rules).participationRecorded).toBe(3);
-    // 1/12 < 25% → one third of 3
-    expect(calculateEvaluationBreakdown({ documentedSessions: 12, goodPart: 1 }, rules).participationRecorded).toBe(1);
-    // no documented session at all → the component is missing, never a zero verdict
+  it('uses a direct 0–6 fallback only when no notebook round exists', () => {
+    expect(calculateEvaluationBreakdown({ unwritten: 1 }, rules).notebook).toBe(5.5);
+    expect(calculateEvaluationBreakdown({ unwritten: 12 }, rules).notebook).toBe(0);
+    expect(calculateEvaluationBreakdown({ unwritten: 1, notebookScores: [4] }, rules).notebook).toBe(4);
+    expect(calculateEvaluationBreakdown({}, rules).notebook).toBeNull();
+  });
+
+  it('gives full recorded participation at 30% of documented sessions', () => {
+    expect(calculateEvaluationBreakdown({ documentedSessions: 10, goodPart: 3 }, rules).participationRecorded).toBe(4);
+    expect(calculateEvaluationBreakdown({ documentedSessions: 10, goodPart: 8 }, rules).participationRecorded).toBe(4);
     expect(calculateEvaluationBreakdown({ sessionsCount: 20, documentedSessions: 0 }, rules).participationRecorded).toBeNull();
   });
 
-  it('adds the teacher judgement (0–5) on top of the documented part', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
-    const breakdown = calculateEvaluationBreakdown(
-      { documentedSessions: 10, goodPart: 0, participationJudgement: 2.5 },
-      rules,
-    );
-    expect(breakdown.participationRecorded).toBe(0);
-    expect(breakdown.participationJudgement).toBe(2.5);
-    expect(breakdown.participation).toBe(2.5);
+  it('rounds proportional recorded participation to the nearest half point', () => {
+    expect(calculateEvaluationBreakdown({ documentedSessions: 10, goodPart: 2 }, rules).participationRecorded).toBe(2.5);
+    expect(calculateEvaluationBreakdown({ documentedSessions: 10, goodPart: 1 }, rules).participationRecorded).toBe(1.5);
+    expect(calculateEvaluationBreakdown({ documentedSessions: 20, goodPart: 1 }, rules).participationRecorded).toBe(0.5);
+    expect(calculateEvaluationBreakdown({ documentedSessions: 10, goodPart: 0 }, rules).participationRecorded).toBe(0);
   });
 
-  it('excludes a component with no evidence and redistributes its weight', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
-    const noNotebook = calculateEvaluationBreakdown(
-      { sessionsCount: 30, documentedSessions: 10, goodPart: 3, participationJudgement: 5 },
+  it('adds the direct teacher judgement 0/2/4 on top of the recorded part', () => {
+    const average = calculateEvaluationBreakdown(
+      { documentedSessions: 10, goodPart: 0, participationJudgement: 2 },
       rules,
     );
-    expect(noNotebook.missing).toContain('notebook');
+    expect(average.participationRecorded).toBe(0);
+    expect(average.participationJudgement).toBe(2);
+    expect(average.participation).toBe(2);
+
+    const excellent = calculateEvaluationBreakdown(
+      { documentedSessions: 10, goodPart: 3, participationJudgement: 4 },
+      rules,
+    );
+    expect(excellent.participation).toBe(8);
+  });
+
+  it('excludes missing notebook evidence and redistributes its weight', () => {
+    const noNotebook = calculateEvaluationBreakdown(
+      { sessionsCount: 30, documentedSessions: 10, goodPart: 3, participationJudgement: 4 },
+      rules,
+    );
+    expect(noNotebook.missing).toEqual(['notebook']);
     expect(noNotebook.availableMax).toBe(14);
     expect(noNotebook.total).toBe(20);
 
     const sparse = calculateEvaluationBreakdown(
-      { sessionsCount: 3, disruptions: 2, documentedSessions: 10, goodPart: 3, participationJudgement: 5 },
+      { sessionsCount: 3, disruptions: 2, documentedSessions: 10, goodPart: 3, participationJudgement: 4 },
       rules,
     );
-    expect(sparse.missing).toEqual(expect.arrayContaining(['attendance', 'notebook']));
-    // عنصر مستبعد يُعرض فراغاً لا صفراً
-    expect(sparse.attendance).toBeNull();
-    expect(sparse.notebook).toBeNull();
-    expect(sparse.availableMax).toBe(11);
-    // 2 behaviour of 3 (two incidents × 0.5) + 8 participation of 8 → 10/11 → 18.18
-    expect(sparse.total).toBeCloseTo(18.18, 2);
+    expect(sparse.missing).toEqual(['notebook']);
+    expect(sparse.attendance).toBe(3);
+    expect(sparse.availableMax).toBe(14);
+    // سلوك 2 + مواظبة 3 + مشاركة 8 = 13 من 14 متاحاً.
+    expect(sparse.total).toBe(18.57);
   });
 
-  it('never exceeds 20 for any combination', async () => {
-    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+  it('never exceeds 20 for any combination', () => {
     const perfect = calculateEvaluationBreakdown(
       {
         sessionsCount: 40,
         documentedSessions: 4,
         goodPart: 40,
-        notebookScores: [5, 5],
-        participationJudgement: 5,
+        notebookScores: [6],
+        participationJudgement: 4,
       },
       rules,
     );

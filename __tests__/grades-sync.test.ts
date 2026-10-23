@@ -52,8 +52,8 @@ function makeGrade(partial: Partial<StudentGrade> = {}): StudentGrade {
     continuousEval: 17,
     behaviorScore: 3,
     attendanceScore: 2.5,
-    notebookScore: 5,
-    participationScore: 6.5,
+    notebookScore: 6,
+    participationScore: 4,
     quiz: 14,
     exam: 16,
     calculatedAverage: 15,
@@ -292,8 +292,8 @@ describe('§3 flush: the server receives every grade column, reusing the cloud r
     expect(payload.remarks).toBe('ملاحظة الأستاذ');
     expect(payload.behavior_score).toBe(3);
     expect(payload.attendance_score).toBe(2.5);
-    expect(payload.notebook_score).toBe(5);
-    expect(payload.participation_score).toBe(6.5);
+    expect(payload.notebook_score).toBe(6);
+    expect(payload.participation_score).toBe(4);
     expect(payload.estimation).toBe('جيد جداً');
     expect(payload.student_id).toBe(studentId);
     expect(payload.trimester).toBe(1);

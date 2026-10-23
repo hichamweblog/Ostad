@@ -18,6 +18,7 @@ import {
   roundProgress,
 } from '@/lib/notebook-rounds';
 import { getLocalDateString } from '@/lib/date-utils';
+import { toggleAbsenceStatus } from '@/lib/attendance-status';
 import { AttendanceStatus, SessionRecord } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -84,17 +85,11 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const activeSession = classSessions.find(s => s.id === selectedSessionId) || classSessions[0];
   const activeAttendance = activeSession?.attendance || {};
 
-  // التناوب الكامل: حاضر → متأخر → مبرَّر → غائب. في الوضع السريع يبقى
-  // التبديل الثنائي حاضر/غائب كما اعتاده الأستاذ.
-  const ATTENDANCE_CYCLE: AttendanceStatus[] = ['PRESENT', 'LATE', 'EXCUSED', 'ABSENT'];
-  const handleCycleStatus = (studentId: string) => {
+  // زر الغياب الوحيد: يعمل من الضغطة الأولى، وإعادة الضغط عليه وهو نشط
+  // تعيد التلميذ إلى «حاضر». لا أزرار منفصلة للتأخر أو التبرير.
+  const handleToggleAbsence = (studentId: string) => {
     const current = (activeAttendance[studentId] || 'PRESENT') as AttendanceStatus;
-    if (attendanceMode === 'quick') {
-      handleSetStudentStatus(studentId, current === 'ABSENT' ? 'PRESENT' : 'ABSENT');
-      return;
-    }
-    const index = ATTENDANCE_CYCLE.indexOf(current);
-    handleSetStudentStatus(studentId, ATTENDANCE_CYCLE[(index + 1) % ATTENDANCE_CYCLE.length]);
+    void handleSetStudentStatus(studentId, toggleAbsenceStatus(current));
   };
 
   const handleSelectClass = (classId: string) => {
@@ -159,10 +154,10 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     }
   }
 
-  // النقطة المعروضة أثناء الحصة هي الجزء الموثَّق من المشاركة (من 3). أما تقدير
-  // الأستاذ (5) فيُدخل في نهاية الفصل من شاشة «مراجعة التقويم».
+  // النقطة المعروضة أثناء الحصة هي الجزء الموثَّق من المشاركة (من 4). أما تقدير
+  // الأستاذ (4) فيُدخل في نهاية الفصل من شاشة «مراجعة التقويم».
   const evaluationRules = state.calendarSettings?.evaluationRules;
-  const participationMax = evaluationRules?.participationRecordedMax ?? 3;
+  const participationMax = evaluationRules?.participationRecordedMax ?? 4;
   // الحصة الملغاة لا تُحتسب في المقام: لا تُدرّس ولا تُوثَّق.
   const scoredSessions = classSessions.filter(session => session.sessionStatus !== 'CANCELLED');
   const documentedSessionsCount = scoredSessions.filter(
@@ -919,7 +914,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             className={`px-2 py-0.5 rounded-lg border ${
                               stats.disruptions > 0 || stats.unwrittenLessons > 0
                                 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200' }`}
-                            title="مجموع التأخرات" >
+                            title="مجموع ملاحظات السلوك والكراس" >
                             سلوك: {stats.disruptions} | كراس: {stats.unwrittenLessons}
                           </span>
                           <span
@@ -928,18 +923,18 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                 ? 'bg-[var(--primary-soft)] text-[var(--primary-ink)] border-[var(--primary)]/30'
                                 : 'bg-slate-50 text-slate-400 border-slate-200'
                             }`}
-                            title="التوثيق الآلي: يُحتسب على الحصص الموثّقة فقط (من 3)"
+                            title="التوثيق الآلي: يُحتسب على الحصص الموثّقة فقط (من 4)"
                           >
-                            مشاركة: {participationPoints.toFixed(2)}/{participationMax}
+                            مشاركة: {participationPoints.toFixed(1)}/{participationMax}
                           </span>
                         </div>
                       </div>
 
                       {/* Unified Attendance & Behavior Buttons (Mobile) */}
-                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-4' : 'grid-cols-2'} gap-1.5`}>
+                      <div className="grid grid-cols-2 gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => handleCycleStatus(student.id)}
+                                  onClick={() => handleToggleAbsence(student.id)}
                                   aria-pressed={status === 'ABSENT'}
                                   className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-300' }`}
@@ -955,7 +950,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
                                       ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس أو أهمل الكراس والواجبات" >
+                                  title="لم يكتب الدرس أو أهمل الكراس وأدوات التعلم" >
                                   الكراس -
                                 </button>
                                 <button
@@ -1001,7 +996,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                         <th className="p-3 text-center">مجموع السلوك</th>
                         <th className="p-3 text-center">
                           نقطة المشاركة
-                          <span className="block text-xs font-normal text-slate-400">توثيق على الحصص الموثّقة (من 3)</span>
+                          <span className="block text-xs font-normal text-slate-400">توثيق على الحصص الموثّقة (من 4)</span>
                         </th>
                       </tr>
                     </thead>
@@ -1029,7 +1024,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                               <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => handleCycleStatus(student.id)}
+                                  onClick={() => handleToggleAbsence(student.id)}
                                   aria-pressed={status === 'ABSENT'}
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:border-rose-300' }`}
@@ -1045,7 +1040,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
                                       ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس أو أهمل الكراس والواجبات" >
+                                  title="لم يكتب الدرس أو أهمل الكراس وأدوات التعلم" >
                                   الكراس -
                                 </button>
                                 <button
@@ -1087,7 +1082,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             {/* Participation points (automatic, starting from 0) */}
                             <td className="p-3 text-center font-bold font-mono text-sm border-r border-slate-100 bg-slate-50/50">
                               <span className={participationPoints > 0 ? 'text-[var(--primary)]' : 'text-slate-400'}>
-                                {participationPoints.toFixed(2)} / {participationMax}
+                                {participationPoints.toFixed(1)} / {participationMax}
                               </span>
                             </td>
                           </tr>
@@ -1109,7 +1104,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   <span className="px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold text-xs whitespace-nowrap">مشاركة +</span>
                 </div>
                 <div className="text-xs text-slate-500">
-                  💡 انقر على حالة التلميذ للتبديل: حاضر ← متأخر ← مبرَّر ← غائب (في الوضع المفصّل). نقطة المشاركة تُحتسب على الحصص الموثّقة فقط، وتكتمل بـ5 نقاط تقدير في «مراجعة التقويم».
+                  زر «الغياب» هو الوحيد لتسجيل الحضور: يعمل من الضغطة الأولى، وإعادة الضغط عليه وهو نشط تعيد «حاضر». تُضاف 4 نقاط تقدير المشاركة في «مراجعة التقويم».
                 </div>
               </div>
           </div>
@@ -1200,7 +1195,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="mt-1.5 grid grid-cols-4 gap-1">
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                   {NOTEBOOK_SCORE_CHOICES.map(choice => {
                     const isSelected = selected === choice.score;
                     return (
@@ -1214,13 +1209,14 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                           triggerHapticFeedback();
                           setNotebookDraft(prev => ({ ...prev, [student.id]: choice.score }));
                         }}
-                        className={`min-h-9 rounded-lg border text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                        className={`flex min-h-11 flex-col items-center justify-center rounded-lg border px-2 py-1.5 text-center text-xs font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                           isSelected
                             ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
                             : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]'
                         }`}
                       >
-                        {choice.label}
+                        <span>{choice.label}</span>
+                        <span className="mt-0.5 whitespace-nowrap font-mono text-xs">{choice.score} / 6</span>
                       </button>
                     );
                   })}
