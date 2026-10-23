@@ -251,7 +251,7 @@ describe('council student profile links', () => {
 });
 
 describe('StudentProfileContent', () => {
-  it('renders current and previous terms without exposing later-term results', () => {
+  it('renders current and previous terms without later-term results or a lateness card', () => {
     const profile = selectStudentProfile(makeState(2), student.id);
     expect(profile).not.toBeNull();
 
@@ -262,7 +262,8 @@ describe('StudentProfileContent', () => {
     expect(html).toContain('الفصل الثاني');
     expect(html).toContain('الفصل الأول');
     expect(html).not.toContain('الفصل الثالث');
-    expect(html).toContain('للمتابعة فقط');
+    expect(html).not.toContain('التأخر');
+    expect(html).not.toContain('للمتابعة فقط');
     expect(html).toContain('12345');
   });
 
