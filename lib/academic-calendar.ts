@@ -374,6 +374,12 @@ export function normalizeCalendarSettings(
     rules.notebookMax = defaults.evaluationRules.notebookMax;
     rules.participationMax = defaults.evaluationRules.participationMax;
   }
+  // جولات الكراس: كل إعداد محفوظ قبل هذا التغيير يحمل 2 لأنها كانت القيمة
+  // الافتراضية الوحيدة، ولم تُعرض أبداً في الواجهة. تُرقّى مرة واحدة إلى الافتراضي
+  // الجديد (جولة واحدة). إن أُتيح اختيارها للأستاذ مستقبلاً فيجب حذف هذا السطر.
+  if (rules.notebookRounds === 2 && defaults.evaluationRules.notebookRounds === 1) {
+    rules.notebookRounds = 1;
+  }
   return {
     ...defaults,
     ...calendar,

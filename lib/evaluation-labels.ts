@@ -43,7 +43,7 @@ export const EVALUATION_CRITERIA: EvaluationCriterionMeta[] = [
     label: 'الكراس والواجبات',
     short: 'الكراس',
     maxKey: 'notebookMax',
-    hint: 'متوسط جولتي تفتيش في الفصل (ويُدمج فيه إحضار الأدوات).',
+    hint: 'تفتيش واحد للكراس في الفصل (ويُدمج فيه إحضار الأدوات).',
   },
   {
     key: 'participation',

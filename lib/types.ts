@@ -81,8 +81,8 @@ export interface ContinuousEvaluationRules {
   participationJudgementMax?: number; // 5
   /** النسبة المستهدفة من الحصص الموثّقة للوصول إلى كامل نقطة التوثيق. */
   participationTargetRatio?: number; // 0.25
-  /** عدد جولات الكراس في الفصل. */
-  notebookRounds?: number; // 2
+  /** عدد جولات الكراس في الفصل (1 افتراضاً، و2 كحد أقصى لسجل قديم). */
+  notebookRounds?: number; // 1
   maxScore: number; // 20
   showGuidanceAlerts: boolean;
   exemptRuleSecondQuiz: string; // legacy text key, kept for backward compatibility

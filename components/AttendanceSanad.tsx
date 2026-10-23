@@ -14,6 +14,7 @@ import {
   buildNotebookChecks,
   collectNotebookChecks,
   nextOpenRound,
+  normalizeNotebookRounds,
   roundProgress,
 } from '@/lib/notebook-rounds';
 import { getLocalDateString } from '@/lib/date-utils';
@@ -182,11 +183,15 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       evaluationRules
     ).participationRecorded ?? 0;
 
-  // جولات تفتيش الكراس: جولتان في الفصل، وكل جولة تمتد على عدة حصص.
+  // جولة تفتيش الكراس: واحدة في الفصل (ويمكن ضبطها على 2)، وتمتد على عدة حصص.
+  const notebookRounds = normalizeNotebookRounds(evaluationRules?.notebookRounds);
   const notebookChecks = collectNotebookChecks(classSessions);
   const classStudentIds = classStudents.map(student => student.id);
-  const notebookRound = nextOpenRound(notebookChecks, classStudentIds);
+  const notebookRound = nextOpenRound(notebookChecks, classStudentIds, notebookRounds);
   const notebookProgress = roundProgress(notebookChecks, classStudentIds, notebookRound);
+  // مع جولة واحدة: بعد اكتمالها يتحول الزر إلى مراجعة وتعديل بدل فتح جولة ثانية.
+  const notebookNeedsReview = notebookRounds === 1 && notebookProgress.complete;
+  const notebookLabel = notebookRounds > 1 ? `جولة الكراس ${notebookRound}` : 'جولة الكراس';
 
   // تلميذ سُجّل كراسه في الحصة نفسها ضمن الجولة الأخرى: لا نسمح بالكتابة فوق
   // سجله السابق، لأن التفتيش الواحد للحصة يخص تلميذاً واحداً.
@@ -232,9 +237,12 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         ),
       }));
       const remaining = classStudents.filter(student => !notebookDraft[student.id]).length;
+      const roundLabel = notebookRounds > 1 ? ` في الجولة ${notebookRound}` : '';
       showToast(
-        `تم حفظ تفتيش ${updates.length} كراس في الجولة ${notebookRound}` +
-          (remaining > 0 ? `؛ بقي ${remaining} تلميذاً تُكملهم في حصة أخرى.` : '؛ اكتملت الجولة.'),
+        `تم حفظ تفتيش ${updates.length} كراس${roundLabel}` +
+          (remaining > 0
+            ? `؛ بقي ${remaining} تلميذاً تُكملهم في حصة أخرى.`
+            : '؛ اكتملت جولة الكراس لهذا الفصل.'),
         'success',
       );
       setIsNotebookOpen(false);
@@ -743,9 +751,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   type="button"
                   onClick={openNotebookRound}
                   className="flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--accent-gold)] bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-100 sm:w-auto"
-                  title="تفتيش كراس 8–10 تلاميذ في هذه الحصة؛ الجولة تكتمل على عدة حصص"
+                  title="تفتيش كراس 8–10 تلاميذ في هذه الحصة؛ الجولة الواحدة تكتمل على عدة حصص"
                 >
-                  <span>جولة الكراس {notebookProgress.round}</span>
+                  <span>{notebookNeedsReview ? 'مراجعة الكراس' : notebookLabel}</span>
                   <span className="rounded bg-white/80 px-1.5 font-mono text-xs">
                     {notebookProgress.inspected}/{notebookProgress.total}
                   </span>
@@ -1141,11 +1149,14 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 id="notebook-round-title" className="text-base font-black text-[var(--text-primary)]">
-              جولة الكراس {notebookRound}
+              {notebookRounds > 1 ? `جولة الكراس ${notebookRound}` : 'جولة الكراس'}
             </h3>
             <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
-              افتح كراس 8–10 تلاميذ فقط في هذه الحصة؛ تُحفظ الدرجات هنا ويُكمل بقية القسم في
-              حصة أخرى حتى يكتمل العدد ({notebookProgress.inspected}/{notebookProgress.total}).
+              {notebookRounds > 1
+                ? `افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`
+                : notebookNeedsReview
+                  ? 'اكتملت الجولة لهذا الفصل. يمكنك تعديل أي درجة ثم الحفظ؛ ولا حاجة لجولة ثانية.'
+                  : `جولة واحدة في الفصل: افتح كراس 8–10 تلاميذ فقط في هذه الحصة، ويُكمل بقية القسم في حصة أخرى حتى يكتمل العدد (${notebookProgress.inspected}/${notebookProgress.total}).`}
             </p>
           </div>
           <span className="shrink-0 rounded-lg bg-[var(--primary-soft)] px-2 py-1 font-mono text-xs font-bold text-[var(--primary-ink)]">
@@ -1167,7 +1178,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   </span>
                   {otherRound && (
                     <span className="shrink-0 rounded bg-[var(--bg-page)] px-1.5 py-0.5 text-xs text-[var(--text-tertiary)]">
-                      سُجّل في الجولة {otherRound}
+                      سُجّل سابقاً
                     </span>
                   )}
                   {!otherRound && checkedInRound && selected === undefined && (

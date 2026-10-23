@@ -790,7 +790,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
                   {calendarSettings.evaluationRules.notebookMax} / 20
                 </td>
-                <td className="px-3 py-2">متوسط جولتين في الفصل، كل جولة على مقياس 0–5 (يُدمج فيها إحضار الأدوات لأن المادة بلا أدوات).</td>
+                <td className="px-3 py-2">جولة واحدة في الفصل على مقياس 0–5 (يُدمج فيها إحضار الأدوات لأن المادة بلا أدوات).</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-bold text-slate-800">المشاركة والنشاط</td>

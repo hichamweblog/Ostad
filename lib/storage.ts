@@ -177,7 +177,8 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     participationRecordedMax: 3,
     participationJudgementMax: 5,
     participationTargetRatio: 0.25,
-    notebookRounds: 2,
+    // جولة كراس واحدة في الفصل، تمتد على عدة حصص.
+    notebookRounds: 1,
     disruptionDeduction: 0.25,
     disruptionRepeatDeduction: 0.5,
     unwrittenLessonDeduction: 0.5,

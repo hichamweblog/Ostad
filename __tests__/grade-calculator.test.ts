@@ -93,11 +93,21 @@ describe('calculateEvaluationBreakdown (decree weights 3/3/6/8)', () => {
     expect(calculateEvaluationBreakdown({ disruptions: 6 }, rules).behavior).toBe(0.25);
   });
 
-  it('averages the two notebook rounds on a 0–6 scale', async () => {
+  it('scores the single notebook round on a 0–6 scale', async () => {
     const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
-    expect(calculateEvaluationBreakdown({ notebookScores: [5, 5] }, rules).notebook).toBe(6);
-    expect(calculateEvaluationBreakdown({ notebookScores: [5, 3] }, rules).notebook).toBe(4.8);
-    expect(calculateEvaluationBreakdown({ notebookScores: [0, 0] }, rules).notebook).toBe(0);
+    expect(calculateEvaluationBreakdown({ notebookScores: [5] }, rules).notebook).toBe(6);
+    expect(calculateEvaluationBreakdown({ notebookScores: [4] }, rules).notebook).toBe(4.8);
+    expect(calculateEvaluationBreakdown({ notebookScores: [0] }, rules).notebook).toBe(0);
+    // جولة ثانية محفوظة من إعداد قديم لا تُخفّض الدرجة حين تكون القاعدة جولة واحدة.
+    expect(calculateEvaluationBreakdown({ notebookScores: [5, 1] }, rules).notebook).toBe(6);
+  });
+
+  it('averages both rounds only for a term configured with two', async () => {
+    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+    const twoRounds = { ...rules, notebookRounds: 2 };
+    expect(calculateEvaluationBreakdown({ notebookScores: [5, 5] }, twoRounds).notebook).toBe(6);
+    expect(calculateEvaluationBreakdown({ notebookScores: [5, 3] }, twoRounds).notebook).toBe(4.8);
+    expect(calculateEvaluationBreakdown({ notebookScores: [0, 0] }, twoRounds).notebook).toBe(0);
   });
 
   it('counts documented participation on documented sessions only', async () => {

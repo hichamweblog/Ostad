@@ -1,18 +1,32 @@
 import type { NotebookCheck, SessionRecord } from './types';
 
 /**
- * جولات تفتيش الكراس.
+ * تفتيش الكراس.
  *
- * قسم من 40 تلميذاً لا يمكن تفتيشه في حصة واحدة، لذلك الجولة الواحدة تمتد على
- * عدة حصص (8–10 تلاميذ في الحصة). كل تفتيش يُحفظ في الحصة التي جرى فيها، وتُجمع
- * النتائج على مستوى الفصل: لكل تلميذ درجة واحدة لكل جولة (الأحدث تحسم التعارض
- * بين جهازين).
+ * الافتراضي **جولة واحدة** في الفصل. وقسم من 40 تلميذاً لا يمكن تفتيشه في حصة
+ * واحدة، لذلك الجولة تمتد على عدة حصص (8–10 تلاميذ في الحصة). كل تفتيش يُحفظ في
+ * الحصة التي جرى فيها، وتُجمع النتائج على مستوى الفصل: لكل تلميذ درجة واحدة
+ * (الأحدث تحسم التعارض بين جهازين).
+ *
+ * القاعدة تبقى قابلة للضبط من `notebookRounds` (1 أو 2) حتى لا يُفقد سجل قديم
+ * فيه جولة ثانية، لكن الواجهة والحساب لا يقرآن إلا الجولات المطلوبة فعلاً.
  */
+
+/** أقصى عدد جولات يدعمه السجل القديم؛ القيمة الفعلية من `notebookRounds`. */
+export const NOTEBOOK_ROUNDS_MAX = 2;
+export const DEFAULT_NOTEBOOK_ROUNDS = 1;
 
 export type NotebookRound = 1 | 2;
 
 export interface StudentNotebookRounds {
   [studentId: string]: Partial<Record<NotebookRound, NotebookCheck>>;
+}
+
+/** يضبط عدد الجولات على 1..2، ويقع على الافتراضي عند قيمة غير صالحة. */
+export function normalizeNotebookRounds(value: unknown): NotebookRound {
+  const numeric = Math.round(Number(value));
+  if (!Number.isFinite(numeric)) return DEFAULT_NOTEBOOK_ROUNDS;
+  return Math.min(NOTEBOOK_ROUNDS_MAX, Math.max(1, numeric)) as NotebookRound;
 }
 
 /** درجات التفتيش السريع: أربع درجات تكفي وتُبقي الاختيار بضغطة واحدة. */
@@ -52,10 +66,22 @@ export function collectNotebookChecks(sessions: SessionRecord[]): StudentNoteboo
   return result;
 }
 
-/** الجولة المفتوحة: الأولى حتى يُفتَّش كل التلاميذ، ثم الثانية. */
-export function nextOpenRound(checks: StudentNotebookRounds, studentIds: string[]): NotebookRound {
-  const missingFirst = studentIds.some(id => !checks[id]?.[1]);
-  return missingFirst ? 1 : 2;
+/**
+ * الجولة المفتوحة: أول جولة لم يُفتَّش فيها كل التلاميذ.
+ * مع جولة واحدة (الافتراضي) تبقى دائماً 1، فلا تُفتح جولة ثانية أبداً.
+ * إذا اكتملت كل الجولات تُعاد الأخيرة ليبقى بالإمكان مراجعة الدرجات.
+ */
+export function nextOpenRound(
+  checks: StudentNotebookRounds,
+  studentIds: string[],
+  rounds: number = DEFAULT_NOTEBOOK_ROUNDS,
+): NotebookRound {
+  const limit = normalizeNotebookRounds(rounds);
+  for (let round = 1; round <= limit; round += 1) {
+    const current = round as NotebookRound;
+    if (studentIds.some(id => !checks[id]?.[current])) return current;
+  }
+  return limit;
 }
 
 export interface RoundProgress {
@@ -74,13 +100,25 @@ export function roundProgress(
   return { round, inspected, total: studentIds.length, complete: studentIds.length > 0 && inspected === studentIds.length };
 }
 
-/** درجات الجولات المكتملة لتلميذ واحد، على مقياس 0–5. */
-export function notebookScoresFor(checks: StudentNotebookRounds, studentId: string): number[] {
+/**
+ * درجات الجولات المطلوبة لتلميذ واحد، على مقياس 0–5.
+ * مع جولة واحدة تُقرأ الجولة الأولى فقط، وأي درجة محفوظة في جولة ثانية قديمة
+ * تبقى في السجل ولا تدخل الحساب.
+ */
+export function notebookScoresFor(
+  checks: StudentNotebookRounds,
+  studentId: string,
+  rounds: number = DEFAULT_NOTEBOOK_ROUNDS,
+): number[] {
   const bucket = checks[studentId];
   if (!bucket) return [];
-  return ([1, 2] as NotebookRound[])
-    .map(round => bucket[round]?.score)
-    .filter((score): score is number => typeof score === 'number');
+  const limit = normalizeNotebookRounds(rounds);
+  const scores: number[] = [];
+  for (let round = 1; round <= limit; round += 1) {
+    const score = bucket[round as NotebookRound]?.score;
+    if (typeof score === 'number') scores.push(score);
+  }
+  return scores;
 }
 
 export interface NotebookCheckUpdate {

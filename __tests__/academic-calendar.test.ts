@@ -201,6 +201,20 @@ describe('normalizeCalendarSettings migration', () => {
     expect(normalized.evaluationRules.disruptionDeduction).toBe(1);
   });
 
+  it('collapses a stored two-round default to the single-round rule', () => {
+    const stored: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: { ...base.evaluationRules, notebookRounds: 2 },
+    };
+    expect(normalizeCalendarSettings(stored, base).evaluationRules.notebookRounds).toBe(1);
+    // جولة واحدة اختارها الأستاذ (أو بقيت من النسخة الجديدة) لا تتغيّر.
+    const single: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: { ...base.evaluationRules, notebookRounds: 1 },
+    };
+    expect(normalizeCalendarSettings(single, base).evaluationRules.notebookRounds).toBe(1);
+  });
+
   it('falls back to defaults for missing or invalid input', () => {
     expect(normalizeCalendarSettings(undefined, base)).toBe(base);
     expect(normalizeCalendarSettings(null, base)).toBe(base);
@@ -279,7 +293,7 @@ describe('untouched legacy defaults migration', () => {
     );
     // غياب الحقول الجديدة ليس تخصيصاً: تُرقّى القيم القديمة وتُضاف الجديدة.
     expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
-    expect(normalized.evaluationRules.notebookRounds).toBe(2);
+    expect(normalized.evaluationRules.notebookRounds).toBe(1);
     expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
     expect(normalized.evaluationRules.participationMax).toBe(8);
   });

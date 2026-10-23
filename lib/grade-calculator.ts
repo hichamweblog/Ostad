@@ -8,7 +8,7 @@ import { ContinuousEvaluationRules, CouncilStatistics, Student, StudentGrade } f
  * فكانت النتيجة أن القسم كله يتراوح بين 12 و18 مهما اختلف سلوكه. النموذج الحالي:
  * – المواظبة نسبة من الحصص لا عدداً مطلقاً، حتى لا يُعاقب قسم الساعة الواحدة ضعفاً.
  * – السلوك خصم تصاعدي (الأولى 0.25 ثم 0.5) فلا يهبط السقف من أول مخالفة.
- * – الكراس من جولتي تفتيش على مقياس 0–5 (لا عدّ «لم يكتب»).
+ * – الكراس من جولة تفتيش واحدة على مقياس 0–5 (لا عدّ «لم يكتب»).
  * – المشاركة = توثيق آلي (3) فوق الحصص الموثّقة فقط + تقدير الأستاذ (5).
  * – أي عنصر بلا أدلة كافية يُستبعد ويُعاد توزيع وزنه على الباقي بدل منحه صفراً
  *   أو سقفه كاملاً.
@@ -46,7 +46,7 @@ export interface SessionBehaviourStats {
   sessionsCount?: number;
   /** عدد الحصص التي وُثِّقت فيها مشاركة تلميذ واحد على الأقل. */
   documentedSessions?: number;
-  /** درجات جولات الكراس (0–5)، أقصاها جولتان. */
+  /** درجات جولات الكراس (0–5)؛ جولة واحدة افتراضياً وجولتان كحد أقصى. */
   notebookScores?: number[];
   /** تقدير الأستاذ للمشاركة والنشاط (0–5). */
   participationJudgement?: number | null;
@@ -158,9 +158,11 @@ export function calculateEvaluationBreakdown(
       )
     : null;
 
-  // 3) الكراس — متوسط الجولات؛ وإن لم تُنفَّذ جولة قط، تُستخدم علامات «لم يكتب»
-  //    كدليل احتياطي بدل استبعاد العنصر من كل القسم.
-  const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, 2);
+  // 3) الكراس — متوسط الجولات المطلوبة (جولة واحدة افتراضياً). أي درجة محفوظة
+  //    في جولة زائدة عن الإعداد لا تدخل الحساب حتى لا يتغيّر السقف بصمت.
+  //    وإن لم تُنفَّذ جولة قط، تُستخدم علامات «لم يكتب» كدليل احتياطي.
+  const notebookRounds = Math.min(2, Math.max(1, Math.round(ruleValue(rules?.notebookRounds, 1))));
+  const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, notebookRounds);
   const hasRounds = rounds.length > 0;
   const fallbackNotebook = hasRounds
     ? null
