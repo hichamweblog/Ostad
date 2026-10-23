@@ -51,11 +51,18 @@ body { direction: rtl !important; text-align: right !important; font-size: 9.5pt
 .print-sheet [class*="rounded-"] { border-radius: 0 !important; }
 .print-sheet [class*="shadow"] { box-shadow: none !important; }
 .print-sheet .no-print, .print-sheet nav, .print-sheet aside { display: none !important; }
-/* Decorative icons are noise on paper; marking buttons keep their text and colours. */
+/* Decorative icons and floating circles are noise on paper. */
 .print-sheet svg { display: none !important; }
-.print-sheet *:not(button):not(button *) { color: #000 !important; }
+.print-sheet .absolute { display: none !important; }
+/* Printers drop background colours, so any dark banner must become black on white,
+   otherwise its white text would disappear. */
+.print-sheet *, .print-sheet *::before, .print-sheet *::after {
+  color: #000 !important;
+  border-color: #334155 !important;
+}
 .print-sheet [class*="bg-linear"], .print-sheet [class*="bg-gradient"],
-.print-sheet [class*="bg-white/"] { background: #fff !important; }
+.print-sheet [class*="bg-white/"], .print-sheet [class*="bg-slate-7"],
+.print-sheet [class*="bg-slate-8"], .print-sheet [class*="bg-slate-9"] { background: #fff !important; }
 .print-sheet button, .print-sheet [role="button"] {
   min-height: 0 !important;
   padding: 1px 4px !important;
@@ -88,6 +95,9 @@ body { direction: rtl !important; text-align: right !important; font-size: 9.5pt
 .print-sheet .print-avoid-break { page-break-inside: avoid !important; break-inside: avoid !important; }
 .print-sheet .print-page-break { page-break-before: always !important; break-before: page !important; }
 .print-sheet .min-w-\\[640px\\], .print-sheet .min-w-\\[850px\\] { min-width: 0 !important; }
+.print-sheet caption { caption-side: top !important; text-align: right !important; padding-bottom: 2px !important; }
+.print-sheet .overflow-x-auto, .print-sheet .overflow-hidden { overflow: visible !important; }
+.print-sheet [class*="max-h-"] { max-height: none !important; overflow: visible !important; }
 `;
 
 /**

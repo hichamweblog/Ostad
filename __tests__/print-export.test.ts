@@ -32,6 +32,19 @@ describe('A4 print frame', () => {
     expect(PRINT_CSS).toContain('print-color-adjust: exact');
   });
 
+  it('turns dark banners into black on white so nothing vanishes on paper', () => {
+    expect(PRINT_CSS).toContain('color: #000 !important');
+    expect(PRINT_CSS).toContain('[class*="bg-gradient"]');
+    expect(PRINT_CSS).toContain('.print-sheet .absolute { display: none');
+  });
+
+  it('prints an official header on every document', () => {
+    const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+    expect(read('components/AttendanceSanad.tsx')).toContain('ورقة الحضور والمواظبة —');
+    expect(read('components/CouncilAnalysis.tsx')).toContain('بطاقة التحليل الإحصائي');
+    expect(read('components/TimetableSanad.tsx')).toContain('print:table-caption');
+  });
+
   it('clones the target element so a <table> keeps its wrapper', () => {
     const source = readFileSync(join(process.cwd(), 'lib', 'print.ts'), 'utf8');
     expect(source).toContain('dir="rtl"');

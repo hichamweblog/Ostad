@@ -47,7 +47,7 @@ function validateExcelFile(file: File): void {
 }
 
 /** Why a worksheet was kept or ignored during a roster import. */
-export type ParsedSheetStatus = 'IMPORTED' | 'SKIPPED_ADMIN' | 'SKIPPED_EMPTY';
+export type ParsedSheetStatus = 'IMPORTED' | 'SKIPPED_ADMIN' | 'SKIPPED_EMPTY' | 'SKIPPED_DUPLICATE';
 
 export interface ParsedSheetSummary {
   sheetName: string;
@@ -70,9 +70,8 @@ export interface ParsedDigitizationResult {
   /** One row per worksheet in the workbook, so the teacher can see what was kept and what was ignored. */
   sheets: ParsedSheetSummary[];
   totalStudents: number;
-  schoolName?: string;
-  stateName?: string;
-  academicYear?: string;
+  // The workbook header may name the school, the directorate and the year, but none of that is
+  // imported: the request is «القسم وأسماء التلاميذ فقط», and a messy header can be wrong.
 }
 
 /**
@@ -90,8 +89,9 @@ export function normalizeArabicText(value: unknown): string {
     .trim();
 }
 
-const STAFF_SHEET_WORDS = /(اساتذ|استاذ|طاقم|اداري|إداري|عمال|موظف|مستخدم|مسير|مقتصد)/;
-const STUDENT_SHEET_WORDS = /(تلاميذ|تلميذ|قسم|فوج|افواج|قائمه)/;
+const STAFF_SHEET_WORDS = /(اساتذ|استاذ|طاقم|اداري|إداري|عمال|موظف|مستخدم|مسير|مقتصد|professeur|enseignant|personnel)/;
+// «قائمة» alone says nothing: «قائمة الأساتذة» is a staff list, «قائمة التلاميذ» a roster.
+const STUDENT_SHEET_WORDS = /(تلاميذ|تلميذ|قسم|فوج|افواج)/;
 
 /**
  * An administrative worksheet (teachers, staff, workers) must never be imported as a class roster.
@@ -104,7 +104,7 @@ export function isAdministrativeSheet(sheetName: string, headText: string): bool
 
   const text = normalizeArabicText(headText);
   const staffTitle =
-    /(قائمه|لائحه|جدول|كشف)\s*(ال)?(اساتذ|طاقم|عمال|موظف|مستخدم|اداري|إداري)|الطاقم\s*(ال)?(اداري|إداري|التربوي)|(اساتذ|اطارات)\s*(الماده|المؤسسه)/;
+    /(قائمه|لائحه|جدول|كشف)\s*(ال)?(اساتذ|طاقم|عمال|موظف|مستخدم|اداري|إداري)|الطاقم\s*(ال)?(اداري|إداري|التربوي)|(اساتذ|اطارات)\s*(الماده|المؤسسه)|liste\s*des\s*(professeurs|enseignants)|corps\s*enseignant/;
   const studentText = /(تلاميذ|تلميذ|قائمه\s*(ال)?تلاميذ|افواج|قائمه\s*(ال)?اقسام)/;
   return staffTitle.test(text) && !studentText.test(text);
 }
@@ -363,6 +363,21 @@ export function detectRosterLayout(data: any[][]): RosterLayout | null {
   return null;
 }
 
+/**
+ * Drops a leading «القسم»/«الفوج» label and a trailing subject so the code parses as a level.
+ * Nothing is dropped when what remains is not a class code («القسم الأول» stays readable).
+ */
+export function stripSectionLabel(value: string): string {
+  const original = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const withoutLabel = original
+    .replace(/^\s*(?:ال)?(?:فوج|قسم)\s*(?:التربوي|التربويه)?\s*[:：\-]?\s*/i, '')
+    .replace(/\s*(?:مادة|المادة|الماده)\s*[:：]?\s*.*$/i, '')
+    .replace(/[.،,;:]+$/, '')
+    .trim();
+  if (!withoutLabel) return original;
+  return /[\d\u0660-\u0669]/.test(withoutLabel) ? withoutLabel : original;
+}
+
 /** Reads the class/section name written in the sheet title rows (`الفوج التربوي`, `القسم`, …). */
 export function extractClassNameFromRows(rows: any[][], limit = 12): string {
   const scan = Math.min(rows.length, limit);
@@ -605,9 +620,6 @@ export async function parseDigitizationFile(
 
   const parsedClasses: ParsedClassData[] = [];
   const sheetSummaries: ParsedSheetSummary[] = [];
-  let detectedSchoolName = '';
-  let detectedStateName = '';
-  let detectedAcademicYear = '';
 
   // Every worksheet is inspected: real files mix rosters, staff lists, empty tabs and summaries.
   for (const sheetName of workbook.SheetNames) {
@@ -636,43 +648,13 @@ export async function parseDigitizationFile(
     assertRowBudget(totalRowsSeen);
     assertTimeBudget(parseStartedAt);
 
-    // The school, the directorate and the academic year live in the title block of the file.
+    // The title block only names the institution, the subject or the staff; it is inspected to
+    // reject staff lists, never imported (the request is «القسم وأسماء التلاميذ فقط»).
     const headRowTexts = data
       .slice(0, 12)
       .map(row => (row || []).map(cell => String(cell || '').trim()).filter(Boolean).join(' '))
       .filter(Boolean);
     const headText = headRowTexts.join(' | ');
-
-    for (const rowText of headRowTexts) {
-      // Extract School Name (ثانوية ...)
-      if (!detectedSchoolName && /ثانوية\s+([^\n\r,]+)/i.test(rowText)) {
-        const m = rowText.match(/ثانوية\s+([^,:|\n\r]{3,60}(?:\([^)]+\))?)/i);
-        // غالباً يكمل السطر بعنوان آخر («الموسم الدراسي» أو «مديرية التربية»)، فتُقطع عنده.
-        const cleanedSchoolName = m?.[1]
-          ?.replace(/\s+(?:السنة|الموسم|مديرية|الأستاذ|الاستاذ|الأستاذة|المادة|الماده|المؤسسة|المؤسسه|القسم|الفوج|رقم)\s*.*$/i, '')
-          .replace(/[.،,;:]+$/, '')
-          .trim();
-        if (cleanedSchoolName && cleanedSchoolName.length >= 3) {
-          detectedSchoolName = `ثانوية ${cleanedSchoolName}`;
-        }
-      }
-
-      // Extract Directorate / State (مديرية التربية لولاية ...)
-      if (!detectedStateName && /مديرية\s*التربية\s*لولاية\s+([^\s,:|\n\r]+)/i.test(rowText)) {
-        const m = rowText.match(/مديرية\s*التربية\s*لولاية\s+([^\s,:|\n\r]+)/i);
-        if (m && m[1]) {
-          detectedStateName = m[1].trim();
-        }
-      }
-
-      // Extract Academic Year (السنة الدراسية : 2025-2026)
-      if (!detectedAcademicYear && /السنة\s*الدراسية\s*:\s*(\d{4}[-/]\d{4})/i.test(rowText)) {
-        const m = rowText.match(/السنة\s*الدراسية\s*:\s*(\d{4}[-/]\d{4})/i);
-        if (m && m[1]) {
-          detectedAcademicYear = m[1].trim();
-        }
-      }
-    }
 
     // Administration sheets (teachers, staff, workers) are reported but never imported.
     if (isAdministrativeSheet(sheetName, headText)) {
@@ -731,6 +713,7 @@ export async function parseDigitizationFile(
         extractedClassName = String(sheetName).trim();
       }
     }
+    extractedClassName = stripSectionLabel(extractedClassName);
     if (!extractedClassName) {
       extractedClassName = `قسم ${parsedClasses.length + 1}`;
     }
@@ -795,6 +778,30 @@ export async function parseDigitizationFile(
     }
 
     if (students.length > 0) {
+      // Real workbooks repeat the same roster on one sheet per subject. Importing every copy
+      // would create identical classes, so a roster already seen in this file is reported once.
+      const sheetKeys = new Set(students.map(student => getStudentNameKey(student.fullName)));
+      // Small classes have to match entirely; a big one may lose or gain a pupil between copies.
+      const requiredShared = sheetKeys.size >= 4 ? Math.ceil(sheetKeys.size * 0.8) : sheetKeys.size;
+      const repeatedRoster = parsedClasses.some(previous => {
+        const previousKeys = new Set(previous.students.map(student => getStudentNameKey(student.fullName)));
+        let shared = 0;
+        sheetKeys.forEach(key => {
+          if (previousKeys.has(key)) shared += 1;
+        });
+        return shared >= requiredShared && previousKeys.size <= sheetKeys.size * 1.5 + 2;
+      });
+      if (repeatedRoster) {
+        sheetSummaries.push({
+          sheetName,
+          className: getCanonicalClassName(extractedClassName || sheetName),
+          studentCount: 0,
+          status: 'SKIPPED_DUPLICATE',
+          reason: 'نفس قائمة التلاميذ موجودة في ورقة أخرى — استُوردت مرة واحدة',
+        });
+        continue;
+      }
+
       const className = getCanonicalClassName(extractedClassName || sheetName);
       const { level, stream } = detectLevelAndStream(className, sheetName);
       parsedClasses.push({ sheetName, className, level, stream, students });
@@ -830,9 +837,6 @@ export async function parseDigitizationFile(
     classes: parsedClasses,
     sheets: sheetSummaries,
     totalStudents,
-    schoolName: detectedSchoolName || undefined,
-    stateName: detectedStateName || undefined,
-    academicYear: detectedAcademicYear || undefined,
   };
 }
 

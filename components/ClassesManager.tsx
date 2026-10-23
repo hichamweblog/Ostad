@@ -605,24 +605,14 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     // Summary notification
     summaryNotificationMsg = `تم تجهيز ${parsedData.classes.length} أفواج تربوية: إضافة ${totalNewStudentsAdded} تلميذاً وتحديث ${totalExistingStudentsRetained} تلميذاً.`;
 
-    // Update profile if schoolName or academicYear were detected
-    const updatedProfile = { ...state.profile };
-    if (parsedData.schoolName && (!state.profile.schoolName || state.profile.schoolName.includes('ثانوية'))) {
-      updatedProfile.schoolName = parsedData.schoolName;
-    }
-    if (parsedData.academicYear) {
-      updatedProfile.academicYear = parsedData.academicYear;
-    }
-    if (parsedData.stateName) {
-      updatedProfile.stateName = parsedData.stateName;
-    }
-
+    // Only the roster (section name + student names) is imported. Institution metadata found in
+    // the workbook header stays in the preview and is never written into the profile: the teacher
+    // sets the school, the state and the year in the settings screen.
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
-      profile: updatedProfile,
     };
 
     if (targetClassIdToSelect) setSelectedClassId(targetClassIdToSelect);
@@ -841,23 +831,12 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     const firstClassId = processedClassIds[0] || state.activeClassId || (updatedClasses.length > 0 ? updatedClasses[0].id : null);
     targetClassIdToSelect = firstClassId;
 
-    const updatedProfile = { ...state.profile };
-    if (moumtazeData.schoolName && (!state.profile.schoolName || state.profile.schoolName.includes('ثانوية'))) {
-      updatedProfile.schoolName = moumtazeData.schoolName;
-    }
-    if (moumtazeData.academicYear) {
-      updatedProfile.academicYear = moumtazeData.academicYear;
-    }
-    if (moumtazeData.stateName) {
-      updatedProfile.stateName = moumtazeData.stateName;
-    }
-
+    // Same rule as the roster importer: classes and student names only, never institution or staff data.
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
-      profile: updatedProfile,
     };
 
     if (targetClassIdToSelect) {
@@ -1375,7 +1354,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             </div>
 
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-              يُستورد القسم وأسماء التلاميذ فقط؛ أوراق الطاقم الإداري والأساتذة تُستثنى تلقائياً. وسيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين.
+              يُستورد القسم وأسماء التلاميذ فقط؛ أوراق الطاقم الإداري والأساتذة تُستثنى تلقائياً، ولا تُحفظ بيانات المؤسسة أو السنة من الملف. وسيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين.
             </p>
             {selectedPendingClasses.length === 0 && (
               <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs font-bold text-rose-800">

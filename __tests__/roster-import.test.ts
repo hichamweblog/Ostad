@@ -127,7 +127,7 @@ describe('multi-sheet roster import', () => {
     expect(result.classes[0].students.map(s => s.fullName)).toEqual(['Benali Noman', 'Cherif Amel']);
   });
 
-  it('cleans the detected school and section names from a merged title row', async () => {
+  it('cleans the section name from a merged title row and imports no institution data', async () => {
     const file = buildWorkbookFile([
       {
         name: '2 ع ت 1',
@@ -141,8 +141,76 @@ describe('multi-sheet roster import', () => {
     ]);
 
     const result = await parseDigitizationFile(file);
-    expect(result.schoolName).toBe('ثانوية الإمام مالك');
     expect(result.classes[0].className).toBe('2 ع ت 1');
+    // «القسم وأسماء التلاميذ فقط»: the school, the state and the year never leave the file.
+    expect(result).not.toHaveProperty('schoolName');
+    expect(result).not.toHaveProperty('academicYear');
+    expect(result.classes[0].students).toHaveLength(1);
+    expect(Object.keys(result.classes[0].students[0]).sort()).toEqual([
+      'birthDate',
+      'fullName',
+      'id',
+      'numberInList',
+      'regNumber',
+      'registrationNumber',
+    ]);
+  });
+
+  it('skips a staff list even when it has no title row and is written in French', async () => {
+    const file = buildWorkbookFile([
+      {
+        name: 'Liste des professeurs',
+        rows: [
+          ['Nom', 'Prénom', 'Matière'],
+          ['Benali', 'Rachid', 'Maths'],
+          ['Cherif', 'Fatiha', 'Français'],
+        ],
+      },
+      { name: '2 ع ت 1', rows: officialSheet },
+    ]);
+
+    const result = await parseDigitizationFile(file);
+
+    expect(result.classes).toHaveLength(1);
+    expect(result.classes[0].students.map(s => s.fullName)).toEqual(['بن علي محمد', 'زروقي أمينة']);
+    expect(result.sheets.find(s => s.sheetName === 'Liste des professeurs')?.status).toBe('SKIPPED_ADMIN');
+  });
+
+  it('imports the same roster once when every subject has its own sheet', async () => {
+    const subjectSheet = (subject: string) => [
+      ['ثانوية الإمام مالك', subject],
+      ['القسم: 2 ع ت 1'],
+      ['اللقب', 'الاسم'],
+      ['بن علي', 'محمد'],
+      ['زروقي', 'أمينة'],
+      ['حمدي', 'سارة'],
+    ];
+
+    const file = buildWorkbookFile([
+      { name: 'علوم إسلامية', rows: subjectSheet('علوم إسلامية') },
+      { name: 'لغة عربية', rows: subjectSheet('لغة عربية') },
+    ]);
+
+    const result = await parseDigitizationFile(file);
+
+    expect(result.classes).toHaveLength(1);
+    expect(result.totalStudents).toBe(3);
+    expect(result.sheets.map(s => s.status)).toEqual(['IMPORTED', 'SKIPPED_DUPLICATE']);
+  });
+
+  it('reads a plain list of names with no header row at all', async () => {
+    const file = buildWorkbookFile([
+      {
+        name: 'القسم 3 ع ت 2',
+        rows: [['قاسمي عبد الرحمن'], ['حمدي سارة'], ['زروقي أمينة'], ['بلقاسمي ياسين']],
+      },
+    ]);
+
+    const result = await parseDigitizationFile(file);
+
+    expect(result.classes).toHaveLength(1);
+    expect(result.classes[0].className).toBe('3 ع ت 2');
+    expect(result.classes[0].students).toHaveLength(4);
   });
 
   it('summarises every sheet so the teacher can see what will be imported', async () => {

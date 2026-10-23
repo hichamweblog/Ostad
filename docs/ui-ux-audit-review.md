@@ -1191,6 +1191,6 @@ export default Page;
 |---|---|
 | `npx tsc --noEmit --noUnusedLocals` | ✅ بلا أخطاء |
 | `npm run lint` | ✅ بلا تحذيرات |
-| `npx vitest run` | ✅ 372 اختبارًا في 25 ملفًا |
+| `npx vitest run` | ✅ 377 اختبارًا في 25 ملفًا |
 | `npm run build` | ✅ جميع المسارات |
 | `next start` + HTTP | ✅ 16 مسارًا كلها 200 |
