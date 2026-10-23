@@ -2,6 +2,7 @@
 
 import { showToast } from "@/components/Toast";
 import { useAppState } from '@/hooks/app-state-context';
+import { useDialogA11y } from '@/hooks/use-dialog-a11y';
 import {
   backupNudge,
   formatAge,
@@ -14,7 +15,6 @@ import {
   dismissBackupNudge,
   readBackupReminder,
   recordBackupExported,
-  writeBackupReminder,
   type BackupReminder,
 } from '@/lib/backup-reminder';
 import {
@@ -53,6 +53,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ProfessionalProfile } from "./ProfessionalProfile";
 import { PWAInstallButton } from "./PWAInstallButton";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { AccessibleDialog } from "./AccessibleDialog";
 
 interface SettingsSanadProps {
 }
@@ -80,6 +81,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       state.calendarSettings || DEFAULT_CALENDAR_SETTINGS,
     );
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [pendingTab, setPendingTab] = useState<SettingsTab | null>(null);
   const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
   const [holidayName, setHolidayName] = useState("");
@@ -99,10 +101,39 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
   const [now, setNow] = useState(() => Date.now());
   const [resetConfirmationText, setResetConfirmationText] = useState("");
 
+  const holidayDialogRef = useDialogA11y(isHolidayModalOpen, () => setIsHolidayModalOpen(false));
+  const resetDialogRef = useDialogA11y(showResetConfirm, () => setShowResetConfirm(false));
+  const holidaysListDialogRef = useDialogA11y(showHolidaysConfirm, () => setShowHolidaysConfirm(false));
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfArchiveInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSaveSettings = () => {
+  // التغييرات غير المحفوظة: تُقارن المسودة بما هو مثبّت في الحالة العامة.
+  const settingsDirty = JSON.stringify(calendarSettings) !== JSON.stringify(
+    state.calendarSettings || DEFAULT_CALENDAR_SETTINGS,
+  );
+  const savesDraft = activeTab === "calendar" || activeTab === "evaluation";
+
+  const requestTabChange = (tab: SettingsTab) => {
+    if (tab === activeTab) return;
+    if (settingsDirty && savesDraft) {
+      setPendingTab(tab);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const discardAndSwitch = () => {
+    setCalendarSettings(state.calendarSettings || DEFAULT_CALENDAR_SETTINGS);
+    if (pendingTab) setActiveTab(pendingTab);
+    setPendingTab(null);
+  };
+
+  /**
+   * Declared as a function (not a const) so the tab-switch guard above can call
+   * it without relying on the temporal dead zone of a later `const`.
+   */
+  function handleSaveSettings() {
     void updateStateAndWait((prev) => ({
       ...prev,
       calendarSettings,
@@ -115,6 +146,13 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
         console.error("Calendar settings save failed:", error);
         showToast("تعذر حفظ إعدادات التقويم في السحابة.", "error");
       });
+  }
+
+  const saveAndSwitch = () => {
+    const nextTab = pendingTab;
+    setPendingTab(null);
+    handleSaveSettings();
+    if (nextTab) setActiveTab(nextTab);
   };
 
   const handleClearClassesData = () => {
@@ -282,7 +320,6 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
   const statusSummary = syncStatusSummary(cloudStatus, pendingCount);
   const nudge = backupNudge(reminder?.lastBackupAt, now);
   const nudgeVisible = nudge.prominent && !isBackupNudgeDismissed(reminder?.dismissedAt, now);
-  const [resyncBusy, setResyncBusy] = useState(false);
   const [syncNowBusy, setSyncNowBusy] = useState(false);
 
   const handleBackupRecorded = () => {
@@ -316,16 +353,6 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       showToast('تعذّر إتمام المزامنة. لم يُعلن نجاح الرفع؛ احتفظ بالجهاز وأعد المحاولة.', 'error');
     } finally {
       setSyncNowBusy(false);
-    }
-  };
-
-  const handleResyncNow = async () => {
-    setResyncBusy(true);
-    try {
-      await resyncFromCloud();
-      await refreshSyncStatus();
-    } finally {
-      setResyncBusy(false);
     }
   };
 
@@ -419,16 +446,31 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       className="space-y-6 w-full max-w-[30rem] md:max-w-5xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6"
       id="sanad-settings-view">
       {/* Settings actions toolbar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-stretch sm:items-center gap-2 flex-wrap">
-        <div className="flex w-full sm:w-auto items-stretch sm:items-center gap-2 flex-col sm:flex-row">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-xs">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
           <PWAInstallButton />
-          <button
-            onClick={handleSaveSettings}
-            className="w-full sm:w-auto min-h-11 flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs">
-            <Save className="w-4 h-4" />
-            <span>حفظ جميع الإعدادات</span>
-          </button>
+          {savesDraft && (
+            <button
+              onClick={handleSaveSettings}
+              disabled={!settingsDirty}
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+              <Save className="w-4 h-4" />
+              <span>حفظ إعدادات الرزنامة والتقويم</span>
+            </button>
+          )}
         </div>
+        {savesDraft && (
+          <span
+            role="status"
+            className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold ${
+              settingsDirty
+                ? "bg-amber-50 text-amber-800"
+                : "bg-emerald-50 text-emerald-800"
+            }`}>
+            <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${settingsDirty ? "bg-amber-600" : "bg-emerald-600"}`} />
+            {settingsDirty ? "تغييرات غير محفوظة" : "كل الإعدادات محفوظة"}
+          </span>
+        )}
       </div>
 
       {savedSuccess && (
@@ -451,7 +493,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
             type="button"
             role="tab"
             aria-selected={activeTab === tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => requestTabChange(tab)}
             className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center text-xs font-bold transition-colors cursor-pointer ${
               activeTab === tab
                 ? "border-[var(--primary)]/40 bg-[var(--primary-soft)] text-[var(--accent-navy)] shadow-xs"
@@ -499,7 +541,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
             <div className="font-bold text-slate-800 text-sm flex items-center justify-between">
               <span>الفصل الأول</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--accent-navy)] font-bold">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--primary-soft)] text-[var(--accent-navy)] font-bold">
                 نشط حالياً
               </span>
             </div>
@@ -652,15 +694,15 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 key={holiday.id}
                 className="group flex items-center gap-3 bg-white px-3 py-2.5 text-xs transition-colors hover:bg-slate-50">
                 <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                  isExam ? "bg-orange-100 text-orange-700" : "bg-[var(--primary-soft)] text-[var(--primary)]"
+                  isExam ? "bg-orange-100 text-orange-700" : "bg-[var(--primary-soft)] text-[var(--primary-ink)]"
                 }`}>
                   <Clock className="h-3.5 w-3.5" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="truncate font-bold text-slate-800">{holiday.name}</div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                     <span
-                      className={`px-1.5 py-0.2 rounded-md font-semibold text-[10px] ${
+                      className={`px-1.5 py-0.2 rounded-md font-semibold text-xs ${
                         isExam
                           ? "bg-orange-100 text-orange-800"
                           : isTerm
@@ -709,8 +751,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               <span>التقويم المستمر</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              قواعد التقويم المستمر: السلوك (5) | الغيابات (5) | تنظيم الكراس
-              (5) | المشاركة (5)
+              أوزان القرار الوزاري: السلوك 3 | المواظبة 3 | الكراس 6 | المشاركة والنشاط 8 (توثيق 3 + تقدير 5)
             </p>
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/30 text-[var(--accent-navy)] text-xs font-bold w-fit">
@@ -719,179 +760,132 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           </div>
         </div>
 
-        {/* The 4 Criteria Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          {/* 1. السلوك (5) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm">
-                1. السلوك
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[var(--primary)]">
-                5 / 5
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              الانضباط واحترام الحرم المدرسي. في حالة الشغب ينقص من السلوك.
-            </p>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                خصم الشغب الواحد (نقاط):
-              </label>
-              <input
-                type="number"
-                step="0.25"
-                min="0"
-                max="5"
-                value={
-                  calendarSettings.evaluationRules.disruptionDeduction ?? 0.5
-                }
-                onChange={(e) =>
-                  setCalendarSettings((prev) => ({
-                    ...prev,
-                    evaluationRules: {
-                      ...prev.evaluationRules,
-                      disruptionDeduction: parseFloat(e.target.value) || 0,
-                    },
-                  }))
-                }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                افتراضياً 0.5 نقطة لكل مخالفة شغب
-              </span>
-            </div>
-          </div>
+        {/* أوزان القرار — ثابتة لا تُعدَّل، والتعديل يقع على شدّة الخصم فقط */}
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-slate-50 text-slate-700">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-bold">العنصر</th>
+                <th scope="col" className="px-3 py-2 font-bold">الوزن</th>
+                <th scope="col" className="px-3 py-2 font-bold">كيف يُحتسب</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-600">
+              <tr>
+                <td className="px-3 py-2 font-bold text-slate-800">السلوك والانضباط</td>
+                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                  {calendarSettings.evaluationRules.behaviorMax} / 20
+                </td>
+                <td className="px-3 py-2">خصم تصاعدي: الأولى {calendarSettings.evaluationRules.disruptionDeduction ?? 0.25} ثم {calendarSettings.evaluationRules.disruptionRepeatDeduction ?? 0.5} لكل مخالفة بعدها.</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-slate-800">المواظبة والحضور</td>
+                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                  {calendarSettings.evaluationRules.attendanceMax} / 20
+                </td>
+                <td className="px-3 py-2">نسبة من حصص الفصل: الغياب غير المبرر يساوي وحدة، والتأخر نصف وحدة، والمبرَّر لا يُخصم.</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-slate-800">الكراس والواجبات</td>
+                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                  {calendarSettings.evaluationRules.notebookMax} / 20
+                </td>
+                <td className="px-3 py-2">متوسط جولتين في الفصل، كل جولة على مقياس 0–5 (يُدمج فيها إحضار الأدوات لأن المادة بلا أدوات).</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-slate-800">المشاركة والنشاط</td>
+                <td className="px-3 py-2 font-mono font-bold text-[var(--primary-ink)]">
+                  {calendarSettings.evaluationRules.participationMax} / 20
+                </td>
+                <td className="px-3 py-2">
+                  {calendarSettings.evaluationRules.participationRecordedMax ?? 3} توثيق آلي على الحصص الموثّقة فقط
+                  {' + '}
+                  {calendarSettings.evaluationRules.participationJudgementMax ?? 5} تقدير الأستاذ (العمل الفردي والفوجي والمبادرة).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-          {/* 2. الغيابات (5) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm">
-                2. الغيابات
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[var(--primary)]">
-                5 / 5
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              المواظبة والحضور. في حالة الغياب غير المبرر يُخصم آلياً.
-            </p>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                خصم الغياب غير المبرر (نقاط):
-              </label>
-              <input
-                type="number"
-                step="0.25"
-                min="0"
-                max="5"
-                value={
-                  calendarSettings.evaluationRules.unexcusedAbsenceDeduction ??
-                  0.5
-                }
-                onChange={(e) =>
-                  setCalendarSettings((prev) => ({
-                    ...prev,
-                    evaluationRules: {
-                      ...prev.evaluationRules,
-                      unexcusedAbsenceDeduction:
-                        parseFloat(e.target.value) || 0,
-                    },
-                  }))
-                }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                افتراضياً 0.5 نقطة لكل غياب غير مبرر (مثل بقية قواعد الخصم)
-              </span>
-            </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="disruption-first" className="mb-1 block text-xs font-bold text-slate-700">
+              خصم المخالفة السلوكية الأولى
+            </label>
+            <input
+              id="disruption-first"
+              type="number"
+              step="0.25"
+              min="0"
+              max="3"
+              value={calendarSettings.evaluationRules.disruptionDeduction ?? 0.25}
+              onChange={(e) =>
+                setCalendarSettings((prev) => ({
+                  ...prev,
+                  evaluationRules: {
+                    ...prev.evaluationRules,
+                    disruptionDeduction: parseFloat(e.target.value) || 0,
+                  },
+                }))
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.25 من أصل 3.</span>
           </div>
-
-          {/* 3. تنظيم الكراس (5) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm">
-                3. تنظيم الكراس
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[var(--primary)]">
-                5 / 5
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              كتابة الدروس والعناية بالدفتر. في حالة عدم كتابة الدروس ينقص من
-              الكراس.
-            </p>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                خصم عدم كتابة الدرس (نقاط):
-              </label>
-              <input
-                type="number"
-                step="0.25"
-                min="0"
-                max="5"
-                value={
-                  calendarSettings.evaluationRules.unwrittenLessonDeduction ??
-                  1.0
-                }
-                onChange={(e) =>
-                  setCalendarSettings((prev) => ({
-                    ...prev,
-                    evaluationRules: {
-                      ...prev.evaluationRules,
-                      unwrittenLessonDeduction: parseFloat(e.target.value) || 0,
-                    },
-                  }))
-                }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                افتراضياً 0.5 نقطة لكل درس لم يُكتب
-              </span>
-            </div>
+          <div>
+            <label htmlFor="disruption-repeat" className="mb-1 block text-xs font-bold text-slate-700">
+              خصم كل مخالفة بعد الأولى
+            </label>
+            <input
+              id="disruption-repeat"
+              type="number"
+              step="0.25"
+              min="0"
+              max="3"
+              value={calendarSettings.evaluationRules.disruptionRepeatDeduction ?? 0.5}
+              onChange={(e) =>
+                setCalendarSettings((prev) => ({
+                  ...prev,
+                  evaluationRules: {
+                    ...prev.evaluationRules,
+                    disruptionRepeatDeduction: parseFloat(e.target.value) || 0,
+                  },
+                }))
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.5.</span>
           </div>
-
-          {/* 4. المشاركة (5) */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm">
-                4. المشاركة
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-[var(--primary)]">
-                5 / 5
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              التفاعل الصفي والإجابة والتحضير. تضاف كنقاط إضافية ولا يخصم
-              لعدمها.
-            </p>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                علاوة المشاركة الإيجابية (نقاط):
-              </label>
-              <input
-                type="number"
-                step="0.25"
-                min="0"
-                max="5"
-                value={
-                  calendarSettings.evaluationRules.participationBonus ?? 0.5
-                }
-                onChange={(e) =>
-                  setCalendarSettings((prev) => ({
-                    ...prev,
-                    evaluationRules: {
-                      ...prev.evaluationRules,
-                      participationBonus: parseFloat(e.target.value) || 0,
-                    },
-                  }))
-                }
-                className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-slate-900 font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                افتراضياً 0.5 نقطة لكل مشاركة إيجابية
-              </span>
-            </div>
+          <div>
+            <label htmlFor="participation-target" className="mb-1 block text-xs font-bold text-slate-700">
+              نسبة المشاركة المطلوبة من الحصص الموثّقة (%)
+            </label>
+            <input
+              id="participation-target"
+              type="number"
+              step="5"
+              min="5"
+              max="100"
+              value={Math.round((calendarSettings.evaluationRules.participationTargetRatio ?? 0.25) * 100)}
+              onChange={(e) =>
+                setCalendarSettings((prev) => ({
+                  ...prev,
+                  evaluationRules: {
+                    ...prev.evaluationRules,
+                    participationTargetRatio: Math.min(1, Math.max(0.05, (parseFloat(e.target.value) || 25) / 100)),
+                  },
+                }))
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              من يشارك في ربع الحصص الموثّقة يحصل على كامل نقطة التوثيق (3).
+            </span>
+          </div>
+          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs leading-6 text-[var(--text-secondary)]">
+            <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> العنصر الذي لا توجد له
+            أدلة كافية (أقل من 5 حصص للمواظبة، أو بلا جولة كراس) يُستبعد ويُعاد توزيع وزنه على
+            بقية العناصر، فلا يُمنح صفر جزاءً على نقص التسجيل ولا سقفه مجاناً.
           </div>
         </div>
 
@@ -966,7 +960,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               </dd>
             </div>
           </dl>
-          <p className="text-[11px] text-slate-500 pt-1">{pendingSummary(pendingCount)}</p>
+          <p className="text-xs text-slate-500 pt-1">{pendingSummary(pendingCount)}</p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -979,13 +973,12 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           </button>
           <button
             onClick={() => setShowResyncConfirm(true)}
-            disabled={resyncBusy}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-800 transition-colors shadow-xs cursor-pointer disabled:opacity-50">
             <CloudDownload className="w-4 h-4 text-[var(--primary)]" />
             <span>إعادة تحميل كل البيانات من الخادم</span>
           </button>
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-xs text-slate-500">
           إعادة التحميل تلغي العمليات التي لم تُرفع بعد وتستبدلها بنسخة الخادم. استعملها فقط إذا
           لاحظت اختلافاً بين جهازين.
         </p>
@@ -1016,12 +1009,12 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
             </p>
             <button
               onClick={handleDismissNudge}
-              className="shrink-0 text-[11px] font-bold text-slate-600 hover:text-slate-900 underline">
+              className="shrink-0 text-xs font-bold text-slate-600 hover:text-slate-900 underline">
               تذكيري لاحقاً
             </button>
           </div>
         )}
-        <p className="text-[11px] text-slate-500">
+        <p className="text-xs text-slate-500">
           {nudge.level === "ok" ? nudge.message : "يُنصح بتصدير نسخة احتياطية كل أسبوع."}
         </p>
 
@@ -1117,10 +1110,13 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       {isHolidayModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div
+            ref={holidayDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200 text-right space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm">
+            aria-labelledby="holiday-modal-title"
+            className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl border border-slate-200 text-right space-y-4 outline-none">
+            <h3 id="holiday-modal-title" className="font-bold text-slate-900 text-sm">
               {editingHolidayId ? "تعديل عطلة / يوم مستثنى" : "إضافة عطلة / يوم مستثنى"}
             </h3>
 
@@ -1190,7 +1186,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <span className="text-[10px] text-slate-500 block mb-0.5">
+                    <span className="text-xs text-slate-500 block mb-0.5">
                       {holidayMode === "day" ? "تاريخ اليوم" : "من تاريخ"}
                     </span>
                     <input
@@ -1203,7 +1199,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                   </div>
                   {holidayMode === "range" && (
                     <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">إلى تاريخ</span>
+                      <span className="text-xs text-slate-500 block mb-0.5">إلى تاريخ</span>
                       <input
                         type="date"
                         required
@@ -1215,7 +1211,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
                     </div>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                   تُستثنى هذه الأيام آلياً من الحصص: لا تُقترح حصة في دفتر النصوص ولا في
                   حصص اليوم، ويمكن توثيقها كحصة ملغاة بالسبب نفسه.
                 </p>
@@ -1243,14 +1239,17 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       {showResetConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div
+            ref={resetDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            aria-labelledby="reset-workspace-title"
+            className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 outline-none">
             <div className="bg-rose-50 border-b border-rose-100 p-4 flex items-center gap-3">
               <div className="p-2 bg-rose-100 text-rose-700 rounded-full">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-rose-900">
+              <h3 id="reset-workspace-title" className="text-base font-bold text-rose-900">
                 إعادة تعيين الأقسام
               </h3>
             </div>
@@ -1298,14 +1297,17 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
       {showHolidaysConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div
+            ref={holidaysListDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            aria-labelledby="holidays-restore-title"
+            className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 outline-none">
             <div className="bg-amber-50 border-b border-amber-100 p-4 flex items-center gap-3">
               <div className="p-2 bg-amber-100 text-amber-700 rounded-full">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-amber-900">
+              <h3 id="holidays-restore-title" className="text-base font-bold text-amber-900">
                 استعادة قائمة العطل
               </h3>
             </div>
@@ -1340,6 +1342,8 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
         isOpen={Boolean(holidayToDeleteId)}
         title="تأكيد حذف العطلة"
         message="هل أنت متأكد من حذف هذه العطلة من الرزنامة؟"
+        confirmLabel="حذف العطلة"
+        tone="danger"
         onCancel={() => setHolidayToDeleteId(null)}
         onConfirm={() => {
           if (holidayToDeleteId) {
@@ -1351,13 +1355,54 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
         isOpen={showResyncConfirm}
         title="إعادة المزامنة من السحابة"
         message="سيتم تجاهل التغييرات المحلية غير المؤكدة (إن وجدت) وإعادة تحميل مساحة العمل من الخادم السحابي. هل تريد المتابعة؟"
+        confirmLabel="إعادة المزامنة"
+        tone="primary"
         onCancel={() => setShowResyncConfirm(false)}
         onConfirm={() => void handleResyncFromCloud()}
       />
+      <AccessibleDialog
+        open={Boolean(pendingTab)}
+        titleId="unsaved-settings-title"
+        onClose={() => setPendingTab(null)}
+        className="w-full max-w-md rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 text-right shadow-xl"
+      >
+        <h3 id="unsaved-settings-title" className="text-lg font-bold text-[var(--text-primary)]">
+          تغييرات غير محفوظة
+        </h3>
+        <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+          عدّلت إعدادات الرزنامة أو قواعد التقويم ولم تحفظها بعد. ماذا تريد أن تفعل قبل الانتقال إلى قسم آخر؟
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setPendingTab(null)}
+            className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]"
+          >
+            البقاء هنا
+          </button>
+          <button
+            type="button"
+            onClick={discardAndSwitch}
+            className="min-h-11 rounded-xl border border-rose-200 px-4 text-xs font-bold text-rose-700 hover:bg-rose-50"
+          >
+            تجاهل التغييرات
+          </button>
+          <button
+            type="button"
+            onClick={saveAndSwitch}
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-bold text-white hover:bg-[var(--primary-hover)]"
+          >
+            حفظ ثم الانتقال
+          </button>
+        </div>
+      </AccessibleDialog>
+
       <ConfirmDialog
         isOpen={Boolean(pendingImportedState)}
         title="استبدال بيانات التطبيق"
         message="سيتم استبدال الحالة الحالية بالنسخة المستوردة، وحذف عمليات المزامنة المحلية القديمة حتى لا تعود بيانات سابقة فوق النسخة الجديدة. ملفات PDF المحلية تحتاج إلى استعادة ملف ZIP بشكل منفصل."
+        confirmLabel="استبدال البيانات"
+        tone="danger"
         onCancel={() => setPendingImportedState(null)}
         onConfirm={() => void confirmImportJSON()}
       />

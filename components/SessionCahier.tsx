@@ -3,38 +3,26 @@
 import { ConfirmDialog } from './ConfirmDialog';
 import { useAppState } from '@/hooks/app-state-context';
 import { showToast } from "@/components/Toast";
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { AppState } from '@/lib/storage';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getLocalDateString } from '@/lib/date-utils';
 import { CurriculumUnit, SessionRecord, SessionStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import {
-  CalendarCheck,
+
   CheckCircle2,
-  Clock,
   BookOpen,
   Users,
   Lightbulb,
-  Plus,
   Save,
   Trash2,
-  Calendar,
   AlertCircle,
-  HelpCircle,
-  Sparkles,
-  ArrowRight,
   History,
-  FileText,
   FileEdit,
   Edit3,
-  Search,
   Bold,
   List,
   ListOrdered,
-  Quote,
-  Check,
-  ChevronDown,
   FileDown,
   Ban
 } from 'lucide-react';
@@ -49,11 +37,14 @@ import {
   buildCancellationNote,
   buildSessionTitle,
   isOrientationSession,
+  isSessionCancelled,
   isSessionDocumented,
+  isSingleSessionUnit,
   normalizeSessionPart,
   readSessionPart,
+  stripSingleSessionSuffix,
 } from '@/lib/session-flow';
-import { getExcludedDayLabel } from '@/lib/academic-calendar';
+import { filterByTrimester, getExcludedDayLabel, normalizeTrimester, trimesterLabel } from '@/lib/academic-calendar';
 
 interface SessionCahierProps {
   initialSessionId?: string;
@@ -84,7 +75,7 @@ const FormattingBar: React.FC<FormattingBarProps> = ({ setter }) => {
       </button>
       <button
         type="button" onClick={() => handleApply('﴿ ', ' ﴾')}
-        className="min-h-[40px] min-w-[40px] px-2.5 py-1 rounded-lg hover:bg-[var(--primary-soft)] text-[var(--primary)] font-bold cursor-pointer transition-colors shrink-0 text-xs" title="إدراج قوس آية قرآنية" >
+        className="min-h-[40px] min-w-[40px] px-2.5 py-1 rounded-lg hover:bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold cursor-pointer transition-colors shrink-0 text-xs" title="إدراج قوس آية قرآنية" >
         ﴿ آية ﴾
       </button>
       <button
@@ -176,10 +167,6 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   const [cancellationReason, setCancellationReason] = useState<string>(() => getExcludedDayLabel(state.calendarSettings?.holidays, todayStr, activeClass?.level) || '');
   const [unifiedNotes, setUnifiedNotes] = useState<string>('');
 
-  // Curriculum Extraction Modal State
-  const [curriculumSearch, setCurriculumSearch] = useState('');
-  const [selectedSectionFilter, setSelectedSectionFilter] = useState<number | 'all'>('all');
-
   const [savedSuccessMsg, setSavedSuccessMsg] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -246,6 +233,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       ? selectedUnitId
       : (nextSuggestedUnitId || availableUnits[0]?.id || '');
   const selectedUnitObj = availableUnits.find(u => u.id === effectiveSelectedUnitId);
+  // A one-hour unit is taught in a single session: its title carries no '(1)' suffix and the
+  // part selector is hidden so the teacher never numbers a unit that has only one session.
+  const isSingleSessionSelection = isSingleSessionUnit(selectedUnitObj?.hourlyVolume);
   const sessionGoals = isOrientationSelected
     ? ORIENTATION_SESSION_GOALS
     : selectedUnitObj
@@ -323,12 +313,20 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     }
   };
 
-  // Check if the teacher has prior notes for this selected unit
-  const previousMemoryForThisUnit = state.sessions.find(
-    s => s.unitId === effectiveSelectedUnitId && (
-      getSessionNotes(s)
-    )
-  );
+  // Notebook notes belong to the section, never to the unit: the memory aid only surfaces a note
+  // written inside the active class, so the notes of another section never leak into this one.
+  const previousNoteForActiveClass = useMemo(() => {
+    return state.sessions
+      .filter(s =>
+        s.classId === state.activeClassId &&
+        s.id !== editingSessionId &&
+        s.date <= sessionDate &&
+        !isSessionCancelled(s) &&
+        isSessionDocumented(s) &&
+        Boolean(getSessionNotes(s)?.trim())
+      )
+      .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime))[0];
+  }, [state.sessions, state.activeClassId, editingSessionId, sessionDate]);
 
   // Save or update Session
   const handleSaveSession = async () => {
@@ -408,7 +406,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       : buildSessionTitle(selectedUnitObj?.title, partNumber, {
           cancelled: isCancelled,
           reason: effectiveReason,
-        });
+        }, { singleSession: isSingleSessionSelection });
+    // A single-session unit stores no part number at all: there is no '(1)' to read back later.
+    const storesPartNumber = !isCancelled && !isOrientationSelected && !isSingleSessionSelection;
 
     const accomplishmentsToSave = isCancelled
       ? buildCancellationNote(effectiveReason, unifiedNotes)
@@ -424,7 +424,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
                 ...s,
                 unitId: isOrientationSelected ? undefined : effectiveSelectedUnitId,
                 customTopic: sessionTitle,
-                partNumber: isCancelled || isOrientationSelected ? undefined : partNumber,
+                partNumber: storesPartNumber ? partNumber : undefined,
                 sessionKind: isOrientationSelected ? 'orientation' : undefined,
                 sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
                 cancellationReason: isCancelled ? effectiveReason : undefined,
@@ -448,7 +448,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
             classId: prev.activeClassId!,
             unitId: isOrientationSelected ? undefined : effectiveSelectedUnitId,
             customTopic: sessionTitle,
-            partNumber: isCancelled || isOrientationSelected ? undefined : partNumber,
+            partNumber: storesPartNumber ? partNumber : undefined,
             sessionKind: isOrientationSelected ? 'orientation' : undefined,
             sessionStatus: isCancelled ? 'CANCELLED' : 'COMPLETED',
             cancellationReason: isCancelled ? effectiveReason : undefined,
@@ -557,12 +557,15 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     }
   };
 
-  // Only past sessions (date <= todayStr) for the active class
+  // Only past sessions (date <= todayStr) for the active class **and active term**.
+  // The log is a per-term document: term 2 must not inherit term 1's rows.
   const classPastSessions = useMemo(() => {
-    return state.sessions
-      .filter(s => s.classId === state.activeClassId && s.date <= todayStr)
-      .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
-  }, [state.sessions, state.activeClassId, todayStr]);
+    return filterByTrimester(
+      state.sessions.filter(s => s.classId === state.activeClassId && s.date <= todayStr),
+      state.calendarSettings?.termDates,
+      normalizeTrimester(state.activeTrimester),
+    ).sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  }, [state.sessions, state.activeClassId, state.activeTrimester, state.calendarSettings?.termDates, todayStr]);
 
   // Only documented past sessions for official export
   const classDocumentedSessions = useMemo(() => {
@@ -572,7 +575,9 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
 const handleExportCahierDoc = () => {
     const rowsHtml = classDocumentedSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
+      const title = s.customTopic
+        ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
+        : unitObj?.title || 'حصة تعلمية';
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
@@ -588,7 +593,9 @@ const handleExportCahierDoc = () => {
 
     const detailsHtml = classDocumentedSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = s.customTopic || unitObj?.title || 'حصة تعلمية';
+      const title = s.customTopic
+        ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
+        : unitObj?.title || 'حصة تعلمية';
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
@@ -643,11 +650,18 @@ const handleExportCahierDoc = () => {
             value={state.activeClassId || ''}
             onChange={(e) => {
               const newId = e.target.value;
+              // Notes are section-scoped: switching the class must never carry the note being
+              // written (or the session being edited) into another section's form.
               setSelectedUnitId('');
+              setEditingSessionId(null);
+              setUnifiedNotes('');
+              setPartNumber(1);
+              setIsUnitCompleted(false);
+              onClearInitialSession?.();
               void updateStateAndWait(prev => ({ ...prev, activeClassId: newId }));
               const cls = state.classes.find(c => c.id === newId);
               if (cls) {
-                showToast(`تم تفعيل قسم ${cls.name} كقسم نشط`, 'success');
+                showToast(`تم تفعيل قسم ${cls.name} كقسم نشط — الملاحظات خاصة بهذا القسم`, 'success');
               }
             }}
             className="min-h-9 px-3 py-1 rounded-xl border border-[var(--primary)]/30 bg-white font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
@@ -658,7 +672,7 @@ const handleExportCahierDoc = () => {
               </option>
             ))}
           </select>
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             القسم النشط
           </span>
@@ -679,7 +693,7 @@ const handleExportCahierDoc = () => {
       </div>
 
       {savedSuccessMsg && (
-        <div className="rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary-soft)] p-4 text-[var(--primary)] shadow-xs animate-in fade-in duration-200">
+        <div className="rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary-soft)] p-4 text-[var(--primary-ink)] shadow-xs animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm font-black">
             <CheckCircle2 className="h-5 w-5" />
             <span>اكتملت الحصة وتم توثيقها بنجاح.</span>
@@ -704,9 +718,9 @@ const handleExportCahierDoc = () => {
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4" id="session-entry-form-card">
             {!editingSessionId && !selectedUnitId && classDocumentedSessions.length === 0 && state.classes.length > 0 && (
               <div className="rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)] p-4">
-                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">الحصة الأولى من السنة الدراسية</div>
+                <div className="text-xs font-bold text-[var(--text-tertiary)]">الحصة الأولى من السنة الدراسية</div>
                 <div className="mt-1 text-sm font-black text-[var(--text-primary)]">{ORIENTATION_SESSION_TOPIC}</div>
-                <p className="mt-1 text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                <p className="mt-1 text-xs text-[var(--text-secondary)] leading-relaxed">
                   هذه الحصة لا ترتبط بوحدة من المنهاج: تُخصص للتوجيهات العامة وتقديم البرنامج السنوي للتلاميذ.
                 </p>
                 <button
@@ -721,7 +735,7 @@ const handleExportCahierDoc = () => {
 
             {!editingSessionId && selectedUnitObj && !selectedUnitId && classDocumentedSessions.length > 0 && (
               <div className="rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)] p-4">
-                <div className="text-[11px] font-bold text-[var(--text-tertiary)]">الدرس التالي المقترح وفق تقدم المنهاج</div>
+                <div className="text-xs font-bold text-[var(--text-tertiary)]">الدرس التالي المقترح وفق تقدم المنهاج</div>
                 <div className="mt-1 text-sm font-black text-[var(--text-primary)]">{selectedUnitObj.title}</div>
                 <button
                   type="button"
@@ -852,7 +866,7 @@ const handleExportCahierDoc = () => {
                           key={reason}
                           type="button"
                           onClick={() => setCancellationReason(reason)}
-                          className={`min-h-8 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          className={`min-h-8 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             cancellationReason === reason
                               ? 'bg-rose-600 text-white shadow-2xs'
                               : 'bg-white border border-rose-200 text-rose-800 hover:border-rose-400 hover:bg-rose-100/60'
@@ -870,7 +884,7 @@ const handleExportCahierDoc = () => {
                       className="w-full px-3 py-2 rounded-xl border border-rose-300 bg-white text-xs font-bold text-slate-900 focus:ring-1 focus:ring-rose-500 focus:outline-none"
                     />
                   </div>
-                  <p className="text-[11px] text-rose-800 font-medium leading-relaxed">
+                  <p className="text-xs text-rose-800 font-medium leading-relaxed">
                     عند حفظ الحصة كملغاة، يتم توثيقها في الدفتر اليومي مع ذكر السبب، ولا تُحتسب الوحدة التعلمية كمنجزة في التدرج السنوي.
                   </p>
                 </div>
@@ -910,35 +924,49 @@ const handleExportCahierDoc = () => {
 
             {/* Part selector & Unit completion toggle */}
             {sessionStatus !== 'CANCELLED' && !isOrientationSelected && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
-                    رقم الحصة من الوحدة (الجزء):
-                  </label>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {SESSION_PART_NUMBERS.map(num => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => {
-                          setPartNumber(num);
-                          const totalHours = selectedUnitObj?.hourlyVolume || 2;
-                          setIsUnitCompleted(num >= totalHours);
-                        }}
-                        className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                          partNumber === num
-                            ? 'bg-[var(--primary)] text-white shadow-xs'
-                            : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
-                        }`}
-                      >
-                        حصة ({num})
-                      </button>
-                    ))}
+              <div className={`grid grid-cols-1 ${isSingleSessionSelection ? '' : 'sm:grid-cols-2'} gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70`}>
+                {!isSingleSessionSelection && (
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                      رقم الحصة من الوحدة (الجزء):
+                    </label>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {SESSION_PART_NUMBERS.map(num => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => {
+                            setPartNumber(num);
+                            const totalHours = selectedUnitObj?.hourlyVolume || 2;
+                            setIsUnitCompleted(num >= totalHours);
+                          }}
+                          className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                            partNumber === num
+                              ? 'bg-[var(--primary)] text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:border-[var(--primary)]'
+                          }`}
+                        >
+                          حصة ({num})
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      عنوان التدوين بالدفتر: <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'} ({partNumber})</span>
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    عنوان التدوين بالدفتر: <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'} ({partNumber})</span>
-                  </p>
-                </div>
+                )}
+
+                {isSingleSessionSelection && (
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">
+                      وحدة من حصة واحدة:
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      لا تُرقّم الحصة في الدفتر. عنوان التدوين:{' '}
+                      <span className="font-bold text-[var(--primary)]">{selectedUnitObj?.title || 'الوحدة'}</span>
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex flex-col justify-center">
                   <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-[var(--primary)]/20 bg-white hover:bg-[var(--primary-soft)]/20 transition-colors cursor-pointer select-none">
@@ -952,7 +980,7 @@ const handleExportCahierDoc = () => {
                       <span className="text-xs font-bold text-slate-900 block">
                         تم إتمام الوحدة كاملة (تسجيل الإنجاز في المنهاج)
                       </span>
-                      <span className="text-[11px] text-slate-500 block leading-tight">
+                      <span className="text-xs text-slate-500 block leading-tight">
                         {isUnitCompleted
                           ? '✓ سيتم احتساب الوحدة كمنجزة بالكامل في المنهاج والتوزيع السنوي.'
                           : '⏳ الوحدة جارية (حصة جزئية) ولن تُسجل كمكتملة في المنهاج حتى إتمامها.'}
@@ -963,15 +991,18 @@ const handleExportCahierDoc = () => {
               </div>
             )}
 
-            {/* Show the latest note for this unit as a writing aid */}
-            {previousMemoryForThisUnit && (
+            {/* Notes are section-scoped: only the last note written in this class is shown. */}
+            {previousNoteForActiveClass && (
               <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs space-y-1">
-                <div className="font-black text-amber-900 flex items-center gap-1.5">
+                <div className="font-black text-amber-900 flex items-center gap-1.5 flex-wrap">
                   <Lightbulb className="w-4 h-4 text-amber-600" />
-                  <span>ملاحظة سابقة لنفس هذا الدرس:</span>
+                  <span>آخر ملاحظة في هذا القسم ({activeClass?.name || 'القسم'}):</span>
+                  <span className="font-mono text-xs font-bold text-amber-700 bg-white/70 border border-amber-200 rounded px-1.5 py-0.5">
+                    {previousNoteForActiveClass.date}
+                  </span>
                 </div>
                 <p className="text-sm leading-7 text-[var(--text-primary)] whitespace-pre-line">
-                  {getSessionNotes(previousMemoryForThisUnit)}
+                  {getSessionNotes(previousNoteForActiveClass)}
                 </p>
               </div>
             )}
@@ -984,7 +1015,7 @@ const handleExportCahierDoc = () => {
                   <span>الأهداف التعلمية المسطرة للحصة:</span>
                 </label>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400 font-normal text-[10px] hidden sm:inline">مستخرجة آلياً من قاعدة البيانات</span>
+                  <span className="text-slate-400 font-normal text-xs hidden sm:inline">مستخرجة آلياً من قاعدة البيانات</span>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden p-3 min-h-[60px]">
@@ -1003,8 +1034,8 @@ const handleExportCahierDoc = () => {
                   <Edit3 className="w-4 h-4 text-[var(--primary)]" />
                   <span>توثيق وملاحظات الحصة (خانة كتابة موحدة):</span>
                 </span>
-                <span className="text-slate-400 font-normal text-[10px]">
-                  ما تم إنجازه + التوجيهات والواجبات + دفتر الملاحظات في خانة واحدة
+                <span className="text-slate-400 font-normal text-xs">
+                  ما تم إنجازه + التوجيهات والواجبات + ملاحظات قسم {activeClass?.name || 'الحالي'} في خانة واحدة
                 </span>
               </label>
 
@@ -1027,7 +1058,7 @@ const handleExportCahierDoc = () => {
                         return `${prev}\n${chip.text}`;
                       });
                     }}
-                    className="min-h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-bold text-slate-700 hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] transition-colors cursor-pointer"
+                    className="min-h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-bold text-slate-700 hover:border-[var(--primary)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary-ink)] transition-colors cursor-pointer"
                   >
                     {chip.label}
                   </button>
@@ -1063,7 +1094,12 @@ const handleExportCahierDoc = () => {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
             <History className="w-4 h-4 text-slate-700" />
-            <span>سجل الحصص السابقة لقسم {activeClass?.name} ({classPastSessions.length} حصة)</span>
+            <span>
+              سجل الحصص السابقة لقسم {activeClass?.name} ({classPastSessions.length} حصة)
+              <span className="ms-2 rounded-md bg-[var(--primary-soft)] px-1.5 py-0.5 text-xs font-bold text-[var(--primary-ink)]">
+                {trimesterLabel(state.activeTrimester)}
+              </span>
+            </span>
           </h3>
           {classPastSessions.length > 0 && (
             <div className="flex items-center gap-2 text-xs">
@@ -1089,7 +1125,11 @@ const handleExportCahierDoc = () => {
               const unit = availableUnits.find(u => u.id === ses.unitId);
               const isDocumented = isSessionDocumented(ses);
               const isEditingThis = ses.id === editingSessionId;
-              const title = ses.customTopic || unit?.title || (ses.sessionGoals ? ses.sessionGoals.slice(0, 40) : 'حصة غير محددة');
+              const rawTitle = ses.customTopic || unit?.title || (ses.sessionGoals ? ses.sessionGoals.slice(0, 40) : 'حصة غير محددة');
+              // One-session units keep no part number, including legacy records already saved as '(1)'.
+              const title = ses.customTopic && isSingleSessionUnit(unit?.hourlyVolume)
+                ? stripSingleSessionSuffix(rawTitle)
+                : rawTitle;
 
               return (
                 <div
@@ -1114,17 +1154,17 @@ const handleExportCahierDoc = () => {
                         {title}
                       </span>
                       {ses.sessionStatus === 'CANCELLED' ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200 inline-flex items-center gap-1">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200 inline-flex items-center gap-1">
                           <Ban className="w-3 h-3 text-rose-600" />
                           <span>ملغاة{ses.cancellationReason ? `: ${ses.cancellationReason}` : ''}</span>
                         </span>
                       ) : isDocumented ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 inline-flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>موثقة</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-300 inline-flex items-center gap-1">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-300 inline-flex items-center gap-1">
                           <span>غير موثقة</span>
                         </span>
                       )}
@@ -1172,7 +1212,7 @@ const handleExportCahierDoc = () => {
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         !isDocumented
                           ? 'bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-xs'
-                          : 'bg-white hover:bg-[var(--primary-soft)] text-slate-700 hover:text-[var(--primary)] border border-slate-200'
+                          : 'bg-white hover:bg-[var(--primary-soft)] text-slate-700 hover:text-[var(--primary-ink)] border border-slate-200'
                       }`}
                       title="توثيق / تعديل الحصة"
                     >

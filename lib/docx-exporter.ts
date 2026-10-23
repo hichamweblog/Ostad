@@ -629,11 +629,19 @@ export function buildDocxBytes(html: string, options: DocxExportOptions = {}): U
   return zipSync(entries, { level: 6 });
 }
 
-/** Browser download helper used by every export icon in the app. */
-export async function exportHtmlToDocx(html: string, filename: string, options: DocxExportOptions = {}): Promise<void> {
+/**
+ * Builds the finished .docx as a Blob so the file can either be downloaded or
+ * handed to the Web Share API (mobile "share to WhatsApp / Drive / mail").
+ */
+export async function buildDocxBlob(html: string, options: DocxExportOptions = {}): Promise<Blob> {
   const prepared = await embedRemoteImages(html);
   const bytes = buildDocxBytes(prepared, options);
-  const blob = new Blob([bytes.slice().buffer as ArrayBuffer], { type: DOCX_MIME_TYPE });
+  return new Blob([bytes.slice().buffer as ArrayBuffer], { type: DOCX_MIME_TYPE });
+}
+
+/** Browser download helper used by every export icon in the app. */
+export async function exportHtmlToDocx(html: string, filename: string, options: DocxExportOptions = {}): Promise<void> {
+  const blob = await buildDocxBlob(html, options);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

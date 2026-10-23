@@ -9,6 +9,11 @@ interface AccessibleDialogProps {
   children: React.ReactNode;
   className?: string;
   describedBy?: string;
+  /**
+   * السماح بإغلاق الحوار بالنقر على الخلفية. مُعطَّل افتراضيًا لأن النقر
+   * العَرَضي أثناء تحديد نص أو سحب المؤشر كان يُغلق نماذج ويكتب ما فيها.
+   */
+  dismissOnBackdrop?: boolean;
 }
 
 const FOCUSABLE = [
@@ -27,6 +32,7 @@ export function AccessibleDialog({
   children,
   className = '',
   describedBy,
+  dismissOnBackdrop = false,
 }: AccessibleDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -86,7 +92,7 @@ export function AccessibleDialog({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4"
       onMouseDown={event => {
-        if (event.target === event.currentTarget) onCloseRef.current?.();
+        if (dismissOnBackdrop && event.target === event.currentTarget) onCloseRef.current?.();
       }}
       role="presentation" >
       <div

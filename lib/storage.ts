@@ -166,14 +166,21 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     term3End: "2027-06-30",
   },
   holidays: OFFICIAL_HOLIDAYS_2026_2027,
+  // أوزان القرار الوزاري للتقويم المستمر: 3 + 3 + 6 + 8 = 20.
+  // «إحضار الأدوات» مدموج في الكراس (لا أدوات في العلوم الإسلامية)،
+  // و«النشاط داخل القسم» مدموج في المشاركة.
   evaluationRules: {
-    behaviorMax: 5,
-    attendanceMax: 5,
-    notebookMax: 5,
-    participationMax: 5,
-    disruptionDeduction: 0.5,
+    behaviorMax: 3,
+    attendanceMax: 3,
+    notebookMax: 6,
+    participationMax: 8,
+    participationRecordedMax: 3,
+    participationJudgementMax: 5,
+    participationTargetRatio: 0.25,
+    notebookRounds: 2,
+    disruptionDeduction: 0.25,
+    disruptionRepeatDeduction: 0.5,
     unwrittenLessonDeduction: 0.5,
-    // Phase 6: unexcused absence now deducts 0.5 by default, like every other rule.
     unexcusedAbsenceDeduction: 0.5,
     lateDeduction: 0.5,
     participationBonus: 0.5,

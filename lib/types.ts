@@ -51,17 +51,38 @@ export interface OfficialHoliday {
   provisional?: boolean;
 }
 
+/**
+ * أوزان التقويم المستمر كما في القرار الوزاري:
+ * السلوك 3 | المواظبة 3 | الكراس 6 | المشاركة والنشاط 8 = 20.
+ *
+ * «إحضار الأدوات» (3) لا وجود له في العلوم الإسلامية، فدُمج في الكراس ليصبح 6،
+ * و«العمل الفردي/الفوجي/المبادرة» (5) اندمجت في المشاركة مع توثيقها (3) فصارت 8.
+ */
 export interface ContinuousEvaluationRules {
-  behaviorMax: number; // 5
-  attendanceMax: number; // 5
-  notebookMax: number; // 5
-  participationMax: number; // 5
-  disruptionDeduction: number; // خصم الشغب (افتراضياً 1.0)
-  unwrittenLessonDeduction: number; // خصم عدم كتابة الدروس (افتراضياً 1.0)
-  unexcusedAbsenceDeduction: number; // خصم الغياب غير المبرر (افتراضياً 0.5)
-  lateDeduction: number; // خصم التأخر (افتراضياً 0.5)
-  participationBonus: number; // علاوة المشاركة (افتراضياً 0.5)
+  behaviorMax: number; // 3
+  attendanceMax: number; // 3
+  notebookMax: number; // 6
+  participationMax: number; // 8 = توثيق 3 + تقدير 5
+  /** خصم المخالفة السلوكية الأولى. */
+  disruptionDeduction: number; // 0.25
+  /** خصم كل مخالفة بعد الأولى (تصاعدي حتى السقف). */
+  disruptionRepeatDeduction?: number; // 0.5
+  /** خصم عدم كتابة الدروس — احتياطي فقط عند غياب جولات الكراس. */
+  unwrittenLessonDeduction: number;
+  unexcusedAbsenceDeduction: number;
+  lateDeduction: number;
+  /** نقطة تُضاف لكل مشاركة إيجابية (نموذج قديم، أُبقي للتوافق). */
+  participationBonus: number;
+  /** خصم اختياري عند تسجيل عدم المشاركة (افتراضياً 0 = دون خصم). */
   lackOfParticipationDeduction?: number;
+  /** حصة المشاركة الآلية (من 8). والباقي تقدير الأستاذ. */
+  participationRecordedMax?: number; // 3
+  /** حصة تقدير الأستاذ (من 8). */
+  participationJudgementMax?: number; // 5
+  /** النسبة المستهدفة من الحصص الموثّقة للوصول إلى كامل نقطة التوثيق. */
+  participationTargetRatio?: number; // 0.25
+  /** عدد جولات الكراس في الفصل. */
+  notebookRounds?: number; // 2
   maxScore: number; // 20
   showGuidanceAlerts: boolean;
   exemptRuleSecondQuiz: string; // legacy text key, kept for backward compatibility
@@ -215,12 +236,27 @@ export interface SessionRecord {
   attendance: { [studentId: string]: AttendanceStatus };
   type?: string;
   // Behavior & Evaluation Tracking per Session
-  disruptions?: string[]; // Array of studentIds who were disruptive (شغب)
+  disruptions?: string[]; // Array of studentIds with a recorded behaviour incident
   unwrittenLessons?: string[]; // Array of studentIds who didn't write the lesson (بدون كراس)
   poorParticipation?: string[]; // Array of studentIds with poor participation
   goodParticipation?: string[]; // Array of studentIds with exceptional participation
   /** Set when the teacher explicitly finishes documenting the class. */
   completedAt?: string;
+  /**
+   * جولات تفتيش الكراس: تُسجَّل في الحصة التي جرى فيها التفتيش، والدرجة 0–5.
+   * التلميذ يُفتَّش مرة في كل جولة؛ الجولة الواحدة قد تمتد على عدة حصص
+   * (8–10 تلاميذ في الحصة) لأن القسم قد يبلغ 40 تلميذاً.
+   */
+  notebookChecks?: { [studentId: string]: NotebookCheck };
+}
+
+/** نتيجة تفتيش الكراس داخل جولة واحدة. */
+export interface NotebookCheck {
+  round: 1 | 2;
+  /** 0 = مهمل، 5 = مكتمل ومنظّم. */
+  score: number;
+  /** وقت التفتيش (ISO) لحسم التعارض بين الجهازين. */
+  at: string;
 }
 
 export interface StudentGrade {
@@ -229,13 +265,13 @@ export interface StudentGrade {
   classId: string;
   trimester: 1 | 2 | 3;
   continuousEval: number | null; // التقويم المستمر الإجمالي (على 20)
-  // عناصر التقويم المستمر الأربعة (كل عنصر على 5 نقاط):
-  behaviorScore?: number | null; // السلوك (على 5)
-  attendanceScore?: number | null; // الغيابات والتأخرات (على 5)
-  notebookScore?: number | null; // تنظيم الكراس وكتابة الدروس (على 5)
-  participationScore?: number | null; // المشاركة والتفاعل (على 5)
+  // عناصر التقويم المستمر الأربعة بأوزان القرار الوزاري 3 / 3 / 6 / 8:
+  behaviorScore?: number | null; // السلوك والانضباط (على 3)
+  attendanceScore?: number | null; // المواظبة والحضور (على 3)
+  notebookScore?: number | null; // الكراس والواجبات (على 6)
+  participationScore?: number | null; // تقدير الأستاذ للمشاركة والنشاط (على 5)؛ الجزء الآلي يُحسب من الحصص
   // تفاصيل التقييم وسجل الملاحظات:
-  disruptionsCount?: number; // عدد مرات الشغب المسجلة
+  disruptionsCount?: number; // عدد المخالفات السلوكية المسجلة
   unwrittenLessonsCount?: number; // عدد مرات عدم كتابة الدروس
   lackOfParticipationCount?: number; // عدد مرات عدم المشاركة
   quiz: number | null; // الفرض الأول (على 20)

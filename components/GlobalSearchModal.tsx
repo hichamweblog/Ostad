@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
-import { AppState } from '@/lib/storage';
 import { getMergedCurriculumUnits } from "@/lib/curriculum-data";
 import { SanadTab } from './SidebarSanad';
-import { Search, X, BookOpen, Users, ArrowLeft, GraduationCap, Building2 } from 'lucide-react';
+import { Search, X, BookOpen, Users, ArrowLeft,  Building2 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { AccessibleDialog } from './AccessibleDialog';
 
@@ -65,7 +64,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         .slice(0, 6);
 
   return (
-    <AccessibleDialog open={isOpen} titleId="global-search-title" onClose={onClose} className="bg-[var(--bg-surface)] max-w-xl w-full p-5 shadow-2xl border border-[var(--bg-surface-subtle)] text-[var(--text-primary)] space-y-4 rounded-t-3xl sm:rounded-xl rounded-b-none sm:rounded-b-3xl mb-0 sm:mb-auto pb-8 sm:pb-6 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95">
+    <AccessibleDialog open={isOpen} titleId="global-search-title" onClose={onClose} dismissOnBackdrop className="bg-[var(--bg-surface)] max-w-xl w-full p-5 shadow-2xl border border-[var(--bg-surface-subtle)] text-[var(--text-primary)] space-y-4 rounded-t-3xl sm:rounded-xl rounded-b-none sm:rounded-b-3xl mb-0 sm:mb-auto pb-8 sm:pb-6 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95">
         {/* Search Header Input */}
         <div className="flex items-center gap-3 pb-3 border-b border-[var(--bg-surface-subtle)]">
           <div id="global-search-title" className="sr-only">البحث العام</div>
@@ -77,7 +76,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           />
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-[var(--bg-page)] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer" >
+            aria-label="إغلاق البحث"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:bg-[var(--bg-page)] hover:text-[var(--text-primary)] cursor-pointer" >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -92,7 +92,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
           {matchedClasses.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-[var(--primary)]" />
                 <span>الأقسام ({matchedClasses.length})</span>
               </div>
@@ -117,7 +117,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                         <div className="font-bold text-xs text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">
                           {cls.name}
                         </div>
-                        <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                        <div className="text-xs text-[var(--text-secondary)] mt-0.5">
                           {cls.stream} • {studentCount} تلميذ
                         </div>
                       </div>
@@ -137,7 +137,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                               onClose();
                               onNavigate(tab);
                             }}
-                            className="min-h-9 px-2 rounded-lg text-[10px] font-bold text-[var(--primary)] bg-white border border-[var(--bg-surface-subtle)] hover:border-[var(--primary)] cursor-pointer"
+                            className="min-h-9 px-2 rounded-lg text-xs font-bold text-[var(--primary)] bg-white border border-[var(--bg-surface-subtle)] hover:border-[var(--primary)] cursor-pointer"
                           >
                             {label}
                           </button>
@@ -153,7 +153,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           {/* Lessons Section */}
           {matchedUnits.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-[var(--primary)]" />
                 <span>الوحدات والدروس في المنهاج ({matchedUnits.length})</span>
               </div>
@@ -185,7 +185,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <div className="font-bold text-xs text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">
                         {unit.title}
                       </div>
-                      <div className="text-[11px] text-[var(--text-secondary)] flex items-center gap-2 mt-0.5">
+                      <div className="text-xs text-[var(--text-secondary)] flex items-center gap-2 mt-0.5">
                         <span className="font-semibold text-[var(--primary)]">{unit.level}</span>
                         <span>•</span>
                         <span>{unit.domain}</span>
@@ -201,7 +201,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           {/* Students Section */}
           {matchedStudents.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-blue-600" />
                 <span>قائمة التلاميذ ({matchedStudents.length})</span>
               </div>
@@ -237,7 +237,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                           <div className="font-bold text-xs text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors">
                             {st.fullName}
                           </div>
-                          <div className="text-[11px] text-[var(--text-secondary)] flex items-center gap-2">
+                          <div className="text-xs text-[var(--text-secondary)] flex items-center gap-2">
                             <span>{cls?.name || 'قسم غير محدد'}</span>
                             {st.regNumber && <span>رقم: {st.regNumber}</span>}
                           </div>
@@ -259,7 +259,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+        <div className="pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-xs text-[var(--text-muted)]">
           <span>اضغط ESC للإغلاق</span>
           <span className="text-[var(--primary)] font-semibold">معين - التعليم الثانوي</span>
         </div>

@@ -47,12 +47,12 @@ export const OfflineIndicator: React.FC<{
         </span>
       </div>
       {isOnline && cloudStatus === 'conflict' && onOpenConflict && (
-        <button type="button" onClick={onOpenConflict} className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-white/15 px-2 text-[11px] hover:bg-white/25">
+        <button type="button" onClick={onOpenConflict} className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-white/15 px-2 text-xs hover:bg-white/25">
           مراجعة
         </button>
       )}
       {isOnline && cloudStatus === 'sync-failed' && onRetry && (
-        <button type="button" onClick={onRetry} className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-white/15 px-2 text-[11px] hover:bg-white/25">
+        <button type="button" onClick={onRetry} className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-white/15 px-2 text-xs hover:bg-white/25">
           <RefreshCw className="h-3.5 w-3.5" />
           إعادة المحاولة
         </button>

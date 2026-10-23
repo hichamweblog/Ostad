@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
-import { AppState } from '@/lib/storage';
-import { calculateContinuousEvaluation, calculateStudentAverage } from '@/lib/grade-calculator';
+import { calculateEvaluationBreakdown, calculateStudentAverage } from '@/lib/grade-calculator';
+import { filterByTrimester } from '@/lib/academic-calendar';
+import { EVALUATION_CRITERIA, criterionMax } from '@/lib/evaluation-labels';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
 import { normalizeGradeInput as normalizeNumerals } from '@/lib/grade-input';
+import { GRADE_FIELD_LABELS, nextGradeCell, parseGradeTable, type GradeField } from '@/lib/grade-table';
+import { collectNotebookChecks, notebookScoresFor } from '@/lib/notebook-rounds';
+import {
+  JUDGEMENT_LEVELS,
+  storedJudgementValue,
+  suggestParticipationJudgement,
+} from '@/lib/participation-judgement';
+import { getStudentNameKey } from '@/lib/name-normalizer';
+import { AccessibleDialog } from './AccessibleDialog';
 import {
   PEDAGOGICAL_TIERS,
   getScoreTier,
@@ -14,21 +24,19 @@ import {
   getDefaultGuidance
 } from '@/lib/pedagogical-evaluations';
 import {
-  GraduationCap,
+
   FileSpreadsheet,
   Download,
-  Upload,
-  Info,
   CheckCircle2,
   AlertCircle,
-  AlertTriangle,
   HelpCircle,
   X,
   Search,
   Sparkles,
   PenLine,
   ListFilter,
-  FileDown
+  Upload,
+  Loader2
 } from 'lucide-react';
 
 /**
@@ -211,6 +219,27 @@ const GuidanceDropdown: React.FC<{
   );
 };
 
+export interface GradeDraftEntry {
+  continuousEval: string;
+  quiz: string;
+  exam: string;
+  estimation: string;
+  guidance: string;
+  remarks: string;
+  /** تقدير الأستاذ للمشاركة والنشاط (0–5) — يُحفظ في participationScore. */
+  participationJudgement: string;
+}
+
+export const EMPTY_GRADE_DRAFT: GradeDraftEntry = {
+  continuousEval: '',
+  quiz: '',
+  exam: '',
+  estimation: '',
+  guidance: '',
+  remarks: '',
+  participationJudgement: '',
+};
+
 function buildDraft(
   students: Student[],
   grades: StudentGrade[],
@@ -218,16 +247,7 @@ function buildDraft(
   trimester: 1 | 2 | 3
 ) {
   const filtered = students.filter(s => s.classId === classId);
-  const draft: {
-    [id: string]: {
-      continuousEval: string;
-      quiz: string;
-      exam: string;
-      estimation: string;
-      guidance: string;
-      remarks: string;
-    };
-  } = {};
+  const draft: { [id: string]: GradeDraftEntry } = {};
   for (const st of filtered) {
     const g = grades.find(x => x.studentId === st.id && x.trimester === trimester);
     draft[st.id] = {
@@ -236,7 +256,9 @@ function buildDraft(
       exam: g?.exam !== null && g?.exam !== undefined ? String(g.exam) : '',
       estimation: g?.estimation || '',
       guidance: g?.guidance || '',
-      remarks: g?.remarks || '' };
+      remarks: g?.remarks || '',
+      participationJudgement: storedJudgementValue(g?.participationScore),
+    };
   }
   return draft;
 }
@@ -254,6 +276,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   );
 
   const [showFormulaModal, setShowFormulaModal] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  // تقديرات جلسة المراجعة الحالية فقط — تُملأ بالاقتراح الآلي أو المحفوظ،
+  // ولا تُكتب في الحالة إلا بزر «تطبيق على القسم».
+  const [reviewJudgements, setReviewJudgements] = useState<Record<string, string>>({});
   const [saveToast, setSaveToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'pending'>('saved');
@@ -271,16 +297,127 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
 
-  const focusNextGradeInput = (studentId: string) => {
-    const visibleStudents = classStudents.filter(student =>
-      student.fullName.toLowerCase().includes(searchStudent.toLowerCase())
-    );
+  const visibleStudents = classStudents.filter(student =>
+    student.fullName.toLowerCase().includes(searchStudent.toLowerCase())
+  );
+
+  /**
+   * Sequential entry: Enter / ArrowDown keeps the same column and moves to the
+   * next student, ArrowUp goes back one. Tab still moves across columns.
+   */
+  const focusGradeCell = (studentId: string, field: GradeField, direction: 'up' | 'down') => {
+    const target = nextGradeCell(field, direction);
+    if (!target) return;
+    const currentIndex = visibleStudents.findIndex(student => student.id === studentId);
+    if (currentIndex === -1) return;
+    const nextStudent = visibleStudents[currentIndex + target.moveRow];
+    if (!nextStudent) return;
+    const nextInput = gradeInputRefs.current[`${target.field}:${nextStudent.id}`];
+    nextInput?.focus();
+    nextInput?.select();
+  };
+
+  /** Mobile card list keeps one column, so Enter simply moves to the next card. */
+  const focusMobileNext = (studentId: string) => {
     const currentIndex = visibleStudents.findIndex(student => student.id === studentId);
     const nextStudent = visibleStudents[currentIndex + 1];
     if (!nextStudent) return;
-    const nextInput = gradeInputRefs.current[`${mobileActiveTab}:${nextStudent.id}`];
+    const nextInput = gradeInputRefs.current[`m:${mobileActiveTab}:${nextStudent.id}`];
     nextInput?.focus();
     nextInput?.select();
+  };
+
+  const handleGradeKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    studentId: string,
+    field: GradeField,
+  ) => {
+    if (event.key === 'Enter' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusGradeCell(studentId, field, 'down');
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusGradeCell(studentId, field, 'up');
+    }
+  };
+
+  // ── Excel / clipboard grade import ───────────────────────────────────────────
+  const [showGradeImport, setShowGradeImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importField, setImportField] = useState<GradeField>('exam');
+  const [importFileName, setImportFileName] = useState('');
+  const [isReadingImport, setIsReadingImport] = useState(false);
+
+  const importPreview = React.useMemo(
+    () => parseGradeTable(importText, importField),
+    [importText, importField],
+  );
+
+  const matchedImportRows = React.useMemo(() => {
+    const byKey = new Map(classStudents.map(student => [getStudentNameKey(student.fullName), student]));
+    const matched: { studentId: string; values: Partial<Record<GradeField, string>> }[] = [];
+    const unmatched: string[] = [];
+    importPreview.rows.forEach(row => {
+      const student = byKey.get(row.key);
+      if (student) matched.push({ studentId: student.id, values: row.values });
+      else unmatched.push(row.name);
+    });
+    return { matched, unmatched };
+  }, [classStudents, importPreview.rows]);
+
+  const handleImportFile = async (file: File) => {
+    setIsReadingImport(true);
+    try {
+      if (/\.(csv|txt)$/i.test(file.name)) {
+        setImportText(await file.text());
+      } else {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, raw: false });
+        setImportText(
+          rows
+            .map(row => (row as unknown[]).map(cell => String(cell ?? '').trim()).join('\t'))
+            .filter(line => line.replace(/\t/g, '').trim())
+            .join('\n'),
+        );
+      }
+      setImportFileName(file.name);
+    } catch (error) {
+      console.error('Grade import read failed:', error);
+      setToastMessage('تعذّر قراءة الملف. تأكد أنه ملف Excel أو CSV صالح.');
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 4000);
+    } finally {
+      setIsReadingImport(false);
+    }
+  };
+
+  const handleApplyImport = () => {
+    if (matchedImportRows.matched.length === 0) return;
+    const matches = matchedImportRows.matched;
+    setGradesDraft(prev => {
+      const next = { ...prev };
+      for (const match of matches) {
+        const current = next[match.studentId] || EMPTY_GRADE_DRAFT;
+        next[match.studentId] = { ...current, ...match.values };
+      }
+      return next;
+    });
+    isDirtyRef.current = true;
+    const skipped = matchedImportRows.unmatched.length;
+    setToastMessage(
+      `تم استيراد نقاط ${matches.length} تلميذاً.` +
+        (skipped ? ` لم يُطابَق ${skipped} اسماً — راجع الإملاء.` : '') +
+        ' اضغط «حفظ» لتثبيتها.',
+    );
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 5000);
+    setShowGradeImport(false);
+    setImportText('');
+    setImportFileName('');
   };
 
   // Local editable grades map for smooth typing without lag
@@ -368,8 +505,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(buildDraft(state.students, state.grades, selectedClassId, newTri));
   };
 
-  // Precompute stats per student for continuous evaluation calculation
-  const classSessions = state.sessions.filter(s => s.classId === selectedClassId);
+  // Precompute stats per student for continuous evaluation calculation.
+  // A cancelled session documents nothing taught, so its leftover marks never count.
+  // Sessions are scoped to the selected term: term 2 must start from a clean slate.
+  const classSessions = filterByTrimester(
+    state.sessions.filter(s => s.classId === selectedClassId && s.sessionStatus !== 'CANCELLED'),
+    state.calendarSettings?.termDates,
+    selectedTrimester,
+  );
   const studentStatsMap: Record<string, {
     absent: number; late: number; excused: number;
     disruptions: number; unwritten: number; poorPart: number; goodPart: number;
@@ -410,57 +553,70 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     }
   }
 
-  const calcAutoContinuousEval = (studentId: string): number => {
-    const stats = studentStatsMap[studentId];
-    if (!stats) return 20;
+  // الحصص التي وُثِّق فيها تلميذ واحد على الأقل. ضيق الوقت لا يجوز أن يُحسب ضد
+  // التلميذ: من لم تُسجَّل مشاركته في حصة غير موثّقة لا يُعاقب.
+  const documentedSessionsCount = classSessions.filter(
+    session => (session.goodParticipation?.length ?? 0) + (session.poorParticipation?.length ?? 0) > 0,
+  ).length;
+  const notebookChecks = collectNotebookChecks(classSessions);
 
-    const rules = state.calendarSettings?.evaluationRules;
-    const behaviorScore = Math.max(
-      0,
-      (rules?.behaviorMax ?? 5) - stats.disruptions * (rules?.disruptionDeduction ?? 0.5)
-    );
-    const attendanceScore = Math.max(
-      0,
-      (rules?.attendanceMax ?? 5) -
-        stats.absent * (rules?.unexcusedAbsenceDeduction ?? 0.5) -
-        stats.late * (rules?.lateDeduction ?? 0.5)
-    );
-    const notebookScore = Math.max(
-      0,
-      (rules?.notebookMax ?? 5) - stats.unwritten * (rules?.unwrittenLessonDeduction ?? 0.5)
-    );
-    const participationScore = Math.max(
-      0,
-      (rules?.participationMax ?? 5) -
-        stats.poorPart * (rules?.lackOfParticipationDeduction ?? 0) +
-        stats.goodPart * (rules?.participationBonus ?? 0.5)
-    );
+  /**
+   * One shared breakdown drives the suggested mark, the tooltip and the saved value.
+   * Auto components come from the notebook (attendance + behaviour + participation
+   * evidence); the teacher's 0–5 judgement is added on top of the documented part.
+   */
+  const evaluationRules = state.calendarSettings?.evaluationRules;
 
-    return calculateContinuousEvaluation(
-      Math.min(rules?.behaviorMax ?? 5, behaviorScore),
-      Math.min(rules?.attendanceMax ?? 5, attendanceScore),
-      Math.min(rules?.notebookMax ?? 5, notebookScore),
-      Math.min(rules?.participationMax ?? 5, participationScore)
+  /**
+   * حاسبة واحدة تخدم الجدول والنافذة: `judgementValue` يسمح لشاشة المراجعة
+   * بحساب المجموع من التقدير المعروض فيها قبل حفظه (اقتراحاً كان أو تعديلاً)،
+   * بينما يبقى الجدول على التقدير المحفوظ فعلاً.
+   */
+  const breakdownFor = (studentId: string, judgementValue?: string) => {
+    const raw = judgementValue !== undefined
+      ? judgementValue
+      : (gradesDraft[studentId]?.participationJudgement || '');
+    return calculateEvaluationBreakdown(
+      {
+        ...(studentStatsMap[studentId] || {}),
+        sessionsCount: classSessions.length,
+        documentedSessions: documentedSessionsCount,
+        notebookScores: notebookScoresFor(notebookChecks, studentId),
+        participationJudgement: raw === '' ? null : Number(raw),
+      },
+      state.calendarSettings?.evaluationRules
     );
   };
 
-  const handleAutoFillContinuousEval = () => {
-    let count = 0;
-    isDirtyRef.current = true;
-    setGradesDraft(prev => {
-      const next = { ...prev };
-      for (const st of classStudents) {
-        const d = next[st.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
-        if (d.continuousEval === '') {
-          next[st.id] = { ...d, continuousEval: String(calcAutoContinuousEval(st.id)) };
-          count++;
-        }
-      }
-      return next;
+  const autoBreakdownFor = (studentId: string) => breakdownFor(studentId);
+
+  /** اقتراح تقدير المشاركة من أدلة التوثيق؛ لا يُحفظ حتى يضغط الأستاذ «تطبيق». */
+  const suggestedJudgementFor = (studentId: string): string => {
+    const suggestion = suggestParticipationJudgement({
+      goodPart: studentStatsMap[studentId]?.goodPart ?? 0,
+      poorPart: studentStatsMap[studentId]?.poorPart ?? 0,
+      documentedSessions: documentedSessionsCount,
+      targetRatio: evaluationRules?.participationTargetRatio,
     });
-    setToastMessage(`تم حساب التقويم آلياً لـ (${count}) تلميذ بدون تغيير النقاط المدخلة يدوياً.`);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 3500);
+    return suggestion === null ? '' : String(suggestion);
+  };
+
+  const calcAutoContinuousEval = (studentId: string): number => autoBreakdownFor(studentId).total;
+
+  const autoBreakdownTitle = (studentId: string): string => {
+    const breakdown = autoBreakdownFor(studentId);
+    const rules = state.calendarSettings?.evaluationRules;
+    return EVALUATION_CRITERIA.map(meta => {
+      if (meta.key === 'participation') {
+        const parts = [
+          breakdown.participationRecorded !== null ? `توثيق ${breakdown.participationRecorded}` : null,
+          breakdown.participationJudgement !== null ? `تقدير ${breakdown.participationJudgement}` : null,
+        ].filter(Boolean).join(' + ');
+        const value = breakdown.participation === null ? '—' : breakdown.participation;
+        return `${meta.short} ${value}/${criterionMax(rules, meta.key)}${parts ? ` (${parts})` : ''}`;
+      }
+      return `${meta.short} ${breakdown[meta.key]}/${criterionMax(rules, meta.key)}`;
+    }).join(' • ');
   };
 
   const handleUseAutoContinuousEval = (studentId: string) => {
@@ -469,13 +625,49 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(prev => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' }),
+        ...(prev[studentId] || EMPTY_GRADE_DRAFT),
         continuousEval: String(autoScore)
       }
     }));
     setToastMessage(`تم وضع النقطة الآلية ${autoScore} في خانة التقويم المستمر. يمكنك تعديلها يدوياً.`);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3000);
+  };
+
+  /**
+   * يفتح المراجعة وقد ملأ كل صف: التقدير المحفوظ إن وُجد، وإلا الاقتراح الآلي.
+   * الاقتراح يظهر في القائمة فقط ولا يمسّ الحالة، فيمكن إغلاق النافذة دون أثر.
+   */
+  const openReview = () => {
+    const seeded: Record<string, string> = {};
+    for (const student of classStudents) {
+      const stored = gradesDraft[student.id]?.participationJudgement || '';
+      seeded[student.id] = stored || suggestedJudgementFor(student.id);
+    }
+    setReviewJudgements(seeded);
+    setShowReview(true);
+  };
+
+  /** يطبّق تقديرات نافذة المراجعة (المقترحة أو المعدَّلة) والتقويم المحسوب منها. */
+  const handleApplyReview = () => {
+    isDirtyRef.current = true;
+    setGradesDraft(prev => {
+      const next = { ...prev };
+      for (const student of classStudents) {
+        const draft = next[student.id] || EMPTY_GRADE_DRAFT;
+        const judgement = reviewJudgements[student.id] ?? '';
+        next[student.id] = {
+          ...draft,
+          participationJudgement: judgement,
+          continuousEval: String(breakdownFor(student.id, judgement).total),
+        };
+      }
+      return next;
+    });
+    setToastMessage('تم تطبيق التقديرات المقترحة (وما عدّلته) على القسم. راجع النقاط ثم احفظ.');
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 4000);
+    setShowReview(false);
   };
 
   const handleGradeChange = (
@@ -496,7 +688,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(prev => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' }),
+        ...(prev[studentId] || EMPTY_GRADE_DRAFT),
         [field]: normalized
       }
     }));
@@ -511,7 +703,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(prev => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' }),
+        ...(prev[studentId] || EMPTY_GRADE_DRAFT),
         [field]: value
       }
     }));
@@ -524,7 +716,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     setGradesDraft(prev => {
       const next = { ...prev };
       for (const st of classStudents) {
-        const d = next[st.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
+        const d = next[st.id] || EMPTY_GRADE_DRAFT;
         const ce = d.continuousEval !== '' ? Number(d.continuousEval) : null;
         const q = d.quiz !== '' ? Number(d.quiz) : null;
         const ex = d.exam !== '' ? Number(d.exam) : null;
@@ -550,7 +742,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       const updatedGradesList: StudentGrade[] = [...prev.grades];
 
       for (const student of classStudents) {
-        const draft = gradesDraft[student.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
+        const draft = gradesDraft[student.id] || EMPTY_GRADE_DRAFT;
         const ceVal = draft.continuousEval !== '' ? Number(draft.continuousEval) : null;
         const qVal = draft.quiz !== '' ? Number(draft.quiz) : null;
         const exVal = draft.exam !== '' ? Number(draft.exam) : null;
@@ -564,6 +756,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         );
 
         const existingGrade = existingIndex >= 0 ? updatedGradesList[existingIndex] : undefined;
+        const breakdown = autoBreakdownFor(student.id);
         const gradeObj: StudentGrade = {
           ...existingGrade,
           id: existingGrade?.id || `gr-${student.id}-t${selectedTrimester}`,
@@ -575,7 +768,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           exam: exVal,
           calculatedAverage: calcAvg,
           estimation: estVal,
-          guidance: guidanceVal
+          guidance: guidanceVal,
+          // المكوّنات تُحفظ كما احتُسبت كي تعكس السحابة النموذج نفسه، مع بقاء
+          // المشاركة في العمود المخصّص لها: الجزء التقديري (0–5) الذي اختاره الأستاذ.
+          behaviorScore: breakdown.behavior,
+          attendanceScore: breakdown.attendance,
+          notebookScore: breakdown.notebook,
+          participationScore:
+            draft.participationJudgement === '' ? null : Number(draft.participationJudgement),
         };
 
         if (existingIndex >= 0) {
@@ -689,7 +889,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
       // Collect all grades for this trimester, ensuring current draft edits are merged
       const trimesterGrades = [...state.grades.filter(g => g.trimester === selectedTrimester)];
-      
+
       Object.entries(gradesDraft).forEach(([studentId, draft]) => {
         const ce = draft.continuousEval !== '' ? Number(draft.continuousEval) : null;
         const q = draft.quiz !== '' ? Number(draft.quiz) : null;
@@ -734,7 +934,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       if (injectionResult.matchedStudents === 0) {
         throw new Error('لم تتم مطابقة أي تلميذ داخل الملف الرسمي. لم يتم تنزيل ملف؛ تحقق من القسم أو رقم التعريف والاسم.');
       }
-      
+
       // Download the modified ministry workbook without changing its filename.
       const url = URL.createObjectURL(injectionResult.blob);
       const link = document.createElement('a');
@@ -745,7 +945,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       setToastMessage(
         `تم حقن ${injectionResult.gradesWritten} قيمة في ملف الرقمنة لـ ${injectionResult.matchedStudents} تلاميذ مع الحفاظ على القالب الأصلي.`
       );
@@ -766,7 +966,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     if (!activeClass) return;
 
     const rows = classStudents.map((st, idx) => {
-      const draft = gradesDraft[st.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
+      const draft = gradesDraft[st.id] || EMPTY_GRADE_DRAFT;
       const ce = draft.continuousEval !== '' ? Number(draft.continuousEval) : '';
       const q = draft.quiz !== '' ? Number(draft.quiz) : '';
       const ex = draft.exam !== '' ? Number(draft.exam) : '';
@@ -871,6 +1071,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             </button>
 
             <button
+              onClick={() => setShowGradeImport(true)}
+              className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold shadow-xs cursor-pointer transition-colors"
+              title="لصق عمود من Excel أو اختيار ملف .xlsx/.csv لملء النقاط دفعة واحدة">
+              <Upload className="w-4 h-4 text-[var(--primary)] shrink-0" />
+              <span>استيراد النقاط</span>
+            </button>
+
+            <button
               onClick={handleExportExcel}
               className="col-span-2 sm:col-span-1 flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold shadow-xs cursor-pointer transition-colors" title="استخراج كشف النقاط كملف Excel" id="btn-export-grades-sheet" >
               <FileSpreadsheet className="w-4 h-4 text-[var(--primary)] shrink-0" />
@@ -881,10 +1089,11 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
           <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
             <button
-              onClick={handleAutoFillContinuousEval}
-              className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--text-primary)] border border-[var(--primary)] text-xs font-bold cursor-pointer transition-colors shadow-2xs" title="حساب التقويم المستمر آلياً بناءً على الغيابات والسلوك المسجل في دفتر النصوص" >
-              <Sparkles className="w-4 h-4 text-[var(--primary)] shrink-0" />
-              <span>حساب التقويم آلياً</span>
+              onClick={openReview}
+              className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--primary)]/30 bg-white px-3.5 py-2 text-xs font-bold text-[var(--primary-ink)] shadow-2xs transition-colors hover:bg-[var(--primary-soft)]"
+              title="مراجعة مكوّنات التقويم لكل تلميذ؛ التقدير مقترح آلياً ويمكن تعديله">
+              <ListFilter className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>مراجعة التقويم</span>
             </button>
 
             <button
@@ -895,7 +1104,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             </button>
 
             <span
-              className={`text-[11px] font-bold ${
+              className={`text-xs font-bold ${
                 saveStatus === 'saved' ? 'text-[var(--primary)]' : saveStatus === 'saving' ? 'text-amber-700' : 'text-slate-500'
               }`}
               aria-live="polite"
@@ -928,7 +1137,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               <button
                 type="button"
                 onClick={handleSaveAllGrades}
-                className="min-h-9 px-2.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-rose-50 text-[11px] font-black transition-colors cursor-pointer"
+                className="min-h-9 px-2.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-rose-50 text-xs font-black transition-colors cursor-pointer"
               >
                 إعادة المحاولة
               </button>
@@ -948,19 +1157,19 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="ملخص دفتر النقاط">
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-          <div className="text-[11px] font-bold text-slate-500">مكتمل</div>
+          <div className="text-xs font-bold text-slate-500">مكتمل</div>
           <div className="mt-1 text-lg font-black text-[var(--primary)]">{gradeSummary.completed}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-          <div className="text-[11px] font-bold text-slate-500">ناقص</div>
+          <div className="text-xs font-bold text-slate-500">ناقص</div>
           <div className="mt-1 text-lg font-black text-amber-700">{gradeSummary.incomplete}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-          <div className="text-[11px] font-bold text-slate-500">المتوسط العام</div>
+          <div className="text-xs font-bold text-slate-500">المتوسط العام</div>
           <div className="mt-1 text-lg font-black text-slate-900">{overallAverage}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
-          <div className="text-[11px] font-bold text-slate-500">أقل من 10</div>
+          <div className="text-xs font-bold text-slate-500">أقل من 10</div>
           <div className="mt-1 text-lg font-black text-rose-700">{gradeSummary.belowTen}</div>
         </div>
       </div>
@@ -969,7 +1178,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex flex-col sm:flex-row gap-4 sm:justify-between items-start sm:items-center w-full sm:w-auto">
           <div className="space-y-0.5 w-full sm:w-auto">
-            <span className="text-[11px] font-bold text-slate-500 block">اختر القسم:</span>
+            <span className="text-xs font-bold text-slate-500 block">اختر القسم:</span>
             <select
               value={selectedClassId}
               onChange={e => handleSelectClass(e.target.value)}
@@ -983,7 +1192,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           </div>
 
           <div className="space-y-0.5 w-full sm:w-auto">
-            <span className="text-[11px] font-bold text-slate-500 block">الفترة الدراسية:</span>
+            <span className="text-xs font-bold text-slate-500 block">الفترة الدراسية:</span>
             <div className="flex items-center bg-slate-50 p-0.5 rounded-lg border border-slate-300 w-full sm:w-auto">
               {([1, 2, 3] as const).map(tri => (
                 <button
@@ -1019,21 +1228,21 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         <div className="md:hidden flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs w-full mt-3 sm:mt-0">
           <button
             type="button" onClick={() => handleMobileGradeTab('continuousEval')}
-            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer text-center ${
               mobileActiveTab === 'continuousEval' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
             التقويم
           </button>
           <button
             type="button" onClick={() => handleMobileGradeTab('quiz')}
-            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer text-center ${
               mobileActiveTab === 'quiz' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
             الفرض
           </button>
           <button
             type="button" onClick={() => handleMobileGradeTab('exam')}
-            className={`flex-1 py-2 px-2 rounded-lg font-bold text-[11px] transition-all cursor-pointer text-center ${
+            className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer text-center ${
               mobileActiveTab === 'exam' ? 'bg-white text-[var(--primary)] shadow-xs border border-slate-200' : 'text-slate-500 hover:text-slate-700' }`}
           >
             الاختبار
@@ -1054,7 +1263,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
               {classStudents
                 .filter(s => s.fullName.toLowerCase().includes(searchStudent.toLowerCase()))
                 .map(student => {
-                  const draft = gradesDraft[student.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
+                  const draft = gradesDraft[student.id] || EMPTY_GRADE_DRAFT;
                   const ce = draft.continuousEval !== '' ? Number(draft.continuousEval) : null;
                   const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                   const ex = draft.exam !== '' ? Number(draft.exam) : null;
@@ -1075,11 +1284,11 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                             {student.fullName}
                           </h4>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${completedFields === 3 ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-amber-50 text-amber-800'}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-black ${completedFields === 3 ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-amber-50 text-amber-800'}`}>
                               {completedFields}/3 مكتملة
                             </span>
                             {student.isRepeater && (
-                              <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                              <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
                                 معيد
                               </span>
                             )}
@@ -1088,19 +1297,26 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                       </div>
 
                       <div className="flex items-center gap-2 w-full">
-                        <span className="text-[11px] font-bold text-slate-500 flex-1">
+                        <span className="text-xs font-bold text-slate-500 flex-1">
                           {mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'}
                         </span>
                         <input
-                          ref={element => { gradeInputRefs.current[`${mobileActiveTab}:${student.id}`] = element; }}
+                          ref={element => { gradeInputRefs.current[`m:${mobileActiveTab}:${student.id}`] = element; }}
                           type="text" inputMode="decimal" pattern="[0-9٠-٩۰-۹.,٫]*" placeholder="-" value={draft[mobileActiveTab]}
                           onFocus={event => event.currentTarget.select()}
                           onChange={e => handleGradeChange(student.id, mobileActiveTab, e.target.value)}
                           onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              focusNextGradeInput(student.id);
-                            }
+                            if (event.key !== 'Enter') return;
+                            event.preventDefault();
+                            focusMobileNext(student.id);
+                          }}
+                          onBlur={() => {
+                            const raw = normalizeNumerals(draft[mobileActiveTab]);
+                            if (raw === '') return;
+                            const numeric = Number(raw);
+                            if (!Number.isFinite(numeric)) return;
+                            const clamped = Math.min(20, Math.max(0, numeric));
+                            if (String(clamped) !== raw) handleGradeChange(student.id, mobileActiveTab, String(clamped));
                           }}
                           enterKeyHint="next"
                           aria-label={`${mobileActiveTab === 'continuousEval' ? 'التقويم المستمر' : mobileActiveTab === 'quiz' ? 'الفرض المحروس' : 'الاختبار الفصلي'} - ${student.fullName}`}
@@ -1108,13 +1324,13 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                       </div>
                       {mobileActiveTab === 'continuousEval' && (
                         <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary-soft)] px-3 py-2">
-                          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                          <span className="text-xs font-semibold text-[var(--text-secondary)]" title={autoBreakdownTitle(student.id)}>
                             المقترح آلياً: <strong className="font-mono text-[var(--primary)]">{calcAutoContinuousEval(student.id).toFixed(2)}</strong>
                           </span>
                           <button
                             type="button"
                             onClick={() => handleUseAutoContinuousEval(student.id)}
-                            className="min-h-8 rounded-md border border-[var(--primary)]/30 bg-white px-2 text-[10px] font-bold text-[var(--primary)] hover:bg-[var(--primary-soft)]"
+                            className="min-h-8 rounded-md border border-[var(--primary)]/30 bg-white px-2 text-xs font-bold text-[var(--primary-ink)] hover:bg-[var(--primary-soft)]"
                           >
                             استخدام المقترح
                           </button>
@@ -1123,18 +1339,18 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
                       {avg !== null && (
                         <div className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-                          <span className="text-[11px] font-bold text-amber-800">المعدل الفصلي</span>
+                          <span className="text-xs font-bold text-amber-800">المعدل الفصلي</span>
                           <span className="font-mono text-sm font-bold text-amber-900">{avg.toFixed(2)}</span>
                         </div>
                       )}
 
                       <div className="grid grid-cols-1 gap-2 w-full border-t border-slate-100 pt-3">
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">التقديرات</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">التقديرات</label>
                           <EstimationDropdown studentId={student.id} value={draft.estimation} avg={avg} onChange={val => handleTextFieldChange(student.id, 'estimation', val)} />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">الإرشادات</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">الإرشادات</label>
                           <GuidanceDropdown studentId={student.id} value={draft.guidance} avg={avg} onChange={val => handleTextFieldChange(student.id, 'guidance', val)} />
                         </div>
                       </div>
@@ -1153,19 +1369,19 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                       <th className="py-3 px-4 min-w-[160px]">اسم ولقب التلميذ</th>
                       <th className="py-3 px-2 w-28 text-center">
                         التقويم المستمر
-                        <span className="block text-[10px] font-normal text-slate-500">(على 20)</span>
+                        <span className="block text-xs font-normal text-slate-500">(على 20)</span>
                       </th>
                       <th className="py-3 px-2 w-28 text-center">
                         الفرض المحروس
-                        <span className="block text-[10px] font-normal text-slate-500">(على 20)</span>
+                        <span className="block text-xs font-normal text-slate-500">(على 20)</span>
                       </th>
                       <th className="py-3 px-2 w-28 text-center">
                         الاختبار الفصلي
-                        <span className="block text-[10px] font-normal text-slate-500">(على 20 × 2)</span>
+                        <span className="block text-xs font-normal text-slate-500">(على 20 × 2)</span>
                       </th>
                       <th className="py-3 px-3 w-28 text-center bg-amber-50/70 border-x border-amber-200">
                         المعدل الفصلي
-                        <span className="block text-[10px] font-normal text-amber-700">(حساب آلي)</span>
+                        <span className="block text-xs font-normal text-amber-700">(حساب آلي)</span>
                       </th>
                       <th className="py-3 px-3 min-w-[175px]">التقديرات</th>
                       <th className="py-3 px-4 min-w-[200px]">الإرشادات</th>
@@ -1175,7 +1391,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                     {classStudents
                       .filter(s => s.fullName.toLowerCase().includes(searchStudent.toLowerCase()))
                       .map(student => {
-                        const draft = gradesDraft[student.id] || { continuousEval: '', quiz: '', exam: '', estimation: '', guidance: '', remarks: '' };
+                        const draft = gradesDraft[student.id] || EMPTY_GRADE_DRAFT;
                         const ce = draft.continuousEval !== '' ? Number(draft.continuousEval) : null;
                         const q = draft.quiz !== '' ? Number(draft.quiz) : null;
                         const ex = draft.exam !== '' ? Number(draft.exam) : null;
@@ -1194,11 +1410,22 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                             <td className="p-1 px-1 text-center">
                               <div className="flex flex-col items-center gap-1">
                                 <input
+                                  ref={element => { gradeInputRefs.current[`continuousEval:${student.id}`] = element; }}
                                   type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.continuousEval}
                                   onChange={e => handleGradeChange(student.id, 'continuousEval', e.target.value)}
+                                  onKeyDown={event => handleGradeKeyDown(event, student.id, 'continuousEval')}
+                                  onBlur={() => {
+                                    const raw = normalizeNumerals(draft.continuousEval);
+                                    if (raw === '') return;
+                                    const numeric = Number(raw);
+                                    if (!Number.isFinite(numeric)) return;
+                                    const clamped = Math.min(20, Math.max(0, numeric));
+                                    if (String(clamped) !== raw) handleGradeChange(student.id, 'continuousEval', String(clamped));
+                                  }}
+                                  enterKeyHint="next"
                                   aria-label={`التقويم المستمر - ${student.fullName}`}
                                   className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
-                                <div className="hidden sm:flex items-center gap-1 text-[9px] text-[var(--primary)] whitespace-nowrap" title="النقطة المقترحة">
+                                <div className="hidden sm:flex items-center gap-1 text-xs text-[var(--primary)] whitespace-nowrap" title={autoBreakdownTitle(student.id)}>
                                   <span className="font-mono">{calcAutoContinuousEval(student.id).toFixed(2)}</span>
                                   <button
                                     type="button"
@@ -1214,8 +1441,19 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                             {/* Quiz (0-20) */}
                             <td className="p-1 px-1 text-center">
                               <input
+                                ref={element => { gradeInputRefs.current[`quiz:${student.id}`] = element; }}
                                 type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.quiz}
                                 onChange={e => handleGradeChange(student.id, 'quiz', e.target.value)}
+                                onKeyDown={event => handleGradeKeyDown(event, student.id, 'quiz')}
+                                onBlur={() => {
+                                  const raw = normalizeNumerals(draft.quiz);
+                                  if (raw === '') return;
+                                  const numeric = Number(raw);
+                                  if (!Number.isFinite(numeric)) return;
+                                  const clamped = Math.min(20, Math.max(0, numeric));
+                                  if (String(clamped) !== raw) handleGradeChange(student.id, 'quiz', String(clamped));
+                                }}
+                                enterKeyHint="next"
                                 aria-label={`الفرض المحروس - ${student.fullName}`}
                                 className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
@@ -1223,8 +1461,19 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                             {/* Exam (0-20) */}
                             <td className="p-1 px-1 text-center">
                               <input
+                                ref={element => { gradeInputRefs.current[`exam:${student.id}`] = element; }}
                                 type="number" inputMode="decimal" step="0.25" min="0" max="20" placeholder="-" value={draft.exam}
                                 onChange={e => handleGradeChange(student.id, 'exam', e.target.value)}
+                                onKeyDown={event => handleGradeKeyDown(event, student.id, 'exam')}
+                                onBlur={() => {
+                                  const raw = normalizeNumerals(draft.exam);
+                                  if (raw === '') return;
+                                  const numeric = Number(raw);
+                                  if (!Number.isFinite(numeric)) return;
+                                  const clamped = Math.min(20, Math.max(0, numeric));
+                                  if (String(clamped) !== raw) handleGradeChange(student.id, 'exam', String(clamped));
+                                }}
+                                enterKeyHint="next"
                                 aria-label={`الاختبار الفصلي - ${student.fullName}`}
                                 className="w-18 text-center px-1 py-1 min-h-[40px] rounded-md border border-slate-300 font-mono font-bold text-slate-900 focus:outline-amber-600 focus:border-gold" />
                             </td>
@@ -1267,49 +1516,314 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       </div>
 
       {/* Explanatory Formula Modal */}
-      {showFormulaModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
-                صيغة المعدل
-              </h3>
-              <button
-                onClick={() => setShowFormulaModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer" >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AccessibleDialog
+        open={showFormulaModal}
+        titleId="grade-formula-title"
+        onClose={() => setShowFormulaModal(false)}
+        dismissOnBackdrop
+        className="w-full max-w-lg space-y-4 rounded-xl border border-slate-200 bg-white p-6 text-right shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <h3 id="grade-formula-title" className="text-base font-bold text-slate-900">
+            صيغة المعدل
+          </h3>
+          <button
+            onClick={() => setShowFormulaModal(false)}
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+            aria-label="إغلاق">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-            <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-2">
-                <div className="text-[11px] font-bold text-amber-900">الصيغة الوزارية الرسمية:</div>
-                <div className="font-mono text-sm font-bold text-amber-950 dir-ltr">
-                  المعدل = [ التقويم المستمر + الفرض + (الاختبار × 2) ] ÷ 4
+        <div className="space-y-3 text-xs leading-relaxed text-slate-700">
+          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+            <div className="text-xs font-bold text-amber-900">الصيغة الوزارية الرسمية:</div>
+            <div className="font-mono text-sm font-bold text-amber-950 dir-ltr">
+              المعدل = [ التقويم المستمر + الفرض + (الاختبار × 2) ] ÷ 4
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block font-bold text-slate-900">شرح العناصر:</span>
+            <ul className="list-inside list-disc space-y-1 text-slate-600">
+              <li><strong>التقويم المستمر (على 20):</strong> السلوك والانضباط 3، المواظبة والحضور 3، الكراس والواجبات 6، المشاركة والنشاط 8 — كما في القرار الوزاري.</li>
+              <li><strong>المواظبة (على 3):</strong> نسبة من حصص الفصل: كل غياب غير مبرر يُنقص النسبة بنقطة كاملة، والتأخر بنصف نقطة، ثم تُضرب النسبة في منحنى تصاعدي. الغياب المبرَّر لا يُخصم.</li>
+              <li><strong>السلوك (على 3):</strong> المخالفة الأولى 0.25 ثم 0.5 لكل مخالفة بعدها؛ فلا يهبط العنصر من أول زلة، ويُفقد كاملًا تقريباً مع التكرار.</li>
+              <li><strong>الكراس (على 6):</strong> متوسط جولتي تفتيش في الفصل على مقياس 0–5. الجولة الواحدة تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
+              <li><strong>المشاركة والنشاط (على 8):</strong> 3 نقاط توثيق آلي تُحسب على الحصص التي وُثِّق فيها شيء فعلاً (لا على كل الحصص)، و5 نقاط تقدير الأستاذ من خمسة مستويات.</li>
+              <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً أو سقفه كاملاً.</li>
+              <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
+              <li><strong>الاختبار الفصلي (على 20):</strong> اختبار موحد يضاعف بمعامل 2 طبقاً للقرارات الوزارية المنظمة للتقويم في الطور الثانوي.</li>
+              <li><strong>معامل المادة:</strong> ثابت (2) في كافة السنوات والشعب (علمي، رياضي، تقني رياضي، تسيير واقتصاد، آداب وفلسفة، لغات أجنبية).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-slate-100 pt-2">
+          <button
+            onClick={() => setShowFormulaModal(false)}
+            className="min-h-11 rounded-lg bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)]">
+            إغلاق
+          </button>
+        </div>
+      </AccessibleDialog>
+
+      {/* Continuous-evaluation review: one screen, no extra icons */}
+      <AccessibleDialog
+        open={showReview}
+        titleId="grade-review-title"
+        onClose={() => setShowReview(false)}
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-4 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 text-right shadow-xl sm:p-6"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="grade-review-title" className="text-base font-black text-[var(--text-primary)]">
+              مراجعة التقويم المستمر
+            </h3>
+            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
+              الأوزان: السلوك 3 · المواظبة 3 · الكراس 6 · المشاركة والنشاط 8 (منها 3 توثيق و5 تقدير).
+            </p>
+            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
+              التقدير مُقترَح آلياً من مشاركاتك المسجّلة؛ عدّله من القائمة إن أردت ثم اضغط «تطبيق على القسم».
+            </p>
+            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
+              {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
+              الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id).length > 0).length}/{classStudents.length}
+              {' '}تلميذاً مُفتَّشاً في جولة واحدة على الأقل.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowReview(false)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            aria-label="إغلاق المراجعة"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
+          {classStudents.map(student => {
+            const storedJudgement = gradesDraft[student.id]?.participationJudgement || '';
+            const suggestion = suggestedJudgementFor(student.id);
+            const judgement = reviewJudgements[student.id] ?? '';
+            const showsSuggestion = storedJudgement === '' && judgement !== '' && judgement === suggestion;
+            const breakdown = breakdownFor(student.id, judgement);
+            const missingNotebook = breakdown.missing.includes('notebook');
+            const missingAttendance = breakdown.missing.includes('attendance');
+            return (
+              <div
+                key={student.id}
+                className="rounded-xl border border-[var(--border-subtle)] bg-white p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="w-6 shrink-0 text-center font-mono text-xs font-bold text-[var(--text-tertiary)]">
+                      {student.numberInList}
+                    </span>
+                    <span className="truncate text-sm font-bold text-[var(--text-primary)]">{student.fullName}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="rounded bg-[var(--bg-page)] px-2 py-0.5 font-mono text-[var(--text-secondary)]">
+                      المجموع <strong className="text-[var(--text-primary)]">{breakdown.total.toFixed(2)}</strong>/20
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <span className="font-bold text-slate-900 block">شرح العناصر:</span>
-                <ul className="list-disc list-inside space-y-1 text-slate-600">
-                  <li><strong>التقويم المستمر (على 20):</strong> يشمل انضباط التلميذ، كراس المادة، المشاركة الصفية، والواجبات المنزلية.</li>
-                  <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
-                  <li><strong>الاختبار الفصلي (على 20):</strong> اختبار موحد يضاعف بمعامل 2 طبقاً للقرارات الوزارية المنظمة للتقويم في الطور الثانوي.</li>
-                  <li><strong>معامل المادة:</strong> ثابت (2) في كافة السنوات والشعب (علمي، رياضي، تقني رياضي، تسيير واقتصاد، آداب وفلسفة، لغات أجنبية).</li>
-                </ul>
-              </div>
-            </div>
+                <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs sm:grid-cols-4">
+                  <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
+                    المواظبة {missingAttendance || breakdown.attendance === null ? '—' : `${breakdown.attendance}/${criterionMax(evaluationRules, 'attendance')}`}
+                  </span>
+                  <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
+                    السلوك {breakdown.behavior ?? '—'}/{criterionMax(evaluationRules, 'behavior')}
+                  </span>
+                  <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
+                    الكراس {missingNotebook || breakdown.notebook === null ? '—' : `${breakdown.notebook.toFixed(1)}/${criterionMax(evaluationRules, 'notebook')}`}
+                  </span>
+                  <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
+                    التوثيق {breakdown.participationRecorded === null ? '—' : `${breakdown.participationRecorded.toFixed(1)}/${evaluationRules?.participationRecordedMax ?? 3}`}
+                  </span>
+                </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setShowFormulaModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold cursor-pointer" >
-                إغلاق
-              </button>
+                <label className="mt-2 flex items-center justify-between gap-2 text-xs font-bold text-[var(--text-secondary)]">
+                  <span className="flex items-center gap-2">
+                    <span>تقدير المشاركة والنشاط</span>
+                    {showsSuggestion && (
+                      <span className="rounded bg-[var(--primary-soft)] px-1.5 py-0.5 text-xs font-bold text-[var(--primary-ink)]">
+                        مقترح
+                      </span>
+                    )}
+                  </span>
+                  <select
+                    value={judgement}
+                    onChange={event => {
+                      const value = event.target.value;
+                      setReviewJudgements(prev => ({ ...prev, [student.id]: value }));
+                    }}
+                    className="min-h-9 rounded-lg border border-[var(--border-default)] bg-white px-2 text-xs font-bold text-[var(--text-primary)]"
+                    aria-label={`تقدير المشاركة - ${student.fullName}`}
+                  >
+                    {JUDGEMENT_LEVELS.map(level => (
+                      <option key={level.value || 'none'} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-6 text-[var(--text-tertiary)]">
+            العنصر بلا أدلة يُستبعد ويُعاد توزيع وزنه، فلا صفر جزاءً على نقص التسجيل.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowReview(false)}
+              className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+            >
+              إغلاق
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyReview}
+              className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)]"
+            >
+              تطبيق على القسم
+            </button>
+          </div>
+        </div>
+      </AccessibleDialog>
+
+      {/* Excel / clipboard import */}
+      <AccessibleDialog
+        open={showGradeImport}
+        titleId="grade-import-title"
+        onClose={() => setShowGradeImport(false)}
+        className="w-full max-w-2xl space-y-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 text-right shadow-xl sm:p-6"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="grade-import-title" className="text-base font-black text-[var(--text-primary)]">
+              استيراد النقاط من Excel
+            </h3>
+            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
+              انسخ الأعمدة من ملف Excel وألصقها هنا، أو اختر ملفاً مباشرة.
+              كل سطر: <span className="font-mono">الاسم</span> ثم التقويم المستمر ثم الفرض ثم الاختبار.
+              ويمكن أن يكون سطرين فقط: الاسم والنقطة.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowGradeImport(false)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            aria-label="إغلاق نافذة الاستيراد"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--primary)]/40 bg-[var(--primary-soft)]/40 px-4 text-xs font-bold text-[var(--primary-ink)] transition-colors hover:bg-[var(--primary-soft)]">
+            {isReadingImport ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
+            <span>اختيار ملف Excel أو CSV</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv,.txt"
+              className="sr-only"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) void handleImportFile(file);
+                event.target.value = '';
+              }}
+            />
+          </label>
+          {importFileName && (
+            <span className="truncate text-xs font-bold text-[var(--text-tertiary)]">{importFileName}</span>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[1fr_14rem]">
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-[var(--text-secondary)]">لصق الجدول</span>
+            <textarea
+              value={importText}
+              onChange={event => setImportText(event.target.value)}
+              rows={8}
+              dir="auto"
+              placeholder={'بن علي يوسف\t12\t14\t16\nحداد مريم\t10\t11\t13'}
+              className="w-full rounded-xl border border-[var(--border-default)] bg-white px-3 py-2 font-mono text-xs leading-6 text-[var(--text-primary)] focus:border-[var(--primary)] focus:outline-none"
+            />
+          </label>
+          <div className="space-y-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-[var(--text-secondary)]">
+                عمود الاستيراد لسطر من خانتين
+              </span>
+              <select
+                value={importField}
+                onChange={event => setImportField(event.target.value as GradeField)}
+                className="min-h-11 w-full rounded-xl border border-[var(--border-default)] bg-white px-3 text-xs font-bold text-[var(--text-primary)] focus:border-[var(--primary)] focus:outline-none"
+              >
+                {(Object.keys(GRADE_FIELD_LABELS) as GradeField[]).map(field => (
+                  <option key={field} value={field}>{GRADE_FIELD_LABELS[field]}</option>
+                ))}
+              </select>
+            </label>
+            <div className="space-y-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">أسطر جاهزة</span>
+                <strong className="font-mono text-[var(--success)]">{matchedImportRows.matched.length}</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">أسماء غير مطابقة</span>
+                <strong className="font-mono text-[var(--warning)]">{matchedImportRows.unmatched.length}</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--text-secondary)]">أسطر متجاهلة</span>
+                <strong className="font-mono text-[var(--text-tertiary)]">{importPreview.skipped.length}</strong>
+              </div>
             </div>
           </div>
         </div>
-      )}
+
+        {matchedImportRows.unmatched.length > 0 && (
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>لم نجد في هذا القسم:</strong>{' '}
+            {matchedImportRows.unmatched.slice(0, 6).join('، ')}
+            {matchedImportRows.unmatched.length > 6 ? ` و${matchedImportRows.unmatched.length - 6} آخرين` : ''}
+          </div>
+        )}
+
+        {importPreview.skipped.length > 0 && (
+          <div role="status" className="max-h-24 overflow-y-auto rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+            <ul className="list-inside list-disc space-y-0.5">
+              {importPreview.skipped.slice(0, 5).map(item => (
+                <li key={item.line}>السطر {item.line}: {item.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setShowGradeImport(false)}
+            className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+          >
+            إلغاء
+          </button>
+          <button
+            type="button"
+            onClick={handleApplyImport}
+            disabled={matchedImportRows.matched.length === 0}
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            استيراد {matchedImportRows.matched.length} نقطة
+          </button>
+        </div>
+      </AccessibleDialog>
     </div>
   );
 };

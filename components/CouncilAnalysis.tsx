@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { exportToDocx } from '@/lib/utils';
-import { AppState } from '@/lib/storage';
+import { printElement } from '@/lib/print';
 import { calculateCouncilStatistics } from '@/lib/grade-calculator';
+import { filterByTrimester, normalizeTrimester, trimesterLabel } from '@/lib/academic-calendar';
+import Link from 'next/link';
+import { AlertTriangle } from 'lucide-react';
 import {
-  BarChart3,
+
   Printer,
-  FileSpreadsheet,
-  CheckCircle2,
   TrendingUp,
   AlertCircle,
   Award,
-  Users,
   Percent
 } from 'lucide-react';
 
@@ -29,11 +29,30 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
     state.activeTrimester || 1
   );
 
+  // Keep the local context in sync with the global class / term switcher.
+  useEffect(() => {
+    if (state.activeClassId && state.activeClassId !== selectedClassId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedClassId(state.activeClassId);
+    }
+  }, [state.activeClassId, selectedClassId]);
+
+  useEffect(() => {
+    const term = normalizeTrimester(state.activeTrimester);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (term !== selectedTrimester) setSelectedTrimester(term);
+  }, [state.activeTrimester, selectedTrimester]);
+
   const activeClass = state.classes.find(c => c.id === selectedClassId);
 
   // Compute absence counts map
   const absencesMap: { [studentId: string]: number } = {};
-  for (const session of state.sessions) {
+  // Absences are counted inside the selected term only.
+  for (const session of filterByTrimester(
+    state.sessions.filter(session => session.classId === selectedClassId),
+    state.calendarSettings?.termDates,
+    selectedTrimester,
+  )) {
     if (session.attendance) {
       for (const [stId, status] of Object.entries(session.attendance)) {
         if (status === 'ABSENT') {
@@ -52,7 +71,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
   );
 
   // Print / Export Form handler with official Algerian Ministry styling and RTL visual layout
-  const handlePrint = () => {
+  const handleExportDocx = () => {
     const totalEval = stats.evaluatedCount || 1;
     const pLess8 = ((stats.lessThan8 / totalEval) * 100).toFixed(1);
     const p8to10 = ((stats.between8and10 / totalEval) * 100).toFixed(1);
@@ -209,10 +228,19 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2">
           <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs cursor-pointer" id="btn-print-council-report" >
-            <Printer className="w-4 h-4" />
-            <span>تصدير تحليل النتائج كملف docx</span>
+            onClick={handleExportDocx}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[var(--primary-hover)] cursor-pointer" id="btn-export-council-report" >
+            <Printer className="w-4 h-4" aria-hidden="true" />
+            <span>تصدير التحليل (.docx)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => printElement('council-analysis-doc', { title: 'تقرير مجلس القسم' })}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer"
+            title="معاينة التقرير ثم طباعته أو حفظه PDF"
+          >
+            <Printer className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            <span>معاينة وطباعة</span>
           </button>
         </div>
       </div>
@@ -222,10 +250,13 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 print:hidden">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500 block">اختر القسم:</span>
+            <span className="text-xs font-bold text-slate-500 block">اختر القسم:</span>
             <select
               value={selectedClassId}
-              onChange={e => setSelectedClassId(e.target.value)}
+              onChange={e => {
+                setSelectedClassId(e.target.value);
+                onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }));
+              }}
               className="bg-white px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer" >
               {state.classes.map(c => (
                 <option key={c.id} value={c.id}>
@@ -236,12 +267,16 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
           </div>
 
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500 block">الفصل الدراسي:</span>
+            <span className="text-xs font-bold text-slate-500 block">الفصل الدراسي:</span>
             <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-300">
               {([1, 2, 3] as const).map(tri => (
                 <button
                   key={tri}
-                  onClick={() => setSelectedTrimester(tri)}
+                  onClick={() => {
+                    setSelectedTrimester(tri);
+                    onUpdateState(prev => ({ ...prev, activeTrimester: tri }));
+                  }}
+                  aria-pressed={selectedTrimester === tri}
                   className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     selectedTrimester === tri
                       ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)]' : 'text-slate-600 hover:text-slate-900' }`}
@@ -259,6 +294,23 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
       </div>
 
       <div id="council-analysis-doc" className="space-y-6">
+        {stats.evaluatedCount === 0 && (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+              <span className="leading-6">
+                <strong>لا توجد نقاط مسجّلة</strong> لهذا القسم في {trimesterLabel(selectedTrimester)}.
+                الأرقام أدناه أصفار لأن المعطيات ناقصة، لا لأن النتائج ضعيفة.
+              </span>
+            </div>
+            <Link
+              href="/grades"
+              className="min-h-10 shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 font-bold text-white transition-colors hover:bg-amber-800"
+            >
+              الانتقال إلى دفتر النقاط
+            </Link>
+          </div>
+        )}
         {/* Key Metric Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Success Rate */}
@@ -270,7 +322,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
           <div className="text-3xl font-bold text-slate-900">
             {stats.passRate}%
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-xs text-slate-500 mt-1">
             ({stats.passCount} من أصل {stats.evaluatedCount} مقوّم)
           </div>
         </div>
@@ -284,7 +336,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
           <div className="text-3xl font-bold text-slate-900">
             {stats.averageScore.toFixed(2)} / 20
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-xs text-slate-500 mt-1">
             المعامل: 2 • المعدل الحسابي العام
           </div>
         </div>
@@ -355,7 +407,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
                     </span>
                   </div>
                 </div>
-                <p className={`text-[11px] font-semibold ${band.textCol} pr-5`}>
+                <p className={`text-xs font-semibold ${band.textCol} pr-5`}>
                   {band.desc}
                 </p>
               </div>
@@ -433,7 +485,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
                 <div
                   key={idx}
                   style={{ width: `${widthPct}%` }}
-                  className={`${band.color} h-full flex items-center justify-center text-white text-[10px] font-bold font-mono transition-all`}
+                  className={`${band.color} h-full flex items-center justify-center text-white text-xs font-bold font-mono transition-all`}
                   title={`${band.label}: ${band.count} تلميذ (${widthPct.toFixed(1)}%)`}
                 >
                   {widthPct >= 6 ? `${Math.round(widthPct)}%` : ''}

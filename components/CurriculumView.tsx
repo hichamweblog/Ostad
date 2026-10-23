@@ -3,29 +3,22 @@
 import { ConfirmDialog } from './ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import { useAppState } from '@/hooks/app-state-context';
+import { useDialogA11y } from '@/hooks/use-dialog-a11y';
 import React, { useState } from 'react';
-import { AppState } from '@/lib/storage';
-import { OFFICIAL_CURRICULUM, OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
+import {  OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import { useEffect } from 'react';
 import { CurriculumUnit, GradeLevel, LessonStatus } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  BookOpen,
-  CheckCircle2,
-  Clock,
-  Edit,
   Plus,
+  Pencil,
   Trash2,
-  Sparkles,
-  AlertCircle,
-  Filter,
   Search,
   Save,
   X,
   ChevronDown,
   ChevronUp,
-  FileText,
-  FileDown
+  FileText
 } from 'lucide-react';
 
 interface CurriculumViewProps {
@@ -56,6 +49,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
 
   // Edit / Add Unit Modal State
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
+  const unitDialogRef = useDialogA11y(isEditingModalOpen, () => setIsEditingModalOpen(false));
   const [editingUnit, setEditingUnit] = useState<Partial<CurriculumUnit> | null>(null);
 
   // Combine official curriculum with custom units cleanly deduplicated by ID
@@ -263,7 +257,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     NOT_STARTED: { label: 'لم يبدأ', bg: 'bg-slate-100', text: 'text-slate-600' },
     PLANNED: { label: 'مخطط له', bg: 'bg-blue-50', text: 'text-blue-700' },
     IN_PROGRESS: { label: 'قيد الإنجاز', bg: 'bg-amber-50', text: 'text-amber-800' },
-    COMPLETED: { label: 'أُنجز بحمد الله', bg: 'bg-[var(--primary-soft)]', text: 'text-[var(--primary)]' },
+    COMPLETED: { label: 'أُنجز بحمد الله', bg: 'bg-[var(--primary-soft)]', text: 'text-[var(--primary-ink)]' },
     NEEDS_REMEDIAL: { label: 'يحتاج معالجة / إعادة', bg: 'bg-rose-50', text: 'text-rose-700' }
   };
 
@@ -301,11 +295,20 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
             className="w-full pr-9 pl-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-amber-600" />
         </div>
 
+        <button
+          type="button"
+          onClick={handleOpenAddUnit}
+          className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] sm:w-auto"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          إضافة وحدة
+        </button>
+
         {activeClass && (
           <div className="flex items-center gap-3 text-xs font-medium text-slate-700 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span>نسبة الإنجاز:</span>
-              <span className="font-bold text-[var(--primary)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full border border-[var(--primary)]/20 font-mono">
+              <span className="font-bold text-[var(--primary-ink)] bg-[var(--primary-soft)] px-2.5 py-0.5 rounded-full border border-[var(--primary)]/20 font-mono">
                 {filteredUnits.filter(u => getUnitStatus(u.id) === 'COMPLETED').length} / {filteredUnits.length} وحدة ({filteredUnits.length > 0 ? Math.round((filteredUnits.filter(u => getUnitStatus(u.id) === 'COMPLETED').length / filteredUnits.length) * 100) : 0}%)
               </span>
             </div>
@@ -331,7 +334,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
             {/* Section Header */}
             <div className="bg-slate-100/90 px-4 py-2 rounded-lg border border-slate-200 flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-800">{sectionName}</h3>
-              <span className="text-[11px] font-semibold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500">
                 {units.length} وحدات
               </span>
             </div>
@@ -362,27 +365,30 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                               {unit.title}
                             </h4>
                             {isCustom && (
-                              <span className="px-1.5 py-0.2 rounded bg-purple-50 text-navy border border-purple-200 text-[10px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded bg-purple-50 text-navy border border-purple-200 text-xs font-bold">
                                 مخصص
                               </span>
                             )}
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-medium">
                               {unit.domain}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-mono">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs font-mono">
                               {unit.hourlyVolume} سا
+                            </span>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
+                              {getCompetenceNumber(unit, unit.unitNumber - 1)}
                             </span>
                           </div>
 
                           {/* Competence full text & local PDF badge */}
                           <div className="flex flex-col gap-1.5 pt-1">
                             {unit.targetedCompetence && (
-                              <div className="px-2 py-1 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200 text-[11px] font-bold truncate" title={unit.targetedCompetence}>
+                              <div className="px-2 py-1 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200 text-xs font-bold truncate" title={unit.targetedCompetence}>
                                 الكفاءة: {unit.targetedCompetence}
                               </div>
                             )}
                             {getUnitNote(unit.id) && (
-                              <div className="text-[11px] text-[var(--primary)] bg-[var(--primary-soft)] border border-[var(--primary)]/20 px-2 py-1 rounded truncate">
+                              <div className="text-xs text-[var(--primary-ink)] bg-[var(--primary-soft)] border border-[var(--primary)]/20 px-2 py-1 rounded truncate">
                                 📝 {getUnitNote(unit.id)}
                               </div>
                             )}
@@ -417,7 +423,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                               setActiveNoteText(getUnitNote(unit.id));
                             }
                           }}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary)] border border-[var(--primary)]/20 text-xs font-bold transition-colors cursor-pointer" title="أضف ملاحظة للوحدة" >
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary-ink)] border border-[var(--primary)]/20 text-xs font-bold transition-colors cursor-pointer" title="أضف ملاحظة للوحدة" >
                           <FileText className="w-3.5 h-3.5" />
                           <span>أضف ملاحظة</span>
                         </button>
@@ -428,6 +434,15 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--text-primary)] border border-[var(--primary)] text-xs font-bold transition-colors cursor-pointer" title="عرض المذكرة البيداغوجية وملف PDF المدمج" >
                           <FileText className="w-3.5 h-3.5 text-[var(--primary)]" />
                           <span>المذكرة البيداغوجية (PDF)</span>
+                        </button>
+
+                        {/* Edit: official units are overridden into customUnits on save */}
+                        <button
+                          onClick={() => handleOpenEditUnit(unit)}
+                          className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                          title="تعديل بيانات الوحدة">
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span className="hidden sm:inline">تعديل</span>
                         </button>
 
                         {/* Delete button if custom */}
@@ -591,9 +606,16 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
       {/* Edit / Add Unit Modal */}
       {isEditingModalOpen && editingUnit && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8">
+          <div
+            ref={unitDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unit-editor-title"
+            className="bg-white rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 my-8 outline-none"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 id="unit-editor-title" className="text-base font-bold text-slate-900">
                 {editingUnit.id?.startsWith('custom') ? 'إضافة وحدة' : 'تعديل بيانات الوحدة'}
               </h3>
               <button

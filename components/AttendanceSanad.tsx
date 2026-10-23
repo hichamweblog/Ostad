@@ -1,35 +1,31 @@
 'use client';
 
 import { showToast } from '@/components/Toast';
+import { printElement } from '@/lib/print';
+import { AccessibleDialog } from '@/components/AccessibleDialog';
 import { useAppState } from '@/hooks/app-state-context';
 import React, { useEffect, useState } from 'react';
 import { exportToDocx, triggerHapticFeedback } from '@/lib/utils';
-import { AppState } from '@/lib/storage';
-import { getExcludedDayLabel, isDateExcluded } from '@/lib/academic-calendar';
+import { filterByTrimester, getExcludedDayLabel, isDateExcluded, normalizeTrimester, trimesterLabel } from '@/lib/academic-calendar';
+import { EVALUATION_EVENT_LABELS } from '@/lib/evaluation-labels';
+import { calculateEvaluationBreakdown } from '@/lib/grade-calculator';
+import {
+  NOTEBOOK_SCORE_CHOICES,
+  buildNotebookChecks,
+  collectNotebookChecks,
+  nextOpenRound,
+  roundProgress,
+} from '@/lib/notebook-rounds';
 import { getLocalDateString } from '@/lib/date-utils';
-import { AttendanceStatus, SessionRecord, Student } from '@/lib/types';
+import { AttendanceStatus, SessionRecord } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import {
   UserCheck,
-  Calendar,
-  Clock,
   Sparkles,
   Printer,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
   Clock3,
-  HelpCircle,
   Plus,
-  Users,
   Search,
-  Filter,
-  LayoutGrid,
-  List,
-  AlertTriangle,
-  BookX,
-  UserMinus,
-  Star,
   Save
 } from 'lucide-react';
 
@@ -60,16 +56,25 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     .filter(s => s.classId === selectedClassId)
     .sort((a, b) => a.numberInList - b.numberInList);
 
-  const classSessions = state.sessions
-    .filter(s => s.classId === selectedClassId)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const activeTrimester = normalizeTrimester(state.activeTrimester);
+
+  // Sessions are scoped to the active term: a new term starts with an empty log
+  // instead of showing (and counting) the previous term's sessions.
+  const classSessions = filterByTrimester(
+    state.sessions.filter(s => s.classId === selectedClassId),
+    state.calendarSettings?.termDates,
+    activeTrimester,
+  ).sort((a, b) => b.date.localeCompare(a.date));
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     classSessions[0]?.id || '' );
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('quick');
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [notebookDraft, setNotebookDraft] = useState<Record<string, number>>({});
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [showFinishReview, setShowFinishReview] = useState(false);
   const [bulkUndo, setBulkUndo] = useState<{
     sessionId: string;
     attendance: Record<string, AttendanceStatus>;
@@ -78,10 +83,17 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   const activeSession = classSessions.find(s => s.id === selectedSessionId) || classSessions[0];
   const activeAttendance = activeSession?.attendance || {};
 
+  // التناوب الكامل: حاضر → متأخر → مبرَّر → غائب. في الوضع السريع يبقى
+  // التبديل الثنائي حاضر/غائب كما اعتاده الأستاذ.
+  const ATTENDANCE_CYCLE: AttendanceStatus[] = ['PRESENT', 'LATE', 'EXCUSED', 'ABSENT'];
   const handleCycleStatus = (studentId: string) => {
-    const current = activeAttendance[studentId] || 'PRESENT';
-    const nextStatus = current === 'ABSENT' ? 'PRESENT' : 'ABSENT';
-    handleSetStudentStatus(studentId, nextStatus);
+    const current = (activeAttendance[studentId] || 'PRESENT') as AttendanceStatus;
+    if (attendanceMode === 'quick') {
+      handleSetStudentStatus(studentId, current === 'ABSENT' ? 'PRESENT' : 'ABSENT');
+      return;
+    }
+    const index = ATTENDANCE_CYCLE.indexOf(current);
+    handleSetStudentStatus(studentId, ATTENDANCE_CYCLE[(index + 1) % ATTENDANCE_CYCLE.length]);
   };
 
   const handleSelectClass = (classId: string) => {
@@ -90,36 +102,147 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   };
 
   // Calculate cumulative stats per student in this class across all sessions
-  const studentStatsMap: Record<string, { absent: number; unwrittenLessons: number; disruptions: number; goodParticipation: number }> = {};
+  type BehaviourStats = {
+    absent: number;
+    late: number;
+    unwrittenLessons: number;
+    disruptions: number;
+    goodParticipation: number;
+    poorParticipation: number;
+  };
+  const emptyStats = (): BehaviourStats => ({
+    absent: 0,
+    late: 0,
+    unwrittenLessons: 0,
+    disruptions: 0,
+    goodParticipation: 0,
+    poorParticipation: 0,
+  });
+  const studentStatsMap: Record<string, BehaviourStats> = {};
   for (const s of classStudents) {
-    studentStatsMap[s.id] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+    studentStatsMap[s.id] = emptyStats();
   }
   for (const session of classSessions) {
+    // A cancelled session is only a journal entry: its marks never feed the evaluation.
+    if (session.sessionStatus === 'CANCELLED') continue;
     if (session.attendance) {
       for (const [studentId, status] of Object.entries(session.attendance)) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
         if (status === 'ABSENT') studentStatsMap[studentId].absent++;
+        else if (status === 'LATE') studentStatsMap[studentId].late++;
       }
     }
     if (session.unwrittenLessons) {
       for (const studentId of session.unwrittenLessons) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
         studentStatsMap[studentId].unwrittenLessons++;
       }
     }
     if (session.disruptions) {
       for (const studentId of session.disruptions) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
         studentStatsMap[studentId].disruptions++;
       }
     }
     if (session.goodParticipation) {
       for (const studentId of session.goodParticipation) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
         studentStatsMap[studentId].goodParticipation++;
       }
     }
+    if (session.poorParticipation) {
+      for (const studentId of session.poorParticipation) {
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = emptyStats();
+        studentStatsMap[studentId].poorParticipation++;
+      }
+    }
   }
+
+  // النقطة المعروضة أثناء الحصة هي الجزء الموثَّق من المشاركة (من 3). أما تقدير
+  // الأستاذ (5) فيُدخل في نهاية الفصل من شاشة «مراجعة التقويم».
+  const evaluationRules = state.calendarSettings?.evaluationRules;
+  const participationMax = evaluationRules?.participationRecordedMax ?? 3;
+  // الحصة الملغاة لا تُحتسب في المقام: لا تُدرّس ولا تُوثَّق.
+  const scoredSessions = classSessions.filter(session => session.sessionStatus !== 'CANCELLED');
+  const documentedSessionsCount = scoredSessions.filter(
+    session => (session.goodParticipation?.length ?? 0) + (session.poorParticipation?.length ?? 0) > 0,
+  ).length;
+  const participationScoreFor = (stats: BehaviourStats): number =>
+    calculateEvaluationBreakdown(
+      {
+        absent: stats.absent,
+        late: stats.late,
+        disruptions: stats.disruptions,
+        unwritten: stats.unwrittenLessons,
+        poorPart: stats.poorParticipation,
+        goodPart: stats.goodParticipation,
+        sessionsCount: scoredSessions.length,
+        documentedSessions: documentedSessionsCount,
+      },
+      evaluationRules
+    ).participationRecorded ?? 0;
+
+  // جولات تفتيش الكراس: جولتان في الفصل، وكل جولة تمتد على عدة حصص.
+  const notebookChecks = collectNotebookChecks(classSessions);
+  const classStudentIds = classStudents.map(student => student.id);
+  const notebookRound = nextOpenRound(notebookChecks, classStudentIds);
+  const notebookProgress = roundProgress(notebookChecks, classStudentIds, notebookRound);
+
+  // تلميذ سُجّل كراسه في الحصة نفسها ضمن الجولة الأخرى: لا نسمح بالكتابة فوق
+  // سجله السابق، لأن التفتيش الواحد للحصة يخص تلميذاً واحداً.
+  const otherRoundInSession = (studentId: string): number | null => {
+    const existing = activeSession?.notebookChecks?.[studentId];
+    return existing && existing.round !== notebookRound ? existing.round : null;
+  };
+
+  // لا نُعيد حفظ ما لم يتغيّر: التوقيت الجديد قد يتجاوز تفتيشاً أحدث من جهاز آخر.
+  const pendingNotebookUpdates = Object.entries(notebookDraft)
+    .filter(([studentId]) => otherRoundInSession(studentId) === null)
+    .filter(([studentId, score]) => notebookChecks[studentId]?.[notebookRound]?.score !== score)
+    .map(([studentId, score]) => ({ studentId, score }));
+
+  const openNotebookRound = () => {
+    const seeded: Record<string, number> = {};
+    for (const student of classStudents) {
+      const existing = notebookChecks[student.id]?.[notebookRound];
+      if (existing) seeded[student.id] = existing.score;
+    }
+    setNotebookDraft(seeded);
+    setIsNotebookOpen(true);
+  };
+
+  const handleSaveNotebookRound = async () => {
+    if (!activeSession) {
+      showToast('أنشئ حصة أولاً ثم سجّل جولة الكراس داخلها.', 'warning');
+      return;
+    }
+    const updates = pendingNotebookUpdates;
+    if (updates.length === 0) {
+      showToast('لم تختر أي تلميذ بعد.', 'warning');
+      return;
+    }
+    try {
+      const checks = buildNotebookChecks(updates, notebookRound);
+      await updateStateAndWait(prev => ({
+        ...prev,
+        sessions: prev.sessions.map(session =>
+          session.id === activeSession.id
+            ? { ...session, notebookChecks: { ...(session.notebookChecks || {}), ...checks } }
+            : session,
+        ),
+      }));
+      const remaining = classStudents.filter(student => !notebookDraft[student.id]).length;
+      showToast(
+        `تم حفظ تفتيش ${updates.length} كراس في الجولة ${notebookRound}` +
+          (remaining > 0 ? `؛ بقي ${remaining} تلميذاً تُكملهم في حصة أخرى.` : '؛ اكتملت الجولة.'),
+        'success',
+      );
+      setIsNotebookOpen(false);
+    } catch (error) {
+      console.error('Notebook round save failed:', error);
+      showToast('تعذر حفظ جولة الكراس في السحابة.', 'error');
+    }
+  };
 
   // Handle setting status for a student in active session
   const handleSetStudentStatus = async (studentId: string, status: AttendanceStatus) => {
@@ -241,7 +364,11 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             }
           : ses)
       }));
-      showToast(`تم إنهاء الحضور: ${absentCount} غائب، ${presentCount} حاضر.`, 'success');
+      showToast(
+        `تم إنهاء الحضور — ${trimesterLabel(activeTrimester)}: ${presentCount} حاضر، ${lateCount} متأخر، ${absentCount} غائب.`,
+        'success',
+      );
+      setShowFinishReview(false);
       onNavigateToSessions?.(activeSession.id);
     } catch (error) {
       console.error('Save all attendance sync failed:', error);
@@ -380,7 +507,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       }))
         .then(() => {
           setSelectedSessionId(newSessions[0].id);
-          showToast(`تم حفظ ${newSessions.length} حصة في طابور المزامنة للفصل ${state.activeTrimester}.`, 'success');
+          showToast(`تم حفظ ${newSessions.length} حصة في طابور المزامنة لـ${trimesterLabel(activeTrimester)}.`, 'success');
         })
         .catch((error: unknown) => {
           console.error('Generated sessions sync failed:', error);
@@ -396,10 +523,21 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     s.fullName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Active session stats
-  const absentCount = Object.values(activeAttendance).filter(v => v === 'ABSENT').length;
-  // الحضور = إجمالي التلاميذ - عدد الغائبين
-  const presentCount = classStudents.length - absentCount;
+  // Active session stats. A student with no explicit record is considered present
+  // (that is how the sheet is filled), then each status is counted separately so
+  // late and excused students are never silently merged into "present".
+  const statusCounts = classStudents.reduce(
+    (counts, student) => {
+      const status = activeAttendance[student.id] || 'PRESENT';
+      counts[status] += 1;
+      return counts;
+    },
+    { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 } as Record<AttendanceStatus, number>,
+  );
+  const presentCount = statusCounts.PRESENT;
+  const absentCount = statusCounts.ABSENT;
+  const lateCount = statusCounts.LATE;
+  const excusedCount = statusCounts.EXCUSED;
 
   // Export official attendance sheet to Word (.docx) with clean table and RTL visual columns
   const handleExportDoc = () => {
@@ -415,13 +553,13 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         const behaviorParts: string[] = [];
         if (isGood) behaviorParts.push('مشارك ونشيط');
         if (isPoor) behaviorParts.push('مستوى ضعيف يحتاج متابعة');
-        if (isNoLessons) behaviorParts.push('بدون كراس');
+        if (isNoLessons) behaviorParts.push(EVALUATION_EVENT_LABELS.unwrittenLesson);
         if (isDisruptive) behaviorParts.push('سلوك غير منضبط');
 
         const statusLabel =
           status === 'ABSENT' ? '<span style="color: #dc2626; font-weight: bold;">غائب</span>' : status === 'LATE' ? '<span style="color: #d97706; font-weight: bold;">متأخر</span>' : status === 'EXCUSED' ? '<span style="color: #2563eb; font-weight: bold;">مبرر</span>' : '<span style="color: #16a34a;">حاضر</span>';
 
-        const statsText = `غ: ${stats.absent} | شغب: ${stats.disruptions} | كراس: ${stats.unwrittenLessons}`;
+        const statsText = `غ: ${stats.absent} | ${EVALUATION_EVENT_LABELS.disruption}: ${stats.disruptions} | ${EVALUATION_EVENT_LABELS.unwrittenLesson}: ${stats.unwrittenLessons}`;
           
           return `
             <tr>
@@ -505,7 +643,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
       {/* Top Class Selector & Action Ribbon (Screenshot 6) */}
       <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-[var(--primary-soft)] text-[var(--primary-ink)] flex items-center justify-center font-bold">
             <UserCheck className="w-5 h-5" />
           </div>
           <div>
@@ -531,9 +669,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           {/* Generate sessions button */}
           <button
             onClick={() => handleGenerateTrimesterSessions()}
-            className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[var(--primary)] bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] border border-[var(--primary)]/20 transition-colors cursor-pointer" >
+            className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[var(--primary-ink)] bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] border border-[var(--primary)]/20 transition-colors cursor-pointer" >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>توليد حصص الفصل {state.activeTrimester}</span>
+            <span>توليد حصص {trimesterLabel(activeTrimester)}</span>
           </button>
 
           {/* New session button */}
@@ -558,9 +696,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              onClick={handleGenerateTrimesterSessions}
+              onClick={() => setShowGenerateConfirm(true)}
               className="px-4 py-2 bg-[var(--primary)] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[var(--primary-hover)] cursor-pointer" >
-              توليد حصص الفصل {state.activeTrimester}
+              توليد حصص {trimesterLabel(activeTrimester)}
             </button>
             {onNavigateToTimetable && (
               <button
@@ -584,7 +722,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 <select
                     value={selectedSessionId}
                     onChange={e => setSelectedSessionId(e.target.value)}
-                    className="w-full sm:flex-1 px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-[11px] sm:text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer" >
+                    className="w-full sm:flex-1 px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-xs sm:text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer" >
                     {classSessions.map(ses => (
                       <option key={ses.id} value={ses.id}>
                     {ses.date} ({ses.startTime}-{ses.endTime}) {ses.sessionGoals ? `- ${ses.sessionGoals.slice(0, 30)}...` : ''}
@@ -595,13 +733,27 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                 {/* Mark All Present */}
                 <button
                   onClick={handleMarkAllPresent}
-                  className="w-full sm:w-auto min-h-11 px-4 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary)] text-xs font-bold border border-[var(--primary)]/20 transition-colors cursor-pointer shrink-0" >
+                  className="w-full sm:w-auto min-h-11 px-4 py-2 rounded-xl bg-[var(--primary-soft)] hover:bg-[var(--primary-soft)] text-[var(--primary-ink)] text-xs font-bold border border-[var(--primary)]/20 transition-colors cursor-pointer shrink-0" >
                   تحديد الكل «حاضر»
                 </button>
 
                 {/* Attendance is already auto-saved; this action advances the session workflow. */}
+                {activeSession.sessionStatus !== 'CANCELLED' && (
                 <button
-                  onClick={() => void handleFinishAttendance()}
+                  type="button"
+                  onClick={openNotebookRound}
+                  className="flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--accent-gold)] bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-100 sm:w-auto"
+                  title="تفتيش كراس 8–10 تلاميذ في هذه الحصة؛ الجولة تكتمل على عدة حصص"
+                >
+                  <span>جولة الكراس {notebookProgress.round}</span>
+                  <span className="rounded bg-white/80 px-1.5 font-mono text-xs">
+                    {notebookProgress.inspected}/{notebookProgress.total}
+                  </span>
+                </button>
+                )}
+
+                <button
+                  onClick={() => setShowFinishReview(true)}
                   disabled={isSavingAll}
                   className="w-full sm:w-auto min-h-11 px-4 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5" >
                   <Save className="w-3.5 h-3.5" />
@@ -610,15 +762,20 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               </div>
             </div>
 
+            <p className="w-full text-xs text-[var(--text-secondary)]">
+              كل ما يُسجَّل هنا يُحتسب في <strong>{trimesterLabel(activeTrimester)}</strong> فقط؛
+              الفصل التالي يبدأ من صفر.
+            </p>
+
             {/* Quick Session Stats */}
             <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 text-xs w-full sm:w-auto">
-              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-[var(--primary-soft)] text-[var(--primary)] font-bold border border-[var(--primary)]/20">
-                <span className="sm:hidden block text-[10px] text-[var(--primary)]">حاضر</span>
+              <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold border border-[var(--primary)]/20">
+                <span className="sm:hidden block text-xs text-[var(--primary)]">حاضر</span>
                 <span className="hidden sm:inline">حاضر: </span>
                 <span>{presentCount}</span>
               </div>
               <div className="text-center sm:text-right px-2 py-1 rounded-lg bg-rose-50 text-rose-800 font-bold border border-rose-200">
-                <span className="sm:hidden block text-[10px] text-rose-700">غائب</span>
+                <span className="sm:hidden block text-xs text-rose-700">غائب</span>
                 <span className="hidden sm:inline">غائب: </span>
                 <span>{absentCount}</span>
               </div>
@@ -651,7 +808,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث عن تلميذ..." className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
               </div>
-              <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1 text-[11px] font-black">
+              <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-black">
                 <button
                   type="button"
                   onClick={() => setAttendanceMode('quick')}
@@ -673,8 +830,17 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
             <button
               onClick={handleExportDoc}
               className="flex min-h-11 items-center justify-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs" >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <Printer className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
               <span>تصدير إلى ملف docx</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => printElement('attendance-doc', { title: 'ورقة الحضور والمواظبة' })}
+              className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 cursor-pointer"
+              title="معاينة ورقة الحضور ثم طباعتها أو حفظها PDF"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+              <span>معاينة وطباعة</span>
             </button>
             {onNavigateToSessions && (
               <button
@@ -694,10 +860,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               <div className="block md:hidden space-y-2.5">
                 {filteredStudents.map(student => {
                   const status = activeAttendance[student.id] || 'PRESENT';
-                  const stats = studentStatsMap[student.id] || { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
-                  const deductionPoints = (stats.absent * 0.5) + (stats.unwrittenLessons * 0.5) + (stats.disruptions * 0.5);
-                  const bonusPoints = stats.goodParticipation * 0.5;
-                  const estimatedImpact = bonusPoints - deductionPoints;
+                  const stats = studentStatsMap[student.id] || emptyStats();
+                  const participationPoints = participationScoreFor(stats);
 
                   return (
                     <div
@@ -714,7 +878,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                               {student.fullName}
                             </h4>
                             {student.isRepeater && (
-                              <span className="inline-block text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold mt-0.5">
+                              <span className="inline-block text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold mt-0.5">
                                 معيد
                               </span>
                             )}
@@ -722,7 +886,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                         </div>
 
                         {/* Badges: Total Absences & Delays */}
-                        <div className="flex items-center gap-1 shrink-0 text-[11px] font-bold font-mono flex-wrap">
+                        <div className="flex items-center gap-1 shrink-0 text-xs font-bold font-mono flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded-lg border ${
                               stats.absent > 0
@@ -735,23 +899,28 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                               stats.disruptions > 0 || stats.unwrittenLessons > 0
                                 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200' }`}
                             title="مجموع التأخرات" >
-                            شغب: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                            سلوك: {stats.disruptions} | كراس: {stats.unwrittenLessons}
                           </span>
-                          {estimatedImpact !== 0 && (
-                            <span className={`text-[10px] font-semibold ${estimatedImpact > 0 ? 'text-[var(--primary)]' : 'text-rose-600'}`}>
-                              ({estimatedImpact > 0 ? '+' : ''}{estimatedImpact.toFixed(2)})
-                            </span>
-                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-lg border font-mono ${
+                              participationPoints > 0
+                                ? 'bg-[var(--primary-soft)] text-[var(--primary-ink)] border-[var(--primary)]/30'
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}
+                            title="التوثيق الآلي: يُحتسب على الحصص الموثّقة فقط (من 3)"
+                          >
+                            مشاركة: {participationPoints.toFixed(2)}/{participationMax}
+                          </span>
                         </div>
                       </div>
 
                       {/* Unified Attendance & Behavior Buttons (Mobile) */}
-                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-4' : 'grid-cols-1'} gap-1.5`}>
+                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-4' : 'grid-cols-2'} gap-1.5`}>
                                 <button
                                   type="button"
-                                  onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
+                                  onClick={() => handleCycleStatus(student.id)}
                                   aria-pressed={status === 'ABSENT'}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-300' }`}
                                   title="تسجيل غياب" >
                                   الغياب -
@@ -762,34 +931,36 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'unwrittenLessons')}
                                   aria-pressed={Boolean(activeSession.unwrittenLessons?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
                                       ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس / الكراس" >
+                                  title="لم يكتب الدرس أو أهمل الكراس والواجبات" >
                                   الكراس -
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
                                   aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
                                       ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--text-primary)] hover:border-slate-400' }`}
-                                  title="شغب وسلوك سيء" >
-                                  شغب -
+                                  title="مخالفة سلوكية وانضباط" >
+                                  سلوك -
                                 </button>
+                                  </>
+                                )}
+                                {/* Participation is always reachable: it is the mark that raises the
+                                    participation point from 0, so it cannot hide behind detailed mode. */}
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
                                   aria-pressed={Boolean(activeSession.goodParticipation?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-[10px] transition-all cursor-pointer border ${
+                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.goodParticipation?.includes(student.id)
                                       ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--primary)] hover:border-[var(--primary)]' }`}
                                   title="مشاركة إيجابية" >
                                   مشاركة +
                                 </button>
-                                  </>
-                                )}
                       </div>
                     </div>
                   );
@@ -807,16 +978,17 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                         <th className="p-3 text-center">حالة الحصة والتقويم السلوكي</th>
                         <th className="p-3 text-center">مجموع الغيابات</th>
                         <th className="p-3 text-center">مجموع السلوك</th>
-                        <th className="p-3 text-center">أثر التقويم المقدر</th>
+                        <th className="p-3 text-center">
+                          نقطة المشاركة
+                          <span className="block text-xs font-normal text-slate-400">توثيق على الحصص الموثّقة (من 3)</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredStudents.map(student => {
                         const status = activeAttendance[student.id] || null;
-                        const stats = studentStatsMap[student.id] || { absent: 0, unwrittenLessons: 0, disruptions: 0, goodParticipation: 0 };
-                  const deductionPoints = (stats.absent * 0.5) + (stats.unwrittenLessons * 0.5) + (stats.disruptions * 0.5);
-                  const bonusPoints = stats.goodParticipation * 0.5;
-                  const estimatedImpact = bonusPoints - deductionPoints;
+                        const stats = studentStatsMap[student.id] || emptyStats();
+                        const participationPoints = participationScoreFor(stats);
 
                         return (
                           <tr key={student.id} className="hover:bg-slate-50/60 transition-colors">
@@ -826,7 +998,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             <td className="p-3 font-bold text-slate-900">
                               {student.fullName}
                               {student.isRepeater && (
-                                <span className="mr-2 text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                                <span className="mr-2 text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
                                   معيد
                                 </span>
                               )}
@@ -836,7 +1008,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                               <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => handleSetStudentStatus(student.id, status === 'ABSENT' ? 'PRESENT' : 'ABSENT')}
+                                  onClick={() => handleCycleStatus(student.id)}
                                   aria-pressed={status === 'ABSENT'}
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:border-rose-300' }`}
@@ -852,7 +1024,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.unwrittenLessons?.includes(student.id)
                                       ? 'bg-[var(--accent-gold)] text-[var(--accent-navy)] border-[var(--accent-gold)] shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-amber-700 hover:border-amber-300' }`}
-                                  title="لم يكتب الدرس / الكراس" >
+                                  title="لم يكتب الدرس أو أهمل الكراس والواجبات" >
                                   الكراس -
                                 </button>
                                 <button
@@ -862,9 +1034,13 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   className={`min-h-10 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
                                     activeSession.disruptions?.includes(student.id)
                                       ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-500 hover:text-[var(--text-primary)] hover:border-slate-400' }`}
-                                  title="شغب وسلوك سيء" >
-                                  شغب -
+                                  title="مخالفة سلوكية وانضباط" >
+                                  سلوك -
                                 </button>
+                                  </>
+                                )}
+                                {/* Participation stays visible in quick mode: it is the mark that
+                                    raises the participation point from 0 upwards. */}
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
@@ -875,8 +1051,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   title="مشاركة إيجابية" >
                                   مشاركة +
                                 </button>
-                                  </>
-                                )}
                               </div>
                             </td>
                             {/* Cumulative Absences */}
@@ -887,17 +1061,13 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             </td>
                             {/* Cumulative Delays */}
                             <td className="p-3 text-center font-bold text-slate-700">
-                              شغب: {stats.disruptions} | كراس: {stats.unwrittenLessons}
+                              سلوك: {stats.disruptions} | كراس: {stats.unwrittenLessons}
                             </td>
-                            {/* Estimated Penalty in Continuous Eval */}
+                            {/* Participation points (automatic, starting from 0) */}
                             <td className="p-3 text-center font-bold font-mono text-sm border-r border-slate-100 bg-slate-50/50">
-                              {estimatedImpact > 0 ? (
-                                <span className="text-[var(--primary)] font-bold">+{estimatedImpact.toFixed(2)} ن</span>
-                              ) : estimatedImpact < 0 ? (
-                                <span className="text-rose-600 font-bold">{estimatedImpact.toFixed(2)} ن</span>
-                              ) : (
-                                <span className="text-slate-400">0.00</span>
-                              )}
+                              <span className={participationPoints > 0 ? 'text-[var(--primary)]' : 'text-slate-400'}>
+                                {participationPoints.toFixed(2)} / {participationMax}
+                              </span>
                             </td>
                           </tr>
                         );
@@ -912,18 +1082,206 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-600 font-medium">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-bold text-slate-900 ml-1">دليل الحالات:</span>
-                  <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] whitespace-nowrap">الغياب -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px] whitespace-nowrap">الكراس -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[10px] whitespace-nowrap">شغب -</span>
-                  <span className="px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-[var(--primary)] font-bold text-[10px] whitespace-nowrap">مشاركة +</span>
+                  <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-xs whitespace-nowrap">الغياب -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-xs whitespace-nowrap">الكراس -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-xs whitespace-nowrap">سلوك -</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold text-xs whitespace-nowrap">مشاركة +</span>
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  💡 انقر مباشرة على حالة التلميذ لتبديلها فوراً أثناء سير الحصة
+                <div className="text-xs text-slate-500">
+                  💡 انقر على حالة التلميذ للتبديل: حاضر ← متأخر ← مبرَّر ← غائب (في الوضع المفصّل). نقطة المشاركة تُحتسب على الحصص الموثّقة فقط، وتكتمل بـ5 نقاط تقدير في «مراجعة التقويم».
                 </div>
               </div>
           </div>
         </div>
       )}
+
+
+      {/* تأكيد توليد حصص الفصل: إجراء جماعي يُنشئ عشرات السجلات */}
+      <AccessibleDialog
+        open={showGenerateConfirm}
+        titleId="generate-sessions-title"
+        onClose={() => setShowGenerateConfirm(false)}
+        className="w-full max-w-md rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 text-right shadow-xl"
+      >
+        <h3 id="generate-sessions-title" className="text-lg font-bold text-[var(--text-primary)]">
+          توليد حصص {trimesterLabel(activeTrimester)}
+        </h3>
+        <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+          سيُنشئ التطبيق حصصًا لكل أسبوع في هذا الفصل وفق جدول التوقيت، مع تجاهل أيام العطل.
+          الحصص الموجودة مسبقًا لن تتكرر.
+        </p>
+        <p className="mt-2 rounded-xl bg-[var(--bg-surface-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+          العدد المتوقع لا يتجاوز 100 حصة. بعد التوليد يمكنك حذف أي حصة من السجل.
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setShowGenerateConfirm(false)}
+            className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]"
+          >
+            إلغاء
+          </button>
+          <button
+            type="button"
+            onClick={handleGenerateTrimesterSessions}
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-bold text-white hover:bg-[var(--primary-hover)]"
+          >
+            توليد الآن
+          </button>
+        </div>
+      </AccessibleDialog>
+
+      {/* جولة الكراس — تفتيش سريع لدفعة من التلاميذ في الحصة الحالية */}
+      <AccessibleDialog
+        open={isNotebookOpen}
+        titleId="notebook-round-title"
+        onClose={() => setIsNotebookOpen(false)}
+        className="flex max-h-[90vh] w-full max-w-lg flex-col gap-3 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 text-right shadow-xl sm:p-5"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="notebook-round-title" className="text-base font-black text-[var(--text-primary)]">
+              جولة الكراس {notebookRound}
+            </h3>
+            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
+              افتح كراس 8–10 تلاميذ فقط في هذه الحصة؛ تُحفظ الدرجات هنا ويُكمل بقية القسم في
+              حصة أخرى حتى يكتمل العدد ({notebookProgress.inspected}/{notebookProgress.total}).
+            </p>
+          </div>
+          <span className="shrink-0 rounded-lg bg-[var(--primary-soft)] px-2 py-1 font-mono text-xs font-bold text-[var(--primary-ink)]">
+            {notebookProgress.inspected}/{notebookProgress.total}
+          </span>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
+          {classStudents.map(student => {
+            const selected = notebookDraft[student.id];
+            const checkedInRound = notebookChecks[student.id]?.[notebookRound];
+            const otherRound = otherRoundInSession(student.id);
+            return (
+              <div key={student.id} className="rounded-xl border border-[var(--border-subtle)] bg-white p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-xs font-bold text-[var(--text-primary)]">
+                    <span className="me-1.5 font-mono text-[var(--text-tertiary)]">{student.numberInList}</span>
+                    {student.fullName}
+                  </span>
+                  {otherRound && (
+                    <span className="shrink-0 rounded bg-[var(--bg-page)] px-1.5 py-0.5 text-xs text-[var(--text-tertiary)]">
+                      سُجّل في الجولة {otherRound}
+                    </span>
+                  )}
+                  {!otherRound && checkedInRound && selected === undefined && (
+                    <span className="shrink-0 rounded bg-[var(--bg-page)] px-1.5 py-0.5 text-xs text-[var(--text-tertiary)]">
+                      سُجّل {checkedInRound.score}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 grid grid-cols-4 gap-1">
+                  {NOTEBOOK_SCORE_CHOICES.map(choice => {
+                    const isSelected = selected === choice.score;
+                    return (
+                      <button
+                        key={choice.score}
+                        type="button"
+                        aria-pressed={isSelected}
+                        title={choice.hint}
+                        disabled={otherRound !== null}
+                        onClick={() => {
+                          triggerHapticFeedback();
+                          setNotebookDraft(prev => ({ ...prev, [student.id]: choice.score }));
+                        }}
+                        className={`min-h-9 rounded-lg border text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                          isSelected
+                            ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
+                            : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]'
+                        }`}
+                      >
+                        {choice.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setIsNotebookOpen(false)}
+            className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-surface-subtle)]"
+          >
+            إلغاء
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSaveNotebookRound()}
+            disabled={pendingNotebookUpdates.length === 0}
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            حفظ {pendingNotebookUpdates.length} تفتيشاً
+          </button>
+        </div>
+      </AccessibleDialog>
+
+      {/* مراجعة إلزامية قبل إنهاء الحضور: لا حفظ بلا رؤية الملخص */}
+      <AccessibleDialog
+        open={showFinishReview}
+        titleId="finish-attendance-title"
+        describedBy="finish-attendance-summary"
+        onClose={() => setShowFinishReview(false)}
+        className="w-full max-w-md rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 text-right shadow-xl"
+      >
+        <h3 id="finish-attendance-title" className="text-lg font-bold text-[var(--text-primary)]">
+          مراجعة الحضور قبل الإنهاء
+        </h3>
+        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+          {activeClass?.name} — {trimesterLabel(activeTrimester)} — {activeSession?.date}
+        </p>
+
+        <div id="finish-attendance-summary" className="mt-4 grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <div className="text-lg font-black text-emerald-800">{presentCount}</div>
+            <div className="text-xs font-bold text-emerald-700">حاضر</div>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="text-lg font-black text-amber-800">{lateCount}</div>
+            <div className="text-xs font-bold text-amber-700">متأخر</div>
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+            <div className="text-lg font-black text-sky-800">{excusedCount}</div>
+            <div className="text-xs font-bold text-sky-700">غائب مبرر</div>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+            <div className="text-lg font-black text-rose-800">{absentCount}</div>
+            <div className="text-xs font-bold text-rose-700">غائب</div>
+          </div>
+        </div>
+
+        <p className="mt-4 rounded-xl bg-[var(--bg-surface-subtle)] px-3 py-2 text-xs leading-5 text-[var(--text-secondary)]">
+          بعد الإنهاء تُنقل إلى دفتر النصوص لتوثيق الحصة. يمكنك تعديل الحضور لاحقًا من سجل الحصص،
+          لكن المخالفات والملاحظات المسجّلة هنا هي ما سيُحتسب في {trimesterLabel(activeTrimester)}.
+        </p>
+
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setShowFinishReview(false)}
+            className="min-h-11 rounded-xl border border-[var(--border-default)] px-4 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]"
+          >
+            رجوع للتعديل
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleFinishAttendance()}
+            disabled={isSavingAll}
+            className="min-h-11 rounded-xl bg-[var(--primary)] px-4 text-xs font-bold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSavingAll ? 'جارٍ الحفظ…' : 'تأكيد وإنهاء'}
+          </button>
+        </div>
+      </AccessibleDialog>
     </div>
   );
 };

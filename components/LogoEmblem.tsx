@@ -30,7 +30,7 @@ export const LogoEmblem: React.FC<LogoEmblemProps> = ({
       <div className="flex flex-col text-right leading-tight">
         <span className="text-sm font-bold text-slate-900">معين</span>
         {showSubtitle && (
-          <span className="text-[11px] text-[var(--text-muted)]">
+          <span className="text-xs text-[var(--text-muted)]">
             العلوم الإسلامية • {academicYear}
           </span>
         )}

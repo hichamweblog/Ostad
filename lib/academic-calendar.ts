@@ -350,11 +350,30 @@ export function normalizeCalendarSettings(
   ) && new Set(holidays.map(h => h.id)).size === 14;
   // Only the fully untouched old default configuration can be identified safely. Upgrade
   // its old 1.0 default once; never rewrite a stored deduction in a customised/new calendar.
+  // الحقول التي أُضيفت بعد كتابة الإعداد القديم لا تُعدّ تخصيصاً: غيابها يعني
+  // أن الأستاذ لم يرها أصلاً، فيبقى ترقية الخصم القديم قائماً.
+  const storedRules = calendar.evaluationRules || {};
   const oldDefaultRules = untouchedLegacyCalendar && rules.unexcusedAbsenceDeduction === 1 &&
     Object.entries(defaults.evaluationRules).every(([key, value]) =>
-      key === 'unexcusedAbsenceDeduction' || calendar.evaluationRules?.[key as keyof typeof rules] === value
+      key === 'unexcusedAbsenceDeduction' ||
+      storedRules[key as keyof typeof rules] === undefined ||
+      storedRules[key as keyof typeof rules] === value
     );
   if (oldDefaultRules) rules.unexcusedAbsenceDeduction = 0.5;
+  // أوزان القرار: كل ما كُتب قبل هذا التغيير يحمل 5/5/5/5 لأن الواجهة لم تُتح
+  // تعديل الأسقف قط. التطابق التام يعني إعداداً قديماً غير مخصّص فيُرفَع إلى
+  // 3/3/6/8؛ أما أي وزن مختلف فقد اختاره الأستاذ صراحةً ولا يُمسّ.
+  const legacyWeights =
+    rules.behaviorMax === 5 &&
+    rules.attendanceMax === 5 &&
+    rules.notebookMax === 5 &&
+    rules.participationMax === 5;
+  if (legacyWeights) {
+    rules.behaviorMax = defaults.evaluationRules.behaviorMax;
+    rules.attendanceMax = defaults.evaluationRules.attendanceMax;
+    rules.notebookMax = defaults.evaluationRules.notebookMax;
+    rules.participationMax = defaults.evaluationRules.participationMax;
+  }
   return {
     ...defaults,
     ...calendar,
@@ -363,4 +382,106 @@ export function normalizeCalendarSettings(
     termDates: { ...defaults.termDates, ...(calendar.termDates || {}) },
     timetableSettings: { ...defaults.timetableSettings, ...(calendar.timetableSettings || {}) },
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Trimesters (الفصول الدراسية)
+ *
+ * The school year is split into three official terms. Everything the
+ * teacher records — attendance, participation, behaviour, marks — must
+ * be scoped to one term so that term 2 starts from a clean slate.
+ * ------------------------------------------------------------------ */
+
+export type Trimester = 1 | 2 | 3;
+
+export const TRIMESTERS: readonly Trimester[] = [1, 2, 3] as const;
+
+export const TRIMESTER_LABELS: Record<Trimester, string> = {
+  1: 'الفصل الأول',
+  2: 'الفصل الثاني',
+  3: 'الفصل الثالث',
+};
+
+export const TRIMESTER_SHORT_LABELS: Record<Trimester, string> = {
+  1: 'ف1',
+  2: 'ف2',
+  3: 'ف3',
+};
+
+/** Fallback used only when a workspace has no calendar settings yet. */
+const FALLBACK_TERM_DATES: AcademicCalendarSettings['termDates'] = {
+  term1Start: '2026-09-01',
+  term1End: '2026-12-15',
+  term2Start: '2026-12-16',
+  term2End: '2027-03-15',
+  term3Start: '2027-03-16',
+  term3End: '2027-06-30',
+};
+
+export function normalizeTrimester(value: unknown): Trimester {
+  return value === 2 || value === 3 ? value : 1;
+}
+
+export function trimesterLabel(value: unknown): string {
+  return TRIMESTER_LABELS[normalizeTrimester(value)];
+}
+
+/** Inclusive ISO range of a term. Returns null when the calendar is unusable. */
+export function getTrimesterRange(
+  termDates: AcademicCalendarSettings['termDates'] | undefined | null,
+  trimester: Trimester,
+): { start: string; end: string } | null {
+  const dates = termDates?.term1Start ? termDates : FALLBACK_TERM_DATES;
+  const start = trimester === 2 ? dates.term2Start : trimester === 3 ? dates.term3Start : dates.term1Start;
+  const end = trimester === 2 ? dates.term2End : trimester === 3 ? dates.term3End : dates.term1End;
+  if (!start || !end || !parseIsoDate(start) || !parseIsoDate(end)) return null;
+  return { start, end: end < start ? start : end };
+}
+
+/**
+ * True when an ISO date belongs to the given term. Comparison is lexicographic,
+ * which is safe for `YYYY-MM-DD`. Dates outside every term (summer) return false.
+ */
+export function isDateInTrimester(
+  isoDate: string,
+  termDates: AcademicCalendarSettings['termDates'] | undefined | null,
+  trimester: Trimester,
+): boolean {
+  if (!isoDate) return false;
+  const range = getTrimesterRange(termDates, trimester);
+  if (!range) return false;
+  return isoDate >= range.start && isoDate <= range.end;
+}
+
+/**
+ * Keeps the records that belong to the term, plus any record dated outside every
+ * term (misconfigured calendar, summer catch-up session): such a record cannot be
+ * attributed, and hiding it would make a saved session silently disappear from
+ * every screen. Records without a usable date are still dropped.
+ *
+ * This is what stops term 1 sessions from leaking into term 2 attendance and
+ * continuous-evaluation counters.
+ */
+export function filterByTrimester<T extends { date?: string | null }>(
+  records: readonly T[] | undefined | null,
+  termDates: AcademicCalendarSettings['termDates'] | undefined | null,
+  trimester: Trimester,
+): T[] {
+  if (!Array.isArray(records)) return [];
+  return records.filter((record) => {
+    if (!record?.date) return false;
+    const owner = getTrimesterForDate(record.date, termDates);
+    return owner === null || owner === trimester;
+  });
+}
+
+/** Which term a given date falls into, if any. */
+export function getTrimesterForDate(
+  isoDate: string,
+  termDates: AcademicCalendarSettings['termDates'] | undefined | null,
+): Trimester | null {
+  for (const term of TRIMESTERS) {
+    if (isDateInTrimester(isoDate, termDates, term)) return term;
+  }
+  return null;
 }

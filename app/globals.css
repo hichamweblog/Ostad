@@ -33,7 +33,7 @@
     /* ── Text ── */
     --text-primary:       #0D2C3B;
     --text-secondary:     #48606A;
-    --text-tertiary:      #71858C;
+    --text-tertiary:      #5A6E76; /* 4.96:1 على خلفية الصفحة — كان 3.86 */
 
     /* ── Borders ── */
     --border-default:     #DEE2E6;
@@ -43,11 +43,15 @@
     --primary:            #2E7D9B;
     --primary-hover:      #256A85;
     --primary-soft:       #E3EFF4;
+    /* نص أزرق فوق الخلفية الناعمة: 7.64:1 بدل 3.96 */
+    --primary-ink:        #1B4F63;
+    /* ذهبي مقروء للنص فوق الأبيض: 6.37:1 بدل 1.99 */
+    --gold-ink:           #7A5A0B;
 
     /* ── Semantic ── */
-    --success:            #2A8A5A;
+    --success:            #1F7A4D; /* 5.32:1 — كان 4.30 */
     --success-soft:       #E6F4ED;
-    --warning:            #A97816;
+    --warning:            #8A5F0A; /* 5.64:1 — كان 3.90 */
     --warning-soft:       #FBF3D8;
     --danger:             #B54747;
     --danger-soft:        #FBEAEA;
@@ -73,7 +77,7 @@
     --bg-card:            #FFFFFF;
     --bg-card-subtle:     #F4F7F6;
     --border-card:        #DEE2E6;
-    --text-muted:         #8E95A0;
+    --text-muted:         #6B7280; /* 4.48:1 — كان 3.02 */
     --accent-cream:       #F4F7F6;
     --bg-page-subtle:     #F1F3F5;
   }
@@ -116,6 +120,25 @@ body {
 :where(button, a, input, select, textarea):focus-visible {
   outline: 3px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* Touch targets — every button-like control reaches 44×44 CSS px on touch
+   devices. Pointer devices keep the denser desktop layout, and inline links
+   inside prose keep their natural line box (WCAG target-size exception). */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  select,
+  summary {
+    min-height: 2.75rem;
+  }
+
+  button.min-w-11,
+  button[data-icon-only] {
+    min-width: 2.75rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -216,8 +239,8 @@ button, nav, input, select, textarea,
 }
 
 @theme inline {
-  --font-heading:       var(--font-sans);
-  --font-sans:       var(--font-sans);
+  --font-heading:       var(--font-amiri), "Traditional Arabic", serif;
+  --font-sans:          var(--font-tajawal), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring:       var(--sidebar-ring);
   --color-sidebar-border:       var(--sidebar-border);
   --color-sidebar-accent-foreground:       var(--sidebar-accent-foreground);

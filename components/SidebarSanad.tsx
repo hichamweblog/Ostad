@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useAppState } from '@/hooks/app-state-context';
 
-import { AppState, exportBackupJSON } from "@/lib/storage";
+import {  exportBackupJSON } from "@/lib/storage";
 import {
   BarChart3,
   BookOpen,
@@ -57,7 +57,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
   onToggleCollapse,
   onSignOut,
 }) => {
-  const { state, updateState: onUpdateState } = useAppState();
+  const { state } = useAppState();
   const navGroups: {
     groupName: string;
     items: {
@@ -163,7 +163,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                 <div className="font-black text-sm text-white tracking-tight leading-tight">
                   معين
                 </div>
-                <div className="text-[10px] text-amber-400 font-bold flex items-center gap-1 mt-0.5">
+                <div className="text-xs text-amber-400 font-bold flex items-center gap-1 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   <span>أستاذ العلوم الإسلامية</span>
                 </div>
@@ -175,7 +175,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
           {onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
-              className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="hidden min-h-11 min-w-11 items-center justify-center p-1.5 lg:flex rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
               title={isCollapsed ? "توسيع القائمة" : "تصغير القائمة"}>
               {isCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -189,7 +189,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg lg:hidden cursor-pointer"
+              className="flex min-h-11 min-w-11 items-center justify-center p-1.5 text-slate-400 hover:text-white rounded-lg lg:hidden cursor-pointer"
               aria-label="إغلاق القائمة">
               <X className="w-5 h-5" />
             </button>
@@ -201,7 +201,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
           {navGroups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-1">
               {!isCollapsed && (
-                <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400 text-right">
+                <div className="px-3 text-xs font-black uppercase tracking-wider text-slate-400 text-right">
                   {group.groupName}
                 </div>
               )}
@@ -237,7 +237,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                       <span className="flex-1 truncate">{item.label}</span>
                     )}
                     {!isCollapsed && item.isAi && !isActive && (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-300 border border-amber-400/30 font-bold">
+                      <span className="text-xs px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-300 border border-amber-400/30 font-bold">
                         AI
                       </span>
                     )}
@@ -280,7 +280,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
                 <div className="font-bold text-xs text-white truncate">
                   {teacherName}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
+                <div className="text-xs text-slate-400 truncate">
                   {schoolName}
                 </div>
               </div>
@@ -308,7 +308,7 @@ export const SidebarSanad: React.FC<SidebarSanadProps> = ({
             </div>
           )}
 
-          <div className={`pt-1 flex items-center gap-1 text-[11px] text-slate-400 ${isCollapsed ? "justify-center" : "justify-between"}`}>
+          <div className={`pt-1 flex items-center gap-1 text-xs text-slate-400 ${isCollapsed ? "justify-center" : "justify-between"}`}>
             <button
               onClick={handleBackup}
               className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition-colors hover:bg-[var(--accent-navy-card)] hover:text-white ${isCollapsed ? "justify-center" : ""}`}

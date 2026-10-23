@@ -841,6 +841,42 @@ describe('delta sync engine', () => {
     expect(deleteBehavior).toBeDefined();
   });
 
+  it('queues a session upsert when only its notebook round checks change', () => {
+    const prevState = getEmptyState();
+    prevState.sessions = [{
+      id: 'sess-1',
+      classId: 'c1',
+      date: '2026-10-05',
+      startTime: '08:00',
+      endTime: '09:00',
+      sessionGoals: '',
+      accomplishments: '',
+      nextSteps: '',
+      teacherNotes: '',
+      attendance: {},
+      notebookChecks: { 'st-1': { round: 1, score: 3, at: '2026-10-05T08:30:00.000Z' } },
+    }];
+
+    // لا تغيير: لا عملية في الطابور
+    expect(getSyncOperationsDelta(prevState, { ...prevState, sessions: [{ ...prevState.sessions[0] }] }))
+      .toHaveLength(0);
+
+    const nextState = {
+      ...prevState,
+      sessions: [{
+        ...prevState.sessions[0],
+        notebookChecks: { 'st-1': { round: 1, score: 4.5, at: '2026-10-06T08:30:00.000Z' } },
+      }],
+    };
+    const ops = getSyncOperationsDelta(prevState, nextState);
+
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toEqual(expect.objectContaining({ id: 'session:sess-1', entity: 'session', action: 'upsert' }));
+    expect((ops[0].payload as Record<string, unknown>).notebookChecks).toEqual({
+      'st-1': { round: 1, score: 4.5, at: '2026-10-06T08:30:00.000Z' },
+    });
+  });
+
   it('enqueueSyncDelta returns null when no delta exists', async () => {
     const state = getEmptyState();
     const result = await enqueueSyncDelta(ownerId, state, state, 1, new Date().toISOString());

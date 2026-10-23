@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { getSupabaseEnv } from '@/lib/supabase/env';
 import { getCachedAuthUser, initializeAuthState, subscribeToAuthState } from '@/lib/supabase/auth-state';
-import { showToast } from '@/components/Toast';
 import { clearAppStateCache } from '@/lib/state-cache';
 import type { User } from '@supabase/supabase-js';
 
@@ -339,6 +338,18 @@ function LoginPanel() {
           {emailSent ? 'تم الإرسال (راجع بريدك)' : working ? 'جارٍ الإرسال...' : email.trim() ? 'إرسال رابط الدخول' : 'أدخل بريدك أولاً'}
         </button>
       </div>
+
+      <p className="text-center text-xs leading-5 text-[var(--text-tertiary)]">
+        بالمتابعة أنت توافق على{' '}
+        <Link href="/terms" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
+          شروط الاستخدام
+        </Link>{' '}
+        و{' '}
+        <Link href="/privacy" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
+          سياسة الخصوصية
+        </Link>
+        . يمكنك تجربة التطبيق دون حساب عبر «المتابعة دون اتصال».
+      </p>
     </div>
   );
 }

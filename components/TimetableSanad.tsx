@@ -5,8 +5,8 @@ import { useAppState } from '@/hooks/app-state-context';
 import { v4 as uuid } from 'uuid';
 import { exportToDocx } from '@/lib/utils';
 import { showToast } from '@/components/Toast';
+import { printElement } from '@/lib/print';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { AppState } from'@/lib/storage';
 import { TimetableSlot, ClassRoom } from'@/lib/types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
 import { selectActiveClassId } from '@/lib/state-selectors';
@@ -17,10 +17,7 @@ import {
  Trash2,
  Edit2,
  X,
- Clock,
  MapPin,
- Users,
- CheckCircle2,
  SlidersHorizontal
 } from'lucide-react';
 
@@ -62,7 +59,6 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  // Form state for slot modal
  const [selectedDay, setSelectedDay] = useState<0 | 1 | 2 | 3 | 4>(0);
  const [selectedStartTime, setSelectedStartTime] = useState('08:00');
- const [selectedEndTime, setSelectedEndTime] = useState('09:00');
  const [selectedClassId, setSelectedClassId] = useState<string>(
  selectActiveClassId(state) ||'' );
  const [selectedRoom, setSelectedRoom] = useState('القاعة 01');
@@ -92,11 +88,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  const handleOpenAddModal = (day?: 0 | 1 | 2 | 3 | 4, startHour?: string) => {
  setEditingSlotId(null);
  if (day !== undefined) setSelectedDay(day);
- if (startHour) {
- setSelectedStartTime(startHour);
- const foundHour = ALL_HOURS.find(h => h.start === startHour);
- setSelectedEndTime(foundHour ? foundHour.end :'09:00');
- }
+ if (startHour) setSelectedStartTime(startHour);
  const defaultCls = state.classes.find(cls => cls.id === selectActiveClassId(state));
  if (defaultCls) {
  setSelectedClassId(defaultCls.id);
@@ -109,7 +101,6 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
    setEditingSlotId(slot.id);
    setSelectedDay(slot.dayOfWeek);
    setSelectedStartTime(slot.startTime);
-   setSelectedEndTime(slot.endTime);
    setSelectedClassId(slot.classId);
    setSelectedRoom(slot.room || 'القاعة 01');
    setIsModalOpen(true);
@@ -289,16 +280,24 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
        onClick={() => setFilterMyHoursOnly(prev => !prev)}
        className={`flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
          filterMyHoursOnly
-         ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-[var(--primary)]/40 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' }`}
+         ? 'bg-[var(--primary-soft)] text-[var(--primary-ink)] border-[var(--primary)]/40 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' }`}
      >
        <SlidersHorizontal className="w-3.5 h-3.5"/>
-       <span>ساعاتي فقط</span>
+       <span>الساعات المستعملة</span>
      </button>
      <button
        onClick={handleExportDoc}
        className="flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors shadow-xs cursor-pointer" >
        <Printer className="w-3.5 h-3.5 text-slate-500"/>
        <span>تصدير (.docx)</span>
+     </button>
+     <button
+       type="button"
+       onClick={() => printElement('timetable-matrix-table', { title: 'جدول التوقيت', landscape: true })}
+       className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 cursor-pointer"
+       title="معاينة الجدول على ورق أفقي ثم طباعته أو حفظه PDF">
+       <Printer className="w-3.5 h-3.5 text-slate-500"/>
+       <span>معاينة وطباعة</span>
      </button>
      <button
        onClick={() => handleOpenAddModal()}
@@ -327,7 +326,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  >
  <span>{day.name}</span>
  <span
- className={`text-[10px] font-mono px-1.5 rounded-full ${
+ className={`text-xs font-mono px-1.5 rounded-full ${
  isSelected
  ?'bg-white/20 text-white' :'bg-slate-100 text-slate-500' }`}
  >
@@ -352,7 +351,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <span className="font-bold">
  حصص يوم {selectedDayName}: <strong className="text-slate-900">{daySlots.length} حصة</strong>
  </span>
- <span className="text-[11px] text-slate-400">استعمل زر «إضافة حصة» لإضافة توقيت جديد</span>
+ <span className="text-xs text-slate-400">استعمل زر «إضافة حصة» لإضافة توقيت جديد</span>
  </div>
 
  {daySlots.length === 0 ? (
@@ -361,7 +360,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <CalendarDays className="w-5 h-5" aria-hidden="true" />
  </div>
  <div className="text-xs font-bold text-slate-700">لا توجد حصص مسجلة يوم {selectedDayName}</div>
- <p className="text-[11px] text-slate-400">يمكنك إضافة حصص هذا اليوم لتنظيم توقيتك الأسبوعي</p>
+ <p className="text-xs text-slate-400">يمكنك إضافة حصص هذا اليوم لتنظيم توقيتك الأسبوعي</p>
  <button
  onClick={() => handleOpenAddModal(mobileActiveDay)}
  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-bold shadow-xs cursor-pointer" >
@@ -379,9 +378,9 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3" >
  <div className="flex items-center gap-3 min-w-0">
  {/* Time Pill */}
- <div className="w-16 text-center py-2 px-1 rounded-xl bg-slate-100 font-mono text-[11px] font-black text-slate-800 shrink-0 border border-slate-200/80">
+ <div className="w-16 text-center py-2 px-1 rounded-xl bg-slate-100 font-mono text-xs font-black text-slate-800 shrink-0 border border-slate-200/80">
  <div>{slot.startTime}</div>
- <div className="text-[9px] text-slate-500 font-medium">إلى</div>
+ <div className="text-xs text-slate-500 font-medium">إلى</div>
  <div>{slot.endTime}</div>
  </div>
 
@@ -398,7 +397,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <p className="text-xs text-slate-500 truncate mt-0.5">
  {slotClass?.stream ||''}
  </p>
- <div className="flex items-center gap-1.5 text-[11px] text-slate-600 mt-1">
+ <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1">
  <MapPin className="w-3 h-3 text-slate-500"/>
  <span>{slot.room || slotClass?.roomNumber ||'القاعة'}</span>
  </div>
@@ -409,7 +408,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <div className="grid grid-cols-1 items-center gap-1.5 shrink-0">
  <button
  onClick={() => handleOpenEditModal(slot)}
- className="min-w-11 min-h-11 flex items-center justify-center rounded-xl text-slate-400 hover:text-[var(--primary)] hover:bg-[var(--primary-soft)] transition-colors cursor-pointer" title="تعديل الحصة" >
+ className="min-w-11 min-h-11 flex items-center justify-center rounded-xl text-slate-400 hover:text-[var(--primary-ink)] hover:bg-[var(--primary-soft)] transition-colors cursor-pointer" title="تعديل الحصة" >
  <Edit2 className="w-4 h-4"/>
  </button>
  <button
@@ -447,7 +446,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  </th>
  </tr>
  {/* Hour Columns Row */}
- <tr className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-bold text-slate-700">
+ <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-bold text-slate-700">
  <th className="p-2.5 text-center border-l border-slate-200">التوقيت</th>
  {activeHours.map(hour => (
  <th
@@ -492,17 +491,17 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  >
  {slotClass.name}
  </div>
- <div className="text-[10px] text-slate-500 truncate mt-0.5">
+ <div className="text-xs text-slate-500 truncate mt-0.5">
  {slotClass.stream}
  </div>
  </div>
 
- <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200/40 mt-1">
+ <div className="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-200/40 mt-1">
  <span className="flex items-center gap-0.5">
  <MapPin className="w-2.5 h-2.5 text-slate-500"/>
  {slot.room || slotClass.roomNumber ||'القاعة'}
  </span>
- <span className="font-mono text-[9px] text-slate-600 font-medium">
+ <span className="font-mono text-xs text-slate-600 font-medium">
  {slot.startTime}–{slot.endTime}
  </span>
  </div>
@@ -511,7 +510,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <div className="absolute top-1 left-1 grid grid-cols-1 gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
  <button
  onClick={() => handleOpenEditModal(slot)}
- className="w-5 h-5 rounded-md bg-white/90 text-[var(--primary)] hover:bg-[var(--primary-soft)] flex items-center justify-center shadow-2xs cursor-pointer" title="تعديل الحصة" >
+ className="w-5 h-5 rounded-md bg-white/90 text-[var(--primary-ink)] hover:bg-[var(--primary-soft)] flex items-center justify-center shadow-2xs cursor-pointer" title="تعديل الحصة" >
  <Edit2 className="w-3 h-3"/>
  </button>
  <button
@@ -524,7 +523,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  ) : (
  <button
  onClick={() => handleOpenAddModal(day.dayOfWeek, hour.start)}
- className="w-full h-full rounded-xl border border-dashed border-slate-200 hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]/40 flex flex-col items-center justify-center text-slate-300 hover:text-[var(--primary)] transition-all cursor-pointer opacity-40 hover:opacity-100 group/btn" title={`إضافة حصة يوم ${day.name} في ${hour.label}`}
+ className="w-full h-full rounded-xl border border-dashed border-slate-200 hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]/40 flex flex-col items-center justify-center text-slate-300 hover:text-[var(--primary-ink)] transition-all cursor-pointer opacity-40 hover:opacity-100 group/btn" title={`إضافة حصة يوم ${day.name} في ${hour.label}`}
  >
  <Plus className="w-4 h-4 transition-transform group-hover/btn:scale-110"/>
  </button>
@@ -588,7 +587,6 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
                     type="button"
                     onClick={() => {
                       setSelectedStartTime(h.start);
-                      setSelectedEndTime(h.end);
                     }}
                     className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border ${
                       isSelected

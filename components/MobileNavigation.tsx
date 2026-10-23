@@ -18,13 +18,15 @@ interface MobileNavigationProps {
 interface NavItem {
   tab: SanadTab;
   label: string;
+  /** تسمية كاملة لقارئ الشاشة حين تكون التسمية المرئية مختصرة. */
+  ariaLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
 const sideItems: NavItem[] = [
-  { tab: 'dashboard', label: 'الرئيسية', icon: Home },
-  { tab: 'classes', label: 'الأقسام', icon: Users },
-  { tab: 'grades', label: 'النقاط', icon: ClipboardList },
+  { tab: 'dashboard', label: 'الرئيسية', ariaLabel: 'لوحة التحكم', icon: Home },
+  { tab: 'classes', label: 'الأقسام', ariaLabel: 'الأقسام المسندة', icon: Users },
+  { tab: 'grades', label: 'النقاط', ariaLabel: 'دفتر النقاط', icon: ClipboardList },
 ];
 
 export const MobileNavigation: React.FC<MobileNavigationProps> = ({
@@ -92,14 +94,14 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
             <button
               key={item.tab}
               onClick={() => onSelectTab(item.tab)}
-              aria-label={item.label}
+              aria-label={item.ariaLabel ?? item.label}
               aria-current={isActive ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] ${
                 isActive ? 'text-[var(--primary)]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
               }`}
             >
               <Icon className="h-[22px] w-[22px]" />
-              <span className="mt-1 text-[10px] font-medium leading-none">{item.label}</span>
+              <span className="mt-1 text-xs font-medium leading-none">{item.label}</span>
             </button>
           );
         })}
@@ -123,13 +125,13 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
               <PlayCircle className="h-6 w-6" />
             )}
           </span>
-          <span className="mt-1 max-w-[5.5rem] truncate text-[10px] font-black leading-none">
+          <span className="mt-1 max-w-[5.5rem] truncate text-xs font-black leading-none">
             {isWeekend ? 'التحضير' : 'ابدأ الحصة'}
           </span>
           {isWeekend ? (
-            <span className="max-w-[5.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]">المذكرات</span>
+            <span className="max-w-[5.5rem] truncate text-xs font-bold leading-none text-[var(--text-tertiary)]">المذكرات</span>
           ) : slotClass ? (
-            <span className="max-w-[6.5rem] truncate text-[9px] font-bold leading-none text-[var(--text-tertiary)]" title={slotClass.name}>{compactClassName(slotClass.name)}</span>
+            <span className="max-w-[6.5rem] truncate text-xs font-bold leading-none text-[var(--text-tertiary)]" title={slotClass.name}>{compactClassName(slotClass.name)}</span>
           ) : null}
         </button>
 
@@ -141,14 +143,14 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
             <button
               key={item.tab}
               onClick={() => onSelectTab(item.tab)}
-              aria-label={item.label}
+              aria-label={item.ariaLabel ?? item.label}
               aria-current={isActive ? 'page' : undefined}
               className={`flex min-h-[52px] flex-col items-center justify-center py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] ${
                 isActive ? 'text-[var(--primary)]' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
               }`}
             >
               <Icon className="h-[22px] w-[22px]" />
-              <span className="mt-1 text-[10px] font-medium leading-none">{item.label}</span>
+              <span className="mt-1 text-xs font-medium leading-none">{item.label}</span>
             </button>
           );
         })}
@@ -156,11 +158,11 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          aria-label="فتح قائمة جميع الأقسام"
+          aria-label="فتح قائمة التنقّل الكاملة"
           className="flex min-h-[52px] flex-col items-center justify-center py-1 text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
         >
           <MoreHorizontal className="h-[22px] w-[22px]" />
-          <span className="mt-1 text-[10px] font-medium leading-none">القائمة</span>
+          <span className="mt-1 text-xs font-medium leading-none">القائمة</span>
         </button>
       </div>
     </nav>

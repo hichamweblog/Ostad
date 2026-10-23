@@ -49,6 +49,7 @@ export const SignOutDialog: React.FC<SignOutDialogProps> = ({
       titleId="signout-dialog-title"
       describedBy="signout-dialog-message"
       onClose={onCancel}
+      dismissOnBackdrop
       className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200"
     >
       <div>
@@ -63,7 +64,7 @@ export const SignOutDialog: React.FC<SignOutDialogProps> = ({
           {' '}الخروج يحذف نسخة هذا المتصفح، لذا زامن التغييرات أو صدّر نسخة احتياطية أولاً.
           {syncError ? ` (${syncError})` : ''}
         </p>
-        <p className="mt-2 text-[11px] font-bold text-slate-500">حالة المزامنة: {cloudStatus}</p>
+        <p className="mt-2 text-xs font-bold text-slate-500">حالة المزامنة: {cloudStatus}</p>
 
         {failure && (
           <p role="alert" className="mt-4 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs font-bold text-[var(--danger)]">

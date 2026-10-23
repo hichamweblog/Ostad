@@ -31,6 +31,15 @@ function nullableText(value: string | undefined): string | null {
   return normalized ? normalized : null;
 }
 
+/**
+ * يحمي الترحيل الأولي من قيم المقياس القديم (0–5 لكل عنصر) التي أصبحت خارج
+ * أسقف القرار (3/3/6/8) وأصبحت قيود جدول grades ترفضها.
+ */
+function nullableScore(value: number | null | undefined, max: number): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(max, value));
+}
+
 export interface LocalMigrationSummary {
   classes: number;
   students: number;
@@ -95,10 +104,10 @@ export async function migrateLocalCoreData(
       class_id: classIdMap.get(item.classId)!,
       trimester: item.trimester,
       continuous_eval: item.continuousEval,
-      behavior_score: item.behaviorScore ?? null,
-      attendance_score: item.attendanceScore ?? null,
-      notebook_score: item.notebookScore ?? null,
-      participation_score: item.participationScore ?? null,
+      behavior_score: nullableScore(item.behaviorScore, 3),
+      attendance_score: nullableScore(item.attendanceScore, 3),
+      notebook_score: nullableScore(item.notebookScore, 6),
+      participation_score: nullableScore(item.participationScore, 8),
       quiz: item.quiz,
       exam: item.exam,
       calculated_average: item.calculatedAverage ?? null,

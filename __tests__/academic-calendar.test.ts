@@ -6,8 +6,12 @@ import {
   addDaysIso,
   findHolidayOnDate,
   formatHolidayDates,
+  filterByTrimester,
   formatIsoDateAr,
   getExcludedDayLabel,
+  getTrimesterForDate,
+  getTrimesterRange,
+  isDateInTrimester,
   holidayCoversDate,
   holidayRange,
   isDateExcluded,
@@ -159,6 +163,44 @@ describe('normalizeCalendarSettings migration', () => {
     expect(normalizeCalendarSettings(stored, base).evaluationRules.unexcusedAbsenceDeduction).toBe(2);
   });
 
+  it('upgrades the untouched legacy 5/5/5/5 weights to the decree 3/3/6/8', () => {
+    const stored: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: {
+        ...base.evaluationRules,
+        behaviorMax: 5,
+        attendanceMax: 5,
+        notebookMax: 5,
+        participationMax: 5,
+      },
+    };
+    const normalized = normalizeCalendarSettings(stored, base);
+    expect(normalized.evaluationRules.behaviorMax).toBe(3);
+    expect(normalized.evaluationRules.attendanceMax).toBe(3);
+    expect(normalized.evaluationRules.notebookMax).toBe(6);
+    expect(normalized.evaluationRules.participationMax).toBe(8);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
+    expect(normalized.evaluationRules.participationJudgementMax).toBe(5);
+  });
+
+  it('leaves a customised weight set alone', () => {
+    const stored: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: {
+        ...base.evaluationRules,
+        behaviorMax: 4,
+        attendanceMax: 3,
+        notebookMax: 6,
+        participationMax: 7,
+        disruptionDeduction: 1,
+      },
+    };
+    const normalized = normalizeCalendarSettings(stored, base);
+    expect(normalized.evaluationRules.behaviorMax).toBe(4);
+    expect(normalized.evaluationRules.participationMax).toBe(7);
+    expect(normalized.evaluationRules.disruptionDeduction).toBe(1);
+  });
+
   it('falls back to defaults for missing or invalid input', () => {
     expect(normalizeCalendarSettings(undefined, base)).toBe(base);
     expect(normalizeCalendarSettings(null, base)).toBe(base);
@@ -218,5 +260,76 @@ describe('untouched legacy defaults migration', () => {
     const edited = { ...legacy, holidays: legacy.holidays.map((h, i) => i === 2 ? { ...h, dateStr: 'تاريخ مخصص' } : h) };
     expect(normalizeCalendarSettings(edited, DEFAULT_CALENDAR_SETTINGS).holidays[2].dateStr).toBe('تاريخ مخصص');
     expect(normalizeCalendarSettings(edited, DEFAULT_CALENDAR_SETTINGS).evaluationRules.unexcusedAbsenceDeduction).toBe(1);
+  });
+
+  it('still upgrades a legacy rules object that predates the decree weights', () => {
+    const names = ['عطلة الشتاء', 'عطلة الربيع', 'عيد ثورة أول نوفمبر', 'رأس السنة الميلادية', 'رأس السنة الأمازيغية (يناير)', 'عيد الفطر', 'عيد الفطر — اليوم الثاني', 'عيد النصر', 'عيد العمال', 'عيد الأضحى', 'عيد الأضحى — اليوم الثاني', 'رأس السنة الهجرية', 'عاشوراء', 'عيد الاستقلال والشباب'];
+    const dates = ['عطلة فصلية', 'عطلة فصلية', '01 نوفمبر 2026', '01 جانفي 2027', '12 جانفي 2027', '10 مارس 2027', '11 مارس 2027', '19 مارس 2027', '01 ماي 2027', '17 ماي 2027', '18 ماي 2027', '06 جوان 2027', '15 جوان 2027', '05 جويلية 2027'];
+    const legacyRules = { ...DEFAULT_CALENDAR_SETTINGS.evaluationRules } as Record<string, unknown>;
+    for (const added of ['participationRecordedMax', 'participationJudgementMax', 'participationTargetRatio', 'notebookRounds', 'disruptionDeduction', 'disruptionRepeatDeduction']) {
+      delete legacyRules[added];
+    }
+    const normalized = normalizeCalendarSettings(
+      {
+        ...DEFAULT_CALENDAR_SETTINGS,
+        holidays: names.map((name, i) => ({ id: `h-${i + 1}`, name, dateStr: dates[i], type: 'national' })),
+        evaluationRules: { ...(legacyRules as AcademicCalendarSettings['evaluationRules']), unexcusedAbsenceDeduction: 1 },
+      },
+      DEFAULT_CALENDAR_SETTINGS,
+    );
+    // غياب الحقول الجديدة ليس تخصيصاً: تُرقّى القيم القديمة وتُضاف الجديدة.
+    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
+    expect(normalized.evaluationRules.notebookRounds).toBe(2);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
+    expect(normalized.evaluationRules.participationMax).toBe(8);
+  });
+});
+
+
+describe('trimesters', () => {
+  const termDates = DEFAULT_CALENDAR_SETTINGS.termDates;
+
+  it('maps each term to its official inclusive range', () => {
+    expect(getTrimesterRange(termDates, 1)).toEqual({ start: termDates.term1Start, end: termDates.term1End });
+    expect(getTrimesterRange(termDates, 2)).toEqual({ start: termDates.term2Start, end: termDates.term2End });
+    expect(getTrimesterRange(termDates, 3)).toEqual({ start: termDates.term3Start, end: termDates.term3End });
+  });
+
+  it('treats term boundaries as inclusive', () => {
+    expect(isDateInTrimester(termDates.term1Start, termDates, 1)).toBe(true);
+    expect(isDateInTrimester(termDates.term1End, termDates, 1)).toBe(true);
+    expect(isDateInTrimester(termDates.term2Start, termDates, 1)).toBe(false);
+    expect(isDateInTrimester(termDates.term2Start, termDates, 2)).toBe(true);
+  });
+
+  it('never leaks a session from one term into another', () => {
+    const sessions = [
+      { id: 't1-a', date: '2026-10-05' },
+      { id: 't1-b', date: '2026-12-15' },
+      { id: 't2-a', date: '2026-12-16' },
+      { id: 't2-b', date: '2027-02-01' },
+      { id: 't3-a', date: '2027-04-01' },
+      { id: 'no-date' },
+    ];
+    expect(filterByTrimester(sessions, termDates, 1).map((s) => s.id)).toEqual(['t1-a', 't1-b']);
+    expect(filterByTrimester(sessions, termDates, 2).map((s) => s.id)).toEqual(['t2-a', 't2-b']);
+    expect(filterByTrimester(sessions, termDates, 3).map((s) => s.id)).toEqual(['t3-a']);
+  });
+
+  it('never hides a dated record that falls outside every term', () => {
+    const odd = [{ id: 'summer', date: '2027-07-20' }];
+    expect(filterByTrimester(odd, termDates, 1).map((s) => s.id)).toEqual(['summer']);
+    expect(filterByTrimester(odd, termDates, 3).map((s) => s.id)).toEqual(['summer']);
+  });
+
+  it('returns an empty list when there is no data or no calendar', () => {
+    expect(filterByTrimester(undefined, termDates, 1)).toEqual([]);
+    expect(filterByTrimester([{ date: '2026-10-05' }], undefined, 1)).toHaveLength(1);
+  });
+
+  it('resolves the term of a date and reports holidays between terms as null', () => {
+    expect(getTrimesterForDate('2026-10-05', termDates)).toBe(1);
+    expect(getTrimesterForDate('2027-01-10', termDates)).toBe(2);
+    expect(getTrimesterForDate('2027-07-20', termDates)).toBeNull();
   });
 });

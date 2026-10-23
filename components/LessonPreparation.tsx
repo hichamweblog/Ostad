@@ -8,7 +8,6 @@ import { deleteTeacherMemorandum, getMemorandumUrl, uploadTeacherMemorandum } fr
 import { cancelMemorandaUpload } from '@/lib/supabase/memoranda-outbox';
 import { ConfirmDialog } from './ConfirmDialog';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { AppState } from '@/lib/storage';
 import { CurriculumUnit, GradeLevel } from '@/lib/types';
 import { OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import { exportUnitToWordDoc } from '@/lib/doc-exporter';
@@ -26,14 +25,9 @@ import {AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Filter,
   AlertCircle,
-  Calendar,
   Clock,
-  Award,
   BookMarked,
-  Sparkles,
-  FileDown,
   Eye
 } from 'lucide-react';
 
@@ -399,7 +393,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                 role="tab" aria-selected={activeTab === 'card'}
                 onClick={() => setActiveTab('card')}
                 className={`flex items-center justify-center w-full sm:w-auto gap-1.5 min-h-9 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'card' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-[var(--primary)]/40 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
+                  activeTab === 'card' ? 'bg-[var(--primary-soft)] text-[var(--primary-ink)] border-[var(--primary)]/40 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900' }`}
               >
                 <FileText className="w-3.5 h-3.5 text-[var(--primary)]" />
                 <span>البطاقة</span>
@@ -443,7 +437,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
         {/* Offline memorandum status + one-tap download */}
         <div className="mt-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
+          <p className="text-xs text-slate-600 flex items-center gap-1.5">
             {offlineAvailability.complete ? (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -472,7 +466,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
             </button>
           )}
           {currentUnit && currentUnitStoredOffline && (
-            <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
               محفوظة على الجهاز
             </span>
@@ -481,7 +475,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
 
         {/* Notice alert */}
         {pdfUploadNotice && (
-          <div className="mt-3 p-2.5 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-xs text-[var(--primary)] flex items-center gap-2">
+          <div className="mt-3 p-2.5 rounded-xl bg-[var(--primary-soft)] border border-[var(--primary)]/20 text-xs text-[var(--primary-ink)] flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[var(--primary)] shrink-0" />
             <span>{pdfUploadNotice}</span>
           </div>
@@ -510,14 +504,14 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
             {/* Time & Hours Volume Badge */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="bg-white/10 backdrop-blur-xs border border-white/20 px-4 py-2 rounded-xl text-center">
-                <div className="text-[11px] text-amber-200 flex items-center justify-center gap-1 font-medium">
+                <div className="text-xs text-amber-200 flex items-center justify-center gap-1 font-medium">
                   <Clock className="w-3.5 h-3.5" />
                   <span>الزمن والحجم الساعي</span>
                 </div>
                 <div className="text-lg font-bold text-white">
                   {currentUnit.hourlyVolume} سا
                 </div>
-                <div className="text-[10px] text-slate-300">
+                <div className="text-xs text-slate-300">
                   {currentUnit.level === '1AS_SCIENCE' ? '1 سا / أسبوع' : '2 سا / أسبوع'}
                 </div>
               </div>
@@ -534,7 +528,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
           {/* Section 1: الهدف التعلمي (Learning Objective) */}
           <div className="bg-white rounded-xl border-2 border-[var(--primary)]/30 p-5 shadow-xs">
             <div className="flex items-center gap-2 mb-3">
-              <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary)]">
+              <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary-ink)]">
                 <Compass className="w-4 h-4" />
               </span>
               <h3 className="text-sm font-bold text-slate-900">
@@ -614,7 +608,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                   4. توجيهات خاصة بالأستاذ (ليست عناصر مفاهيمية)
                 </h3>
               </div>
-              <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200">
+              <span className="text-xs font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200">
                 تنبيهات المنهاج
               </span>
             </div>
@@ -640,7 +634,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
           {/* Section 5: مؤشرات الأداء والتقويم (Performance Indicators) */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <div className="flex items-center gap-2 mb-3">
-              <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary)]">
+              <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary-ink)]">
                 <CheckCircle2 className="w-4 h-4" />
               </span>
               <h3 className="text-sm font-bold text-slate-900">
@@ -664,7 +658,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
           {currentUnit.referenceTexts && currentUnit.referenceTexts.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
               <div className="flex items-center gap-2 mb-3">
-                <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary)]">
+                <span className="p-1.5 rounded-lg bg-[var(--primary-soft)] text-[var(--primary-ink)]">
                   <BookOpen className="w-4 h-4" />
                 </span>
                 <h3 className="text-sm font-bold text-slate-900">
@@ -688,7 +682,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
           <div className="bg-gradient-to-br from-slate-900 to-[var(--text-primary)] text-white rounded-xl p-6 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="space-y-1 text-center sm:text-right">
               <div className="flex items-center justify-center sm:justify-start gap-2">
-                <span className="px-2 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary-soft)] border border-[var(--primary)]/30 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary-soft)] border border-[var(--primary)]/30 text-xs font-bold">
                   PDF مدمج
                 </span>
                 <span className="text-xs text-slate-300">مذكرة الوحدة بصيغة PDF</span>
@@ -719,7 +713,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
           {/* Top PDF Controls Header */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3">
-              <span className="p-2.5 rounded-xl bg-[var(--primary-soft)] text-[var(--primary)] border border-[var(--primary)]/20 shrink-0">
+              <span className="p-2.5 rounded-xl bg-[var(--primary-soft)] text-[var(--primary-ink)] border border-[var(--primary)]/20 shrink-0">
                 <FileText className="w-5 h-5" />
               </span>
               <div>
@@ -728,12 +722,12 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                     الوحدة {currentUnit.unitNumber}: «{currentUnit.title}»
                   </h3>
                   {(attachedPdf?.fileStorageKey || attachedPdf?.fileDataUrl) && (
-                    <span className="px-2 py-0.5 rounded-full bg-purple-50 text-navy border border-purple-200 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-50 text-navy border border-purple-200 text-xs font-bold">
                       نسخة مخصصة مرفوعة
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   {attachedPdf?.fileName
                     ? `تم رفع مذكرة مخصصة محلياً`
                     : currentUnit.pdfFileName
@@ -855,7 +849,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
             </div>
           ) : (
             <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-xl bg-[var(--primary-soft)] text-[var(--primary)] flex items-center justify-center border border-[var(--primary)]/20">
+              <div className="w-16 h-16 mx-auto rounded-xl bg-[var(--primary-soft)] text-[var(--primary-ink)] flex items-center justify-center border border-[var(--primary)]/20">
                 <FileUp className="w-8 h-8" />
               </div>
               <div className="space-y-1 max-w-md mx-auto">
@@ -890,7 +884,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-[var(--primary)]/30 text-white/70 text-[10px] font-bold border border-[var(--primary)]/30">
+                    <span className="px-2 py-0.5 rounded-full bg-[var(--primary)]/30 text-white/70 text-xs font-bold border border-[var(--primary)]/30">
                       مذكرات مدمجة
                     </span>
                     <span className="text-xs text-slate-300 font-mono">
@@ -949,7 +943,7 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold flex-wrap">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 font-bold flex-wrap">
                         <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                           الوحدة {unit.unitNumber}
                         </span>
@@ -957,6 +951,11 @@ export const LessonPreparation: React.FC<LessonPreparationProps> = ({
                         <span>{unit.domain}</span>
                         <span>•</span>
                         <span className="text-[var(--primary)] font-bold">{unit.hourlyVolume} سا</span>
+                        {hasPdf && (
+                          <span className="rounded bg-[var(--primary-soft)] px-1.5 py-0.5 text-xs font-bold text-[var(--primary-ink)]">
+                            مذكرة PDF
+                          </span>
+                        )}
                       </div>
                       <h4 className="text-sm font-bold text-slate-900 font-serif">
                         {unit.title}

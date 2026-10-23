@@ -113,3 +113,43 @@ describe('orientation session without a curriculum unit', () => {
     expect(isOrientationSession({ unitId: 'unit', customTopic: ORIENTATION_SESSION_TOPIC })).toBe(false);
   });
 });
+
+describe('single-session units are not numbered in the notebook', () => {
+  it('recognises a one-hour unit only', async () => {
+    const { isSingleSessionUnit } = await import('@/lib/session-flow');
+    expect(isSingleSessionUnit(1)).toBe(true);
+    expect(isSingleSessionUnit(0)).toBe(true);
+    expect(isSingleSessionUnit(2)).toBe(false);
+    expect(isSingleSessionUnit(3)).toBe(false);
+    expect(isSingleSessionUnit(undefined)).toBe(false);
+    expect(isSingleSessionUnit(null)).toBe(false);
+  });
+
+  it('writes a title without the (1) suffix for a single-session unit', async () => {
+    const { buildSessionTitle } = await import('@/lib/session-flow');
+    expect(buildSessionTitle('وحدة من حصة واحدة', 1, { cancelled: false }, { singleSession: true }))
+      .toBe('وحدة من حصة واحدة');
+    expect(buildSessionTitle('وحدة من حصتين', 1, { cancelled: false }))
+      .toBe('وحدة من حصتين (1)');
+    // A cancelled session still carries its reason and no part number.
+    expect(buildSessionTitle('وحدة من حصة واحدة', 1, { cancelled: true, reason: 'الغياب' }, { singleSession: true }))
+      .toBe('حصة ملغاة (الغياب) — وحدة من حصة واحدة');
+  });
+
+  it('cleans a legacy (1) suffix already stored in older records', async () => {
+    const { stripSingleSessionSuffix } = await import('@/lib/session-flow');
+    expect(stripSingleSessionSuffix('وحدة من حصة واحدة (1)')).toBe('وحدة من حصة واحدة');
+    expect(stripSingleSessionSuffix('وحدة من حصتين (2)')).toBe('وحدة من حصتين (2)');
+    expect(stripSingleSessionSuffix('حصة ملغاة (الغياب) — وحدة')).toBe('حصة ملغاة (الغياب) — وحدة');
+  });
+
+  it('reads the part number as 1 when the title carries no suffix', async () => {
+    const { readSessionPart } = await import('@/lib/session-flow');
+    const session: SessionRecord = {
+      id: 's', classId: 'c', date: '2026-10-01', startTime: '08:00', endTime: '09:00',
+      sessionGoals: '', accomplishments: '', nextSteps: '', teacherNotes: '',
+      attendance: {}, customTopic: 'وحدة من حصة واحدة',
+    };
+    expect(readSessionPart(session)).toBe(1);
+  });
+});
