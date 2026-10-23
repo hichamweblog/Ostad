@@ -281,6 +281,54 @@ describe('StudentProfileContent', () => {
     expect(html).toContain('—');
   });
 
+  it('renders all 4 marks in order and equal-sized follow-up cards inside term 1 summary while keeping section order', () => {
+    const profile = selectStudentProfile(makeState(1), student.id);
+    expect(profile).not.toBeNull();
+
+    const html = renderToStaticMarkup(
+      React.createElement(StudentProfileContent, { profile: profile! }),
+    );
+
+    const summaryStart = html.indexOf('ملخص الفصل الأول');
+    const indicatorsStart = html.indexOf('مؤشرات التقويم المستمر');
+    const resultsStart = html.indexOf('النتائج الفصلية');
+
+    expect(summaryStart).toBeGreaterThan(-1);
+    expect(indicatorsStart).toBeGreaterThan(summaryStart);
+    expect(resultsStart).toBeGreaterThan(indicatorsStart);
+
+    const summaryHtml = html.slice(summaryStart, indicatorsStart);
+    const evalIdx = summaryHtml.indexOf('>التقويم<');
+    const quizIdx = summaryHtml.indexOf('>الفرض<');
+    const examIdx = summaryHtml.indexOf('>الاختبار<');
+    const avgIdx = summaryHtml.indexOf('>المعدل<');
+
+    expect(evalIdx).toBeGreaterThan(-1);
+    expect(quizIdx).toBeGreaterThan(evalIdx);
+    expect(examIdx).toBeGreaterThan(quizIdx);
+    expect(avgIdx).toBeGreaterThan(examIdx);
+
+    const absencesIdx = summaryHtml.indexOf('>الغيابات<');
+    const goodPartIdx = summaryHtml.indexOf('>المشاركات الإيجابية<');
+    const disruptionsIdx = summaryHtml.indexOf('>المخالفات السلوكية<');
+
+    expect(absencesIdx).toBeGreaterThan(avgIdx);
+    expect(goodPartIdx).toBeGreaterThan(absencesIdx);
+    expect(disruptionsIdx).toBeGreaterThan(goodPartIdx);
+    expect(summaryHtml).toContain('grid-cols-3');
+
+    const indicatorsHtml = html.slice(indicatorsStart, resultsStart);
+    const bIdx = indicatorsHtml.indexOf('السلوك والانضباط');
+    const aIdx = indicatorsHtml.indexOf('المواظبة والحضور');
+    const nIdx = indicatorsHtml.indexOf('الكراس وأدوات التعلم');
+    const pIdx = indicatorsHtml.indexOf('المشاركة الصفية');
+
+    expect(bIdx).toBeGreaterThan(-1);
+    expect(aIdx).toBeGreaterThan(bIdx);
+    expect(nIdx).toBeGreaterThan(aIdx);
+    expect(pIdx).toBeGreaterThan(nIdx);
+  });
+
   it('keeps the requested wider desktop overlay instead of the default width', () => {
     const html = renderToStaticMarkup(
       React.createElement(
