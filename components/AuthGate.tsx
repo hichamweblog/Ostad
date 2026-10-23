@@ -18,26 +18,14 @@ export function AuthGate({ children }: AuthGateProps) {
   const [user, setUser] = useState<User | null>(cachedUser ?? null);
   const configured = Boolean(getSupabaseEnv());
   const [loading, setLoading] = useState(configured && cachedUser === undefined);
-  const [showOfflineFallback, setShowOfflineFallback] = useState(false);
 
+  // لا يوجد دخول دون حساب: لا زر «متابعة دون اتصال». لكن إن تعذّر التحقّق من الجلسة
+  // (شبكة متعطّلة مثلاً) لا نُبقي المؤشر دائراً إلى ما لا نهاية، بل نعرض شاشة الدخول.
   useEffect(() => {
-    let timeoutId: number;
-    if (loading) {
-      timeoutId = window.setTimeout(() => setShowOfflineFallback(true), 2000);
-    }
+    if (!loading) return;
+    const timeoutId = window.setTimeout(() => setLoading(false), 12_000);
     return () => window.clearTimeout(timeoutId);
   }, [loading]);
-
-  const handleContinueOffline = async () => {
-    const client = createSupabaseBrowserClient();
-    if (client) {
-      const { data } = await client.auth.getSession();
-      if (data.session?.user) {
-        setUser(data.session.user);
-      }
-    }
-    setLoading(false);
-  };
 
   useEffect(() => {
     let active = true;
@@ -116,14 +104,6 @@ export function AuthGate({ children }: AuthGateProps) {
           <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-bold text-[var(--muted-foreground)]">جارٍ الاتصال بالسحابة...</p>
         </div>
-        {showOfflineFallback && (
-          <button
-            onClick={handleContinueOffline}
-            className="px-6 py-2.5 rounded-full border border-[var(--border-default)] bg-white shadow-sm text-sm font-bold text-[var(--text-secondary)] active:bg-slate-50 transition-colors animate-in fade-in zoom-in duration-300"
-          >
-            المتابعة دون اتصال (الوضع المحلي)
-          </button>
-        )}
       </div>
     );
   }
@@ -343,12 +323,10 @@ function LoginPanel() {
         بالمتابعة أنت توافق على{' '}
         <Link href="/terms" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
           شروط الاستخدام
-        </Link>{' '}
-        و{' '}
+        </Link>{' و'}
         <Link href="/privacy" className="font-bold text-[var(--primary-ink)] underline underline-offset-2">
           سياسة الخصوصية
-        </Link>
-        . يمكنك تجربة التطبيق دون حساب عبر «المتابعة دون اتصال».
+        </Link>{'.'}
       </p>
     </div>
   );

@@ -4,6 +4,7 @@ import { GradeLevel, Student, StudentGrade } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { parseAlgerianClass, getCanonicalClassName, getStudentNameKey } from './name-normalizer';
 import { normalizeDateToIso } from './date-utils';
+import { extractInstitutionMetadata } from './institution-metadata';
 
 const MAX_EXCEL_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 const EXCEL_FILE_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xlsb', '.xls']);
@@ -46,6 +47,17 @@ function validateExcelFile(file: File): void {
   }
 }
 
+/** Why a worksheet was kept or ignored during a roster import. */
+export type ParsedSheetStatus = 'IMPORTED' | 'SKIPPED_ADMIN' | 'SKIPPED_EMPTY' | 'SKIPPED_DUPLICATE';
+
+export interface ParsedSheetSummary {
+  sheetName: string;
+  className: string;
+  studentCount: number;
+  status: ParsedSheetStatus;
+  reason?: string;
+}
+
 export interface ParsedClassData {
   sheetName: string;
   className: string;
@@ -56,11 +68,345 @@ export interface ParsedClassData {
 
 export interface ParsedDigitizationResult {
   classes: ParsedClassData[];
+  /** One row per worksheet in the workbook, so the teacher can see what was kept and what was ignored. */
+  sheets: ParsedSheetSummary[];
   totalStudents: number;
+  /**
+   * The title block of the file: school, directorate and academic year, already cleaned
+   * (`ثانوية الإمام مالك — الموسم الدراسي: 2026/2027` → `ثانوية الإمام مالك`).
+   * It fills the matching settings fields; the rosters themselves carry names only.
+   */
   schoolName?: string;
   stateName?: string;
   academicYear?: string;
 }
+
+/**
+ * Folds the many spellings used in Algerian school files (hamza forms, taa marbuta, diacritics,
+ * tatweel) into one plain form so a keyword test is not defeated by «قائمة» / «قائمه».
+ */
+export function normalizeArabicText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[\u200c-\u200f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const STAFF_SHEET_WORDS = /(اساتذ|استاذ|طاقم|اداري|إداري|عمال|موظف|مستخدم|مسير|مقتصد|professeur|enseignant|personnel)/;
+// «قائمة» alone says nothing: «قائمة الأساتذة» is a staff list, «قائمة التلاميذ» a roster.
+const STUDENT_SHEET_WORDS = /(تلاميذ|تلميذ|قسم|فوج|افواج)/;
+
+/**
+ * An administrative worksheet (teachers, staff, workers) must never be imported as a class roster.
+ * The test is deliberately narrow: a staff word has to appear where a student word does not,
+ * either in the sheet name or in the sheet's title rows.
+ */
+export function isAdministrativeSheet(sheetName: string, headText: string): boolean {
+  const name = normalizeArabicText(sheetName);
+  if (STAFF_SHEET_WORDS.test(name) && !STUDENT_SHEET_WORDS.test(name)) return true;
+
+  const text = normalizeArabicText(headText);
+  const staffTitle =
+    /(قائمه|لائحه|جدول|كشف)\s*(ال)?(اساتذ|طاقم|عمال|موظف|مستخدم|اداري|إداري)|الطاقم\s*(ال)?(اداري|إداري|التربوي)|(اساتذ|اطارات)\s*(الماده|المؤسسه)|liste\s*des\s*(professeurs|enseignants)|corps\s*enseignant/;
+  const studentText = /(تلاميذ|تلميذ|قائمه\s*(ال)?تلاميذ|افواج|قائمه\s*(ال)?اقسام)/;
+  return staffTitle.test(text) && !studentText.test(text);
+}
+
+/** Rows that belong to the administration block and must not become students. */
+export function isStaffOrAdminRow(value: unknown): boolean {
+  const text = normalizeArabicText(value);
+  if (!text) return false;
+  return /(^|\s)(ال)?(استاذ|استاذه|اساتذ|مدير|مديره|ناظر|مستشار|مقتصد|مسير|موظف|عامل|سائق|حارس|اعوان|اداري)(\s|$|:)/.test(
+    text,
+  );
+}
+
+/** Strips list numbering, leading labels and decoration from a name cell. */
+export function cleanStudentName(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\u200c-\u200f\u0640]/g, ' ')
+    .replace(/^\s*(?:الرقم|رقم|التلميذ|التلميذة|الاسم)\s*[:：-]\s*/, '')
+    .replace(/^\s*\d{1,3}\s*[-.)\-:]\s*/, '')
+    .replace(/\s*[|•]+\s*/g, ' ')
+    .replace(/[.،,;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const ARABIC_HEADER_WORDS =
+  /(اللقب|الاسم|التعريف|تاريخ|الميلاد|التقويم|الفرض|فروض|الاختبار|التقدير|ملاحظ|الرقم|المستوى|الشعبه|القسم|الفوج|المؤسسه|الاستاذ|الماده|الجنس|العدد|المجموع|رقم)/;
+/** Latin words must match as whole words: «Noman» is a first name, «Nom» is a header. */
+const LATIN_HEADER_WORDS = /\b(matricule|nom|prenom|prénom|name|birth|naissance)\b/i;
+
+function looksLikeHeaderish(value: unknown): boolean {
+  const text = normalizeArabicText(value);
+  return ARABIC_HEADER_WORDS.test(text) || LATIN_HEADER_WORDS.test(text);
+}
+
+/** كلمات تظهر في أعمدة التقديرات أو الحضور وليست أسماء. */
+const NON_NAME_WORDS =
+  /^(ممتاز|جيد\s*جدا|جيد|حسن|مقبول|ضعيف|ضعيف\s*جدا|غائب|حاضر|متاخر|متأخر|معيد|نعم|لا|ذكر|انثي|أنثى|ذكور|اناث|إناث|ناجح|راسب|مؤجل|منقطع)$/;
+
+function looksLikePersonName(value: unknown): boolean {
+  const text = cleanStudentName(value);
+  if (!text || text.length < 5 || text.length > 70) return false;
+  if (/\d/.test(text)) return false;
+  if (looksLikeHeaderish(text) || isSchoolSummaryOrFooterRow(text)) return false;
+  if (NON_NAME_WORDS.test(normalizeArabicText(text))) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 6) return false;
+  const letters = text.replace(/[^\p{L}\s'’-]/gu, '');
+  return letters.replace(/\s/g, '').length >= 5;
+}
+
+function looksLikeNameWord(value: unknown): boolean {
+  const text = cleanStudentName(value);
+  if (!text || text.length < 2 || text.length > 30) return false;
+  if (/\d/.test(text)) return false;
+  if (looksLikeHeaderish(text) || isSchoolSummaryOrFooterRow(text)) return false;
+  if (NON_NAME_WORDS.test(normalizeArabicText(text))) return false;
+  return /^[\p{L}\s'’.-]+$/u.test(text);
+}
+
+interface RosterNameColumns {
+  fullNameCol: number;
+  lastNameCol: number;
+  firstNameCol: number;
+  regNumberCol: number;
+  birthDateCol: number;
+}
+
+export interface RosterLayout {
+  headerRowIndex: number;
+  dataStartRowIndex: number;
+  fullNameCol: number;
+  lastNameCol: number;
+  firstNameCol: number;
+  regNumberCol: number;
+  birthDateCol: number;
+  /** True when the columns were guessed from the values because the sheet has no usable header. */
+  guessed: boolean;
+}
+
+const MAX_HEADER_SCAN_ROWS = 30;
+const MAX_LAYOUT_COLUMNS = 40;
+
+/**
+ * Finds the student-name columns in a messy roster sheet:
+ * 1. an explicit header row (`اللقب`/`الاسم`, `الاسم واللقب`, `Nom et prénom`, …), or
+ * 2. a value-based guess (one full-name column, or a last-name/first-name pair).
+ * Columns such as grades, birth dates or administration notes are ignored on purpose: the
+ * importer only ever keeps the section name and the student names.
+ */
+export function detectRosterLayout(data: any[][]): RosterLayout | null {
+  const rows = Array.isArray(data) ? data : [];
+  const limit = Math.min(rows.length, MAX_HEADER_SCAN_ROWS);
+
+  for (let r = 0; r < limit; r++) {
+    const row = rows[r] || [];
+    const cols: RosterNameColumns = {
+      fullNameCol: -1,
+      lastNameCol: -1,
+      firstNameCol: -1,
+      regNumberCol: -1,
+      birthDateCol: -1,
+    };
+    let firstNameOnlySeen = false;
+
+    row.forEach((cell, c) => {
+      if (c >= MAX_LAYOUT_COLUMNS) return;
+      const raw = String(cell ?? '').trim();
+      if (!raw) return;
+
+      const isFull = /(الاسم\s*(و|وال|و\s)?\s*اللقب|اللقب\s*(و|وال)?\s*الاسم|اسم\s*(و|وال)?\s*لقب|الاسم\s*الكامل|nom\s*(et|&)?\s*prenom|nom\s*complet)/i.test(
+        raw,
+      );
+      if (isFull) {
+        if (cols.fullNameCol === -1) cols.fullNameCol = c;
+        return;
+      }
+      if (/(رقم\s*(التعريف|التسجيل|الترتيب)|matricule|numero|n°)/i.test(raw) && cols.regNumberCol === -1) {
+        cols.regNumberCol = c;
+        return;
+      }
+      if (/تاريخ\s*الميلاد|date\s*de\s*naissance|naissance/i.test(raw) && cols.birthDateCol === -1) {
+        cols.birthDateCol = c;
+        return;
+      }
+      if (/اللقب|l'?nom\b|^nom$/i.test(raw) && cols.lastNameCol === -1 && !/الاسم/.test(raw)) {
+        cols.lastNameCol = c;
+        return;
+      }
+      if (/^(الاسم(\s*الشخصي)?|prénom|prenom|first\s*name)$/i.test(raw) && cols.firstNameCol === -1) {
+        cols.firstNameCol = c;
+        firstNameOnlySeen = true;
+        return;
+      }
+    });
+
+    const hasFullName = cols.fullNameCol >= 0;
+    const hasNamePair = cols.lastNameCol >= 0 && cols.firstNameCol >= 0;
+
+    // A sheet whose only name header is «الاسم» usually holds one full name per row.
+    const hasFullNameOnly = !hasFullName && !hasNamePair && firstNameOnlySeen;
+    if (!hasFullName && !hasNamePair && !hasFullNameOnly) continue;
+
+    return {
+      headerRowIndex: r,
+      dataStartRowIndex: r + 1,
+      fullNameCol: hasFullName ? cols.fullNameCol : hasFullNameOnly ? cols.firstNameCol : -1,
+      lastNameCol: hasFullName || hasFullNameOnly ? -1 : cols.lastNameCol,
+      firstNameCol: hasFullName || hasFullNameOnly ? -1 : cols.firstNameCol,
+      regNumberCol: cols.regNumberCol,
+      birthDateCol: cols.birthDateCol,
+      guessed: false,
+    };
+  }
+
+  // No readable header: guess from the values themselves.
+  const scanRows = Math.min(rows.length, 60);
+  let bestFullCol = -1;
+  let bestFullCount = 0;
+  for (let c = 0; c < MAX_LAYOUT_COLUMNS; c++) {
+    let count = 0;
+    for (let r = 0; r < scanRows; r++) {
+      if (looksLikePersonName((rows[r] || [])[c])) count++;
+    }
+    if (count > bestFullCount) {
+      bestFullCount = count;
+      bestFullCol = c;
+    }
+  }
+  if (bestFullCol >= 0 && bestFullCount >= 3) {
+    // A sheet without any header often lists «اللقب» and «الاسم» in two columns; the
+    // surname column can look like a full name, so a single-word neighbour wins.
+    for (const pairCol of [bestFullCol - 1, bestFullCol]) {
+      if (pairCol < 0) continue;
+      let pairHits = 0;
+      for (let r = 0; r < scanRows; r++) {
+        const row = rows[r] || [];
+        if (looksLikeNameWord(row[pairCol]) && looksLikeNameWord(row[pairCol + 1])) pairHits++;
+      }
+      if (pairHits < 3 || pairHits < bestFullCount * 0.6) continue;
+      const singleWordNeighbour = Array.from({ length: scanRows }, (_, r) => String((rows[r] || [])[pairCol + 1] ?? '').trim())
+        .filter(Boolean)
+        .every(cell => cell.split(/\s+/).length === 1);
+      if (!singleWordNeighbour) continue;
+      let firstPairRow = 0;
+      for (let r = 0; r < scanRows; r++) {
+        const row = rows[r] || [];
+        if (looksLikeNameWord(row[pairCol]) && looksLikeNameWord(row[pairCol + 1])) {
+          firstPairRow = r;
+          break;
+        }
+      }
+      return {
+        headerRowIndex: firstPairRow - 1,
+        dataStartRowIndex: firstPairRow,
+        fullNameCol: -1,
+        lastNameCol: pairCol,
+        firstNameCol: pairCol + 1,
+        regNumberCol: -1,
+        birthDateCol: -1,
+        guessed: true,
+      };
+    }
+
+    let firstRow = 0;
+    for (let r = 0; r < scanRows; r++) {
+      if (looksLikePersonName((rows[r] || [])[bestFullCol])) {
+        firstRow = r;
+        break;
+      }
+    }
+    return {
+      headerRowIndex: firstRow - 1,
+      dataStartRowIndex: firstRow,
+      fullNameCol: bestFullCol,
+      lastNameCol: -1,
+      firstNameCol: -1,
+      regNumberCol: -1,
+      birthDateCol: -1,
+      guessed: true,
+    };
+  }
+
+  let bestPair: { col: number; count: number } | null = null;
+  for (let c = 0; c + 1 < MAX_LAYOUT_COLUMNS; c++) {
+    let count = 0;
+    for (let r = 0; r < scanRows; r++) {
+      const row = rows[r] || [];
+      if (looksLikeNameWord(row[c]) && looksLikeNameWord(row[c + 1])) count++;
+    }
+    if (count >= 3 && (!bestPair || count > bestPair.count)) {
+      bestPair = { col: c, count };
+    }
+  }
+  if (bestPair) {
+    let firstRow = 0;
+    for (let r = 0; r < scanRows; r++) {
+      const row = rows[r] || [];
+      if (looksLikeNameWord(row[bestPair.col]) && looksLikeNameWord(row[bestPair.col + 1])) {
+        firstRow = r;
+        break;
+      }
+    }
+    return {
+      headerRowIndex: firstRow - 1,
+      dataStartRowIndex: firstRow,
+      fullNameCol: -1,
+      lastNameCol: bestPair.col,
+      firstNameCol: bestPair.col + 1,
+      regNumberCol: -1,
+      birthDateCol: -1,
+      guessed: true,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Drops a leading «القسم»/«الفوج» label and a trailing subject so the code parses as a level.
+ * Nothing is dropped when what remains is not a class code («القسم الأول» stays readable).
+ */
+export function stripSectionLabel(value: string): string {
+  const original = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const withoutLabel = original
+    .replace(/^\s*(?:ال)?(?:فوج|قسم)\s*(?:التربوي|التربويه)?\s*[:：\-]?\s*/i, '')
+    .replace(/\s*(?:مادة|المادة|الماده)\s*[:：]?\s*.*$/i, '')
+    .replace(/[.،,;:]+$/, '')
+    .trim();
+  if (!withoutLabel) return original;
+  return /[\d\u0660-\u0669]/.test(withoutLabel) ? withoutLabel : original;
+}
+
+/** Reads the class/section name written in the sheet title rows (`الفوج التربوي`, `القسم`, …). */
+export function extractClassNameFromRows(rows: any[][], limit = 12): string {
+  const scan = Math.min(rows.length, limit);
+  for (let r = 0; r < scan; r++) {
+    const row = rows[r] || [];
+    for (const cell of row) {
+      const text = String(cell ?? '').trim();
+      if (!text) continue;
+      const labelled = text.match(
+        /(?:الفوج\s*(?:التربوي)?|القسم\s*(?:التربوي)?)\s*[:：]\s*([^\n,،|]{2,40})/i,
+      );
+      if (!labelled?.[1]) continue;
+      const cleaned = labelled[1]
+        .replace(/\s+(?:مادة|المادة|الماده|الأستاذ|الاستاذ|المؤسسة|المؤسسه|السنة|الموسم|عدد|التلاميذ)\s*.*$/i, '')
+        .replace(/[.،,;:]+$/, '')
+        .trim();
+      if (cleaned.length >= 2) return cleaned;
+    }
+  }
+  return '';
+}
+
 
 /**
  * Detects GradeLevel and Stream (الشعبة) from class text and sheet code according to the Algerian Educational System.
@@ -133,6 +479,8 @@ export function isSchoolSummaryOrFooterRow(text: unknown, rowCells?: unknown[]):
 }
 
 export interface SheetColumnIndices {
+  /** False when no ministerial / technical header row was found, so the defaults below are only a guess. */
+  headerDetected: boolean;
   headerRowIndex: number;
   dataStartRowIndex: number;
   regNumberCol: number;
@@ -151,6 +499,7 @@ export interface SheetColumnIndices {
  * Correctly accounts for sheets starting at Column A or Column B, and reads ministerial code tags.
  */
 export function detectSheetColumnIndices(data: any[][]): SheetColumnIndices {
+  let headerDetected = false;
   let headerRowIndex = 7;
   let dataStartRowIndex = 8;
   let regNumberCol = -1;
@@ -171,6 +520,7 @@ export function detectSheetColumnIndices(data: any[][]): SheetColumnIndices {
     const isTechHeader = /matricule/i.test(rowText) && /nom/i.test(rowText);
 
     if (isArabicHeader || isTechHeader) {
+      headerDetected = true;
       headerRowIndex = r;
       dataStartRowIndex = r + 1;
 
@@ -236,6 +586,7 @@ export function detectSheetColumnIndices(data: any[][]): SheetColumnIndices {
   if (guidanceCol === -1) guidanceCol = baseCol + 8;
 
   return {
+    headerDetected,
     headerRowIndex,
     dataStartRowIndex,
     regNumberCol,
@@ -275,11 +626,10 @@ export async function parseDigitizationFile(
   let totalRowsSeen = 0;
 
   const parsedClasses: ParsedClassData[] = [];
-  let detectedSchoolName = '';
-  let detectedStateName = '';
-  let detectedAcademicYear = '';
+  const sheetSummaries: ParsedSheetSummary[] = [];
+  const institutionRowTexts: string[] = [];
 
-  // Process EVERY sheet in the workbook
+  // Every worksheet is inspected: real files mix rosters, staff lists, empty tabs and summaries.
   for (const sheetName of workbook.SheetNames) {
     const worksheet = workbook.Sheets[sheetName];
     if (!worksheet) continue;
@@ -291,133 +641,199 @@ export async function parseDigitizationFile(
       blankrows: true,
     });
 
-    if (!data || data.length === 0) continue;
+    if (!data || data.length === 0) {
+      sheetSummaries.push({
+        sheetName,
+        className: '',
+        studentCount: 0,
+        status: 'SKIPPED_EMPTY',
+        reason: 'ورقة فارغة',
+      });
+      continue;
+    }
 
     totalRowsSeen += data.length;
     assertRowBudget(totalRowsSeen);
     assertTimeBudget(parseStartedAt);
 
-    let extractedClassName = '';
-    const cols = detectSheetColumnIndices(data);
-    const dataStartIndex = cols.dataStartRowIndex;
+    // The title block names the institution, the subject or the staff: it is kept for the
+    // settings fields and used to reject staff lists, but never becomes a student row.
+    const headRowTexts = data
+      .slice(0, 12)
+      .map(row => (row || []).map(cell => String(cell || '').trim()).filter(Boolean).join(' '))
+      .filter(Boolean);
+    const headText = headRowTexts.join(' | ');
+    institutionRowTexts.push(...headRowTexts);
 
-    // Scan the header rows
-    const scanLimit = Math.min(data.length, dataStartIndex);
-    for (let i = 0; i < scanLimit; i++) {
-      const row = data[i];
-      if (!row) continue;
+    // Administration sheets (teachers, staff, workers) are reported but never imported.
+    if (isAdministrativeSheet(sheetName, headText)) {
+      sheetSummaries.push({
+        sheetName,
+        className: '',
+        studentCount: 0,
+        status: 'SKIPPED_ADMIN',
+        reason: 'قائمة إدارية أو طاقم تربوي — تُستثنى من الاستيراد',
+      });
+      continue;
+    }
 
-      const rowText = row
-        .map(cell => String(cell || '').trim())
-        .filter(Boolean)
-        .join(' ');
-
-      // Extract School Name (ثانوية ...)
-      if (!detectedSchoolName && /ثانوية\s+([^\n\r,]+)/i.test(rowText)) {
-        const m = rowText.match(/ثانوية\s+([^,:\n\r]+(?:\([^)]+\))?)/i);
-        if (m && m[1]) {
-          detectedSchoolName = `ثانوية ${m[1].trim()}`;
-        }
-      }
-
-      // Extract Directorate / State (مديرية التربية لولاية ...)
-      if (!detectedStateName && /مديرية\s*التربية\s*لولاية\s+([^\s,:\n\r]+)/i.test(rowText)) {
-        const m = rowText.match(/مديرية\s*التربية\s*لولاية\s+([^\s,:\n\r]+)/i);
-        if (m && m[1]) {
-          detectedStateName = m[1].trim();
-        }
-      }
-
-      // Extract Academic Year (السنة الدراسية : 2025-2026)
-      if (!detectedAcademicYear && /السنة\s*الدراسية\s*:\s*(\d{4}[-/]\d{4})/i.test(rowText)) {
-        const m = rowText.match(/السنة\s*الدراسية\s*:\s*(\d{4}[-/]\d{4})/i);
-        if (m && m[1]) {
-          detectedAcademicYear = m[1].trim();
-        }
-      }
-
-      // Extract Class Name (الفوج التربوي : ...)
-      if (rowText.includes('الفوج التربوي')) {
-        const match = rowText.match(/الفوج\s*التربوي\s*:\s*(.*?)\s*(?:مادة|$)/i);
-        if (match && match[1]) {
-          extractedClassName = match[1].trim();
-        }
+    // Layout: explicit header row first, then a value-based guess, then the ministerial template.
+    let layout = detectRosterLayout(data);
+    if (!layout) {
+      const official = detectSheetColumnIndices(data);
+      if (official.headerDetected && official.lastNameCol >= 0 && official.firstNameCol >= 0) {
+        layout = {
+          headerRowIndex: official.headerRowIndex,
+          dataStartRowIndex: official.dataStartRowIndex,
+          fullNameCol: -1,
+          lastNameCol: official.lastNameCol,
+          firstNameCol: official.firstNameCol,
+          regNumberCol: official.regNumberCol,
+          birthDateCol: official.birthDateCol,
+          guessed: false,
+        };
       }
     }
 
-    // Fallback for class name if not found in text: use sheet name or default
+    if (!layout) {
+      sheetSummaries.push({
+        sheetName,
+        className: '',
+        studentCount: 0,
+        status: 'SKIPPED_EMPTY',
+        reason: 'لم يُعثر على أعمدة أسماء التلاميذ',
+      });
+      continue;
+    }
+
+    // Class/section name: «الفوج التربوي» / «القسم» labels, otherwise the worksheet name.
+    let extractedClassName = extractClassNameFromRows(data, 12);
     if (!extractedClassName) {
-      if (sheetName && sheetName !== 'Sheet1') {
-        extractedClassName = `فوج ${sheetName}`;
-      } else {
-        extractedClassName = `قسم ${parsedClasses.length + 1}`;
+      const normalizedSheetName = normalizeArabicText(sheetName);
+      // «قائمة التلاميذ» أو «ورقة 1» ليست اسم قسم: تُترك للتسمية الافتراضية.
+      const genericSheetName =
+        /^(sheet|feuil|hoja|ورقه)\s*\d*$/i.test(normalizedSheetName) ||
+        /^(قائمه|قايمه|لائحه|كشف|جدول|اسماء|قائمه\s*(ال)?تلاميذ|قائمه\s*(ال)?تلميذ|ورقه\s*(ال)?تلاميذ)$/i.test(
+          normalizedSheetName.replace(/\s+/g, ' ').trim(),
+        );
+      const normalizedNoSpaces = normalizedSheetName.replace(/\s+/g, '');
+      const looksGeneric = genericSheetName || /^(قائمه|لائحه|كشف|ورقه)?(ال)?(تلاميذ|تلميذ|اسماء)$/.test(normalizedNoSpaces);
+      if (!looksGeneric && normalizedSheetName.length >= 2) {
+        extractedClassName = String(sheetName).trim();
       }
     }
+    extractedClassName = stripSectionLabel(extractedClassName);
+    if (!extractedClassName) {
+      extractedClassName = `قسم ${parsedClasses.length + 1}`;
+    }
 
-    // Determine Level and Stream accurately
-    const { level, stream } = detectLevelAndStream(extractedClassName, sheetName);
-
-    // Parse students in this sheet using dynamically detected columns
+    // Only names are imported: no grades, no administration columns, no gender guesses.
     const students: Omit<Student, 'classId'>[] = [];
     let numberInList = 1;
+    let blankStreak = 0;
 
-    for (let i = dataStartIndex; i < data.length; i++) {
-      const row = data[i];
-      if (!row) continue;
+    for (let i = layout.dataStartRowIndex; i < data.length; i++) {
+      // A very long sheet must not freeze the tab: the wall-clock budget is checked
+      // while walking the rows, not only once per worksheet.
+      if ((i & 511) === 0) assertTimeBudget(parseStartedAt);
+      const row = data[i] || [];
+      const rawName =
+        layout.fullNameCol >= 0
+          ? row[layout.fullNameCol]
+          : [row[layout.lastNameCol], row[layout.firstNameCol]]
+              .map(value => String(value ?? '').trim())
+              .filter(Boolean)
+              .join(' ');
+      const rowText = row.map(cell => String(cell ?? '').trim()).filter(Boolean).join(' ');
+      const name = cleanStudentName(rawName);
 
-      const regNumber = String(row[cols.regNumberCol] || '').trim();
-      const lastName = String(row[cols.lastNameCol] || '').trim();
-      const firstName = String(row[cols.firstNameCol] || '').trim();
-
-      if (!regNumber && !lastName && !firstName) {
+      // A totals row closes the roster; a note or a signature row is simply skipped.
+      if (isSchoolSummaryOrFooterRow(name, row) || isSchoolSummaryOrFooterRow(rowText, row)) {
+        if (/(مجموع|المجموع|تعداد|احصاء|إحصاء)/.test(normalizeArabicText(rowText))) break;
+        blankStreak += 1;
+        if (blankStreak > 3) break;
         continue;
       }
 
-      // Stop if we hit footer summary text (e.g. مجموع الذكور والإناث)
-      const combinedName = `${lastName} ${firstName}`.trim();
-      if (
-        isSchoolSummaryOrFooterRow(lastName, row) ||
-        isSchoolSummaryOrFooterRow(firstName, row) ||
-        isSchoolSummaryOrFooterRow(combinedName, row) ||
-        isSchoolSummaryOrFooterRow(regNumber, row)
-      ) {
-        break;
+      if (!name) {
+        blankStreak += 1;
+        if (blankStreak > 12) break;
+        continue;
       }
+      blankStreak = 0;
 
-      const birthDateText = row[cols.birthDateCol];
-      const birthDate = normalizeDateToIso(birthDateText) || '';
+      // Administration rows («الأستاذ: …», «المدير») never become students.
+      if (isStaffOrAdminRow(name)) continue;
 
-      const fullName = `${lastName} ${firstName}`.trim();
+      const isValidName = layout.guessed
+        ? looksLikeNameWord(name)
+        : /\p{L}/u.test(name) && !looksLikeHeaderish(name);
+      if (!isValidName) continue;
 
-      if (fullName || regNumber) {
-        students.push({
-          id: uuidv4(),
-          numberInList,
-          fullName: fullName || `تلميذ ${numberInList}`,
-          regNumber: regNumber || undefined,
-          registrationNumber: regNumber || undefined,
-          birthDate: birthDate || undefined,
-          gender: 'M',
-        });
-        numberInList++;
-      }
+      const regRaw = layout.regNumberCol >= 0 ? String(row[layout.regNumberCol] ?? '').trim() : '';
+      const regNumber = /^[\d\u0660-\u0669][\d\u0660-\u0669\s/.\-]{2,}$/.test(regRaw) ? regRaw : '';
+      const birthDate =
+        layout.birthDateCol >= 0 ? normalizeDateToIso(row[layout.birthDateCol]) || undefined : undefined;
+
+      students.push({
+        id: uuidv4(),
+        numberInList,
+        fullName: name,
+        regNumber: regNumber || undefined,
+        registrationNumber: regNumber || undefined,
+        birthDate,
+      });
+      numberInList += 1;
     }
 
-    // Only add class if it has students or was explicitly named
     if (students.length > 0) {
-      parsedClasses.push({
+      // Real workbooks repeat the same roster on one sheet per subject. Importing every copy
+      // would create identical classes, so a roster already seen in this file is reported once.
+      const sheetKeys = new Set(students.map(student => getStudentNameKey(student.fullName)));
+      // Small classes have to match entirely; a big one may lose or gain a pupil between copies.
+      const requiredShared = sheetKeys.size >= 4 ? Math.ceil(sheetKeys.size * 0.8) : sheetKeys.size;
+      const repeatedRoster = parsedClasses.some(previous => {
+        const previousKeys = new Set(previous.students.map(student => getStudentNameKey(student.fullName)));
+        let shared = 0;
+        sheetKeys.forEach(key => {
+          if (previousKeys.has(key)) shared += 1;
+        });
+        return shared >= requiredShared && previousKeys.size <= sheetKeys.size * 1.5 + 2;
+      });
+      if (repeatedRoster) {
+        sheetSummaries.push({
+          sheetName,
+          className: getCanonicalClassName(extractedClassName || sheetName),
+          studentCount: 0,
+          status: 'SKIPPED_DUPLICATE',
+          reason: 'نفس قائمة التلاميذ موجودة في ورقة أخرى — استُوردت مرة واحدة',
+        });
+        continue;
+      }
+
+      const className = getCanonicalClassName(extractedClassName || sheetName);
+      const { level, stream } = detectLevelAndStream(className, sheetName);
+      parsedClasses.push({ sheetName, className, level, stream, students });
+      sheetSummaries.push({
         sheetName,
-        className: getCanonicalClassName(extractedClassName || sheetName),
-        level,
-        stream,
-        students,
+        className,
+        studentCount: students.length,
+        status: 'IMPORTED',
+      });
+    } else {
+      sheetSummaries.push({
+        sheetName,
+        className: extractedClassName,
+        studentCount: 0,
+        status: 'SKIPPED_EMPTY',
+        reason: 'لم يُعثر على أسماء تلاميذ',
       });
     }
   }
 
   if (parsedClasses.length === 0) {
     throw new Error(
-      'لم يتم العثور على أي تلاميذ في الملف. تأكد من أن الملف هو الملف الرسمي للرقمنة ويحتوي على جدول التلاميذ.'
+      'لم يتم العثور على أي تلاميذ في الملف. تأكد من أن الملف يحتوي على ورقة بها أسماء التلاميذ، وأن أوراق الطاقم الإداري لا تُستورد عمداً.'
     );
   }
 
@@ -426,12 +842,14 @@ export async function parseDigitizationFile(
     0
   );
 
+  // Institution fields come from the first sheet that spells them; a messy header is cleaned.
+  const institution = extractInstitutionMetadata(institutionRowTexts);
+
   return {
     classes: parsedClasses,
+    sheets: sheetSummaries,
     totalStudents,
-    schoolName: detectedSchoolName || undefined,
-    stateName: detectedStateName || undefined,
-    academicYear: detectedAcademicYear || undefined,
+    ...institution,
   };
 }
 

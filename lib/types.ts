@@ -63,9 +63,9 @@ export interface ContinuousEvaluationRules {
   attendanceMax: number; // 3
   notebookMax: number; // 6
   participationMax: number; // 8 = توثيق 3 + تقدير 5
-  /** خصم المخالفة السلوكية الأولى. */
-  disruptionDeduction: number; // 0.25
-  /** خصم كل مخالفة بعد الأولى (تصاعدي حتى السقف). */
+  /** خصم كل مخالفة سلوكية (من 3) — 0.5 من المخالفة الأولى. */
+  disruptionDeduction: number; // 0.5
+  /** خصم المخالفات التالية؛ يساوي `disruptionDeduction` فلا تصاعد بينها. */
   disruptionRepeatDeduction?: number; // 0.5
   /** خصم عدم كتابة الدروس — احتياطي فقط عند غياب جولات الكراس. */
   unwrittenLessonDeduction: number;
@@ -81,8 +81,8 @@ export interface ContinuousEvaluationRules {
   participationJudgementMax?: number; // 5
   /** النسبة المستهدفة من الحصص الموثّقة للوصول إلى كامل نقطة التوثيق. */
   participationTargetRatio?: number; // 0.25
-  /** عدد جولات الكراس في الفصل. */
-  notebookRounds?: number; // 2
+  /** عدد جولات الكراس في الفصل (1 افتراضاً، و2 كحد أقصى لسجل قديم). */
+  notebookRounds?: number; // 1
   maxScore: number; // 20
   showGuidanceAlerts: boolean;
   exemptRuleSecondQuiz: string; // legacy text key, kept for backward compatibility

@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { exportToDocx } from '@/lib/utils';
+import { UNIT_STATUS_LABELS, normalizeUnitStatus } from '@/lib/unit-status';
 import { buildDocxBlob } from '@/lib/docx-exporter';
 import { printElement } from '@/lib/print';
 import { showToast } from '@/components/Toast';
@@ -64,7 +65,9 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       state.sessions.filter(s => s.classId === selectedClassId && isSessionDocumented(s)),
       state.calendarSettings?.termDates,
       selectedTrimester,
-    ).sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+    // The printed daily log is read top-to-bottom, so the oldest session comes first and
+    // the latest one sits at the bottom of the sheet.
+    ).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
   }, [state.sessions, selectedClassId, selectedTrimester, state.calendarSettings?.termDates]);
 
   const getSessionNotes = (session: SessionRecord): string => {
@@ -114,6 +117,12 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
    * Shares the real .docx file when the device supports file sharing
    * (Web Share Level 2), and falls back to text → download otherwise.
    */
+  // The grades roster is the only wide table: it gets A4 landscape in Word too.
+  const docxOptionsFor = (doc: { title: string }) => ({
+    title: doc.title,
+    landscape: docType === 'GRADES_ROSTER',
+  });
+
   const handleShare = async () => {
     const doc = buildWordDocument();
     const fileName = `${doc.filename}.docx`;
@@ -121,11 +130,11 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
     try {
       if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
         showToast('المشاركة غير متاحة على هذا الجهاز. سنزيل نسخة .docx بدلاً منها.', 'warning');
-        exportToDocx(doc.html, doc.filename);
+        exportToDocx(doc.html, doc.filename, docxOptionsFor(doc));
         return;
       }
 
-      const blob = await buildDocxBlob(doc.html, { title: doc.title });
+      const blob = await buildDocxBlob(doc.html, docxOptionsFor(doc));
       const file = new File([blob], fileName, {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
@@ -143,7 +152,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('Share failed:', error);
       showToast('تعذّرت المشاركة. أزلنا لك نسخة .docx بدلاً منها.', 'warning');
-      exportToDocx(doc.html, doc.filename);
+      exportToDocx(doc.html, doc.filename, docxOptionsFor(doc));
     }
   };
 
@@ -458,7 +467,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
   const handleExportDoc = () => {
     const doc = buildWordDocument();
-    exportToDocx(doc.html, doc.filename);
+    exportToDocx(doc.html, doc.filename, docxOptionsFor(doc));
   };
 
   return (
@@ -579,7 +588,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
       {/* Missing grades warning: an official document full of zeros looks broken */}
       {!hasGradesForTerm && (docType === 'GRADES_ROSTER' || docType === 'COUNCIL_FORM') && (
-        <div className="flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+        <div className="no-print flex flex-col items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
             <span className="leading-6">
@@ -594,7 +603,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
 
       {/* Institutional Profile Incomplete Warning Banner */}
       {!state.profile.schoolName && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
+        <div className="no-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
@@ -611,7 +620,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       )}
 
       {/* Mobile Quick Actions (No A4 preview) */}
-      <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+      <div className="md:hidden print:hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 rounded-2xl shadow-sm text-center">
           <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
           <h3 className="text-sm font-bold text-blue-900 mb-1">{getDocTitle()}</h3>
@@ -629,7 +638,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
       {/* 3. Document Sheet Container (Hidden on Mobile) */}
       <div
         dir="rtl" style={{ direction: 'rtl', textAlign: 'right' }}
-        className="hidden md:block bg-white rounded-xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right" >
+        className="hidden md:block print:block bg-white rounded-xl border border-slate-300 shadow-sm max-w-[860px] mx-auto text-slate-900 text-xs transition-all p-5 [direction:rtl] text-right print:max-w-none print:border-0 print:p-0" >
         {/* Space-Saving Compact Institutional Header */}
         <div className="pb-2 border-b-2 border-slate-900">
           <div className="flex justify-between items-center text-xs font-bold text-slate-800 px-1">
@@ -752,7 +761,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                     const prog = state.lessonProgress.find(
                       p => p.classId === selectedClassId && p.unitId === unit.id
                     );
-                    const isDone = prog?.status === 'COMPLETED';
+                    const isDone = normalizeUnitStatus(prog?.status) === 'COMPLETED';
 
                     return (
                       <tr key={unit.id} className="break-inside-avoid">
@@ -772,7 +781,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
                           {unit.hourlyVolume || 2} سا
                         </td>
                         <td className={`border border-slate-900 text-center font-bold ${ecoPaperMode ? 'p-1 text-xs' : 'p-1.5 text-xs'}`}>
-                          {isDone ? 'أُنجز' : 'مخطط'}
+                          {isDone ? UNIT_STATUS_LABELS.COMPLETED : UNIT_STATUS_LABELS[normalizeUnitStatus(prog?.status)]}
                         </td>
                       </tr>
                     );

@@ -7,7 +7,8 @@ import { useDialogA11y } from '@/hooks/use-dialog-a11y';
 import React, { useState } from 'react';
 import {  OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@/lib/curriculum-data';
 import { useEffect } from 'react';
-import { CurriculumUnit, GradeLevel, LessonStatus } from '@/lib/types';
+import { CurriculumUnit, GradeLevel } from '@/lib/types';
+import { UNIT_STATUS_OPTIONS, normalizeUnitStatus, type UnitStatusOption } from '@/lib/unit-status';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Plus,
@@ -134,13 +135,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     sectionsMap.get(key)!.push(unit);
   }
 
-  // Get status for unit in active class
-  const getUnitStatus = (unitId: string): LessonStatus => {
+  // Get status for unit in active class — الحالات الثلاث فقط، مع تطبيع أي حالة قديمة.
+  const getUnitStatus = (unitId: string): UnitStatusOption => {
     if (!state.activeClassId) return 'NOT_STARTED';
     const progress = state.lessonProgress.find(
       p => p.classId === state.activeClassId && p.unitId === unitId
     );
-    if (progress?.status) return progress.status;
+    if (progress?.status) return normalizeUnitStatus(progress.status);
 
     // Automatically recognize as completed if documented in the notebook (excluding cancelled sessions)
     const isDocumentedInSessions = state.sessions.some(
@@ -155,7 +156,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     return 'NOT_STARTED';
   };
 
-  const setUnitStatus = async (unitId: string, status: LessonStatus) => {
+  const setUnitStatus = async (unitId: string, status: UnitStatusOption) => {
     if (!state.activeClassId) return;
     try {
       await updateStateAndWait(prev => {
@@ -253,12 +254,11 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     }
   };
 
-  const statusLabels: Record<LessonStatus, { label: string; bg: string; text: string }> = {
+  // ثلاث حالات فقط للوحدة: لم يبدأ، قيد الإنجاز، أنجز.
+  const statusLabels: Record<UnitStatusOption, { label: string; bg: string; text: string }> = {
     NOT_STARTED: { label: 'لم يبدأ', bg: 'bg-slate-100', text: 'text-slate-600' },
-    PLANNED: { label: 'مخطط له', bg: 'bg-blue-50', text: 'text-blue-700' },
     IN_PROGRESS: { label: 'قيد الإنجاز', bg: 'bg-amber-50', text: 'text-amber-800' },
-    COMPLETED: { label: 'أُنجز بحمد الله', bg: 'bg-[var(--primary-soft)]', text: 'text-[var(--primary-ink)]' },
-    NEEDS_REMEDIAL: { label: 'يحتاج معالجة / إعادة', bg: 'bg-rose-50', text: 'text-rose-700' }
+    COMPLETED: { label: 'أنجز', bg: 'bg-[var(--primary-soft)]', text: 'text-[var(--primary-ink)]' },
   };
 
   return (
@@ -402,14 +402,12 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         {state.activeClassId && (
                           <select
                             value={currentStatus}
-                            onChange={e => setUnitStatus(unit.id, e.target.value as LessonStatus)}
+                            onChange={e => setUnitStatus(unit.id, normalizeUnitStatus(e.target.value))}
                             className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer outline-none ${statusInfo.bg} ${statusInfo.text} border-slate-200`}
                           >
-                            <option value="NOT_STARTED">لم يبدأ</option>
-                            <option value="PLANNED">مخطط</option>
-                            <option value="IN_PROGRESS">قيد الإنجاز</option>
-                            <option value="COMPLETED">أُنجز</option>
-                            <option value="NEEDS_REMEDIAL">يحتاج معالجة</option>
+                            {UNIT_STATUS_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                           </select>
                         )}
 

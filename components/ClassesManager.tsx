@@ -7,10 +7,15 @@ import { ClassFormDialog } from './classes/ClassFormDialog';
 import { StudentFormDialog } from './classes/StudentFormDialog';
 import React, { useEffect, useState, useRef } from 'react';
 import { DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
-import { AppState } from '@/lib/storage';
+import { AppState, DEFAULT_PROFILE } from '@/lib/storage';
 import { SanadTab } from './SidebarSanad';
 import { ClassRoom, GradeLevel, Student, StudentGrade } from '@/lib/types';
 import { isSchoolSummaryOrFooterRow } from '@/lib/excel-sync';
+import {
+  describeInstitutionMetadata,
+  mergeInstitutionMetadata,
+  type InstitutionMetadata,
+} from '@/lib/institution-metadata';
 import type { ParsedDigitizationResult } from '@/lib/excel-sync';
 import type { ParsedMoumtazeResult } from '@/lib/moumtaze-sync';
 import {  type RosterImportClass, type RosterImportStudent } from '@/lib/supabase/roster-import';
@@ -93,6 +98,8 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const moumtazeFileInputRef = useRef<HTMLInputElement>(null);
   const [importNotification, setImportNotification] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<ParsedDigitizationResult | null>(null);
+  // Worksheets the teacher unchecked in the import preview (never the administration ones).
+  const [excludedImportSheets, setExcludedImportSheets] = useState<string[]>([]);
   const [importConflicts, setImportConflicts] = useState<ImportConflict[]>([]);
 
   useEffect(() => {
@@ -232,9 +239,50 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     return conflicts;
   };
 
+  const selectedPendingClasses = pendingImport
+    ? pendingImport.classes.filter(cls => !excludedImportSheets.includes(cls.sheetName))
+    : [];
+  const selectedPendingStudents = selectedPendingClasses.reduce(
+    (total, cls) => total + cls.students.length,
+    0
+  );
+  // ترويسة الملف كما ستظهر في الإعدادات (اسم مؤسسة نظيف، سنة موحّدة الصيغة).
+  const pendingInstitutionText = pendingImport ? describeInstitutionMetadata(pendingImport) : '';
+
+  const toggleImportSheet = (sheetName: string) => {
+    setExcludedImportSheets(previous =>
+      previous.includes(sheetName)
+        ? previous.filter(name => name !== sheetName)
+        : [...previous, sheetName]
+    );
+  };
+
+  /**
+   * يحكي ما فعله الملف بإعدادات المؤسسة: يُملأ الفارغ، ولا يُستبدل ما كتبه الأستاذ.
+   * (كل الإشعارات عربية وقابلة للإغلاق، بلا alert/prompt.)
+   */
+  const announceInstitutionMetadata = (applied: InstitutionMetadata, kept: InstitutionMetadata) => {
+    const appliedText = describeInstitutionMetadata(applied);
+    if (appliedText) showToast(`حُدّثت الإعدادات من الملف — ${appliedText}`, 'success');
+    const keptText = describeInstitutionMetadata(kept);
+    if (keptText) {
+      showToast(`أُبقيت إعداداتك كما هي؛ الملف يحمل ${keptText}. يمكنك تعديلها من الإعدادات.`, 'info');
+    }
+  };
+
   const handleConfirmDigitizationImport = () => {
     if (!pendingImport) return;
-    const conflicts = findImportConflicts(pendingImport.classes);
+    if (selectedPendingClasses.length === 0) {
+      showToast('لم تختر أي ورقة للاستيراد. حدّد ورقة واحدة على الأقل ثم أكّد.', 'warning');
+      return;
+    }
+    // Only the checked worksheets are imported; the administration ones are never parsed at all.
+    const importPayload: ParsedDigitizationResult = {
+      ...pendingImport,
+      classes: selectedPendingClasses,
+      totalStudents: selectedPendingStudents,
+    };
+    const conflicts = findImportConflicts(importPayload.classes);
     if (conflicts.length > 0) {
       setImportConflicts(conflicts);
       setImportNotification(
@@ -242,7 +290,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
       );
       return;
     }
-    applyDigitizationImport(pendingImport);
+    applyDigitizationImport(importPayload);
   };
 
 
@@ -577,24 +625,16 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     // Summary notification
     summaryNotificationMsg = `تم تجهيز ${parsedData.classes.length} أفواج تربوية: إضافة ${totalNewStudentsAdded} تلميذاً وتحديث ${totalExistingStudentsRetained} تلميذاً.`;
 
-    // Update profile if schoolName or academicYear were detected
-    const updatedProfile = { ...state.profile };
-    if (parsedData.schoolName && (!state.profile.schoolName || state.profile.schoolName.includes('ثانوية'))) {
-      updatedProfile.schoolName = parsedData.schoolName;
-    }
-    if (parsedData.academicYear) {
-      updatedProfile.academicYear = parsedData.academicYear;
-    }
-    if (parsedData.stateName) {
-      updatedProfile.stateName = parsedData.stateName;
-    }
-
+    // Rosters carry names only; the header fills the school / state / year fields in the settings.
+    const institution = mergeInstitutionMetadata(state.profile, parsedData, {
+      defaultAcademicYear: DEFAULT_PROFILE.academicYear,
+    });
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
-      profile: updatedProfile,
+      profile: { ...state.profile, ...institution.applied },
     };
 
     if (targetClassIdToSelect) setSelectedClassId(targetClassIdToSelect);
@@ -604,6 +644,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     try {
       await commitRosterImport(importedClasses, importedStudents, nextState);
       showToast('تم استيراد القوائم ومزامنتها سحابياً بنجاح.', 'success');
+      announceInstitutionMetadata(institution.applied, institution.kept);
     } catch (error) {
       console.error('Atomic roster import sync failed:', error);
       showToast('تم حفظ الاستيراد محلياً، وتعذرت المصادقة السحابية للدفعة. ستتم إعادة المحاولة عبر المزامنة.', 'warning');
@@ -613,18 +654,19 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setImportNotification('حجم الملف كبير جداً. الحد الأقصى للاستيراد هو 20 ميغابايت.');
+    if (file.size > 15 * 1024 * 1024) {
+      setImportNotification('حجم الملف كبير جداً. الحد الأقصى للاستيراد هو 15 ميغابايت.');
       e.target.value = '';
       return;
     }
     try {
       const { parseDigitizationFile } = await import('@/lib/excel-sync');
       const parsedData = await parseDigitizationFile(file);
+      setExcludedImportSheets([]);
       setPendingImport(parsedData);
     } catch (err: any) {
       console.error('File import error:', err);
-      showToast(err.message || 'حدث خطأ أثناء قراءة الملف. يرجى التأكد من أنه ملف الرقمنة الأصلي.', 'error');
+      showToast(err.message || 'حدث خطأ أثناء قراءة الملف. تأكد من أن الملف بصيغة Excel ويحتوي على أسماء التلاميذ.', 'error');
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -812,23 +854,16 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     const firstClassId = processedClassIds[0] || state.activeClassId || (updatedClasses.length > 0 ? updatedClasses[0].id : null);
     targetClassIdToSelect = firstClassId;
 
-    const updatedProfile = { ...state.profile };
-    if (moumtazeData.schoolName && (!state.profile.schoolName || state.profile.schoolName.includes('ثانوية'))) {
-      updatedProfile.schoolName = moumtazeData.schoolName;
-    }
-    if (moumtazeData.academicYear) {
-      updatedProfile.academicYear = moumtazeData.academicYear;
-    }
-    if (moumtazeData.stateName) {
-      updatedProfile.stateName = moumtazeData.stateName;
-    }
-
+    // Same rule as the roster importer: names go to the rosters, the header to the settings.
+    const institution = mergeInstitutionMetadata(state.profile, moumtazeData, {
+      defaultAcademicYear: DEFAULT_PROFILE.academicYear,
+    });
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
-      profile: updatedProfile,
+      profile: { ...state.profile, ...institution.applied },
     };
 
     if (targetClassIdToSelect) {
@@ -842,6 +877,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     try {
       await commitRosterImport(importedClasses, importedStudents, nextState);
       showToast('تم استيراد قوائم الممتاز ومزامنتها سحابياً بنجاح.', 'success');
+      announceInstitutionMetadata(institution.applied, institution.kept);
     } catch (error) {
       console.error('Atomic Moumtaze roster sync failed:', error);
       showToast('تم حفظ الاستيراد محلياً، وتعذرت المصادقة السحابية للدفعة. ستتم إعادة المحاولة عبر المزامنة.', 'warning');
@@ -1283,10 +1319,10 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           <section
             ref={pendingImportRef}
             tabIndex={-1}
-            role="dialog" aria-modal="true" aria-labelledby="digitization-import-preview-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl outline-none" >
+            role="dialog" aria-modal="true" aria-labelledby="digitization-import-preview-title" className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl outline-none" >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div id="digitization-import-preview-title" className="text-lg font-black text-slate-900">معاينة استيراد ملف الرقمنة</div>
+                <div id="digitization-import-preview-title" className="text-lg font-black text-slate-900">معاينة استيراد قوائم الأقسام</div>
                 <p className="mt-1 text-sm text-slate-600">لن يتم تعديل البيانات قبل تأكيدك.</p>
               </div>
               <button type="button" onClick={() => setPendingImport(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="إلغاء المعاينة">
@@ -1295,22 +1331,82 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-slate-50 p-4">
-                <div className="text-2xl font-black text-slate-900">{pendingImport.classes.length}</div>
-                <div className="text-xs font-bold text-slate-600">الأفواج المكتشفة</div>
+                <div className="text-2xl font-black text-slate-900">{selectedPendingClasses.length}</div>
+                <div className="text-xs font-bold text-slate-600">أقسام مُختارة</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-4">
-                <div className="text-2xl font-black text-slate-900">{pendingImport.totalStudents}</div>
-                <div className="text-xs font-bold text-slate-600">التلاميذ المكتشفون</div>
+                <div className="text-2xl font-black text-slate-900">{selectedPendingStudents}</div>
+                <div className="text-xs font-bold text-slate-600">تلاميذ سيُستوردون</div>
               </div>
             </div>
+
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-bold text-slate-600">
+                أوراق الملف ({pendingImport.sheets.length}) — أزل التحديد عن أي ورقة لا تريد استيرادها
+              </div>
+              <ul className="max-h-60 space-y-1.5 overflow-y-auto">
+                {pendingImport.sheets.map(sheet => {
+                  const isRoster = sheet.status === 'IMPORTED';
+                  const isSelected = isRoster && !excludedImportSheets.includes(sheet.sheetName);
+                  return (
+                    <li key={sheet.sheetName}>
+                      <label
+                        className={`flex items-start gap-2 rounded-xl border p-2.5 text-xs ${
+                          isRoster
+                            ? 'cursor-pointer border-slate-200 bg-white'
+                            : 'cursor-default border-slate-100 bg-slate-50 text-slate-500'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+                          checked={isSelected}
+                          disabled={!isRoster}
+                          onChange={() => toggleImportSheet(sheet.sheetName)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-bold text-slate-800">
+                            {sheet.className || sheet.sheetName}
+                          </span>
+                          <span className="mt-0.5 block leading-5 text-slate-500">
+                            {isRoster
+                              ? `${sheet.studentCount} تلميذاً — ورقة «${sheet.sheetName}»`
+                              : sheet.reason || 'لم تُستورد'}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-              سيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين، مع تحديث معلومات المؤسسة المكتشفة إن وُجدت.
+              يُستورد القسم وأسماء التلاميذ فقط؛ أوراق الطاقم الإداري والأساتذة تُستثنى تلقائياً، ولا تُحفظ بيانات المؤسسة أو السنة من الملف. وسيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين.
             </p>
+            {pendingInstitutionText && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs leading-6 text-slate-700">
+                <span className="font-bold">من ترويسة الملف إلى الإعدادات:</span> {pendingInstitutionText}
+                <span className="mt-0.5 block text-[11px] text-slate-500">
+                  تُملأ الحقول الفارغة فقط؛ وما كتبته بنفسك في الإعدادات يبقى كما هو.
+                </span>
+              </div>
+            )}
+            {selectedPendingClasses.length === 0 && (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs font-bold text-rose-800">
+                حدّد ورقة واحدة على الأقل لتتمكن من التأكيد.
+              </p>
+            )}
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setPendingImport(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
                 إلغاء
               </button>
-              <button type="button" onClick={handleConfirmDigitizationImport} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white hover:opacity-90">
+              <button
+                type="button"
+                onClick={handleConfirmDigitizationImport}
+                disabled={selectedPendingClasses.length === 0}
+                className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 تأكيد الاستيراد
               </button>
             </div>
@@ -1326,7 +1422,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
           <input
             type="file"
             ref={fileInputRef}
-            accept=".xlsx, .xls, .csv"
+            accept=".xlsx,.xls,.xlsm,.xlsb"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -1502,7 +1598,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 </div>
                 <h3 className="text-base font-black text-[var(--text-primary)]">ابدأ بإضافة أقسامك</h3>
                 <p className="mx-auto mt-2 max-w-md text-xs leading-6 text-[var(--text-secondary)]">
-                  الاستيراد من ملف الرقمنة هو أسرع مسار: سيحاول مُعين إنشاء الأقسام وقوائم التلاميذ دفعة واحدة، ويمكنك دائماً الإضافة يدوياً.
+                  الاستيراد من ملف Excel هو أسرع مسار: يقرأ مُعين كل أوراق الملف، ويستورد القسم وأسماء التلاميذ فقط، ويستثني أوراق الأساتذة والإدارة تلقائياً. ويمكنك دائماً الإضافة يدوياً.
                 </p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
@@ -1511,7 +1607,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                     className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-sm font-black text-white shadow-xs active:scale-[0.98]"
                   >
                     <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
-                    استيراد ملف الرقمنة
+                    استيراد ملف Excel
                   </button>
                   <button
                     type="button"
@@ -1581,10 +1677,10 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* File Input for Excel/CSV - Digitization */}
+              {/* File input for the roster importer (Excel workbooks, any number of sheets). */}
               <input
                 type="file" ref={fileInputRef}
-                accept=".xlsx, .xls, .csv" onChange={handleFileUpload}
+                accept=".xlsx,.xls,.xlsm,.xlsb" onChange={handleFileUpload}
                 className="hidden" />
 
               {/* File Input for Excel - Moumtaze */}
@@ -1615,7 +1711,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button type="button" onClick={() => { setIsImportSheetOpen(false); moumtazeFileInputRef.current?.click(); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)]"><Sparkles className="h-4 w-4 text-[var(--warning)]" />استيراد الممتاز</button>
-                  <button type="button" onClick={() => { setIsImportSheetOpen(false); fileInputRef.current?.click(); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)]"><FileSpreadsheet className="h-4 w-4 text-[var(--primary)]" />استيراد الرقمنة</button>
+                  <button type="button" onClick={() => { setIsImportSheetOpen(false); fileInputRef.current?.click(); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)]"><FileSpreadsheet className="h-4 w-4 text-[var(--primary)]" />استيراد ملف Excel</button>
                   <button type="button" onClick={() => { setIsImportSheetOpen(false); setIsPasteModalOpen(true); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)]"><ClipboardPaste className="h-4 w-4 text-[var(--primary)]" />لصق قائمة أسماء</button>
                   <button type="button" onClick={() => { setIsImportSheetOpen(false); setEditingStudent({ id: uuidv4(), classId: selectedClassId, numberInList: classStudents.length + 1, fullName: '', gender: 'M' }); setIsStudentModalOpen(true); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)]"><Plus className="h-4 w-4 text-[var(--primary)]" />إضافة يدوية</button>
                   <button type="button" onClick={() => { setIsImportSheetOpen(false); handleExportStudentsExcel(); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border-default)] p-3 text-right text-xs font-bold hover:bg-[var(--bg-surface-subtle)] sm:col-span-2"><Download className="h-4 w-4 text-[var(--text-secondary)]" />تصدير قائمة Excel</button>
@@ -1668,7 +1764,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-bold cursor-pointer" >
-                    استيراد من ملف الرقمنة (Excel)
+                    استيراد من ملف Excel
                   </button>
                   <button
                     onClick={() => setIsPasteModalOpen(true)}

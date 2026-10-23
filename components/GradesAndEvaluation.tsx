@@ -9,7 +9,7 @@ import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
 import { normalizeGradeInput as normalizeNumerals } from '@/lib/grade-input';
 import { GRADE_FIELD_LABELS, nextGradeCell, parseGradeTable, type GradeField } from '@/lib/grade-table';
-import { collectNotebookChecks, notebookScoresFor } from '@/lib/notebook-rounds';
+import { collectNotebookChecks, normalizeNotebookRounds, notebookScoresFor } from '@/lib/notebook-rounds';
 import {
   JUDGEMENT_LEVELS,
   storedJudgementValue,
@@ -566,6 +566,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
    * evidence); the teacher's 0–5 judgement is added on top of the documented part.
    */
   const evaluationRules = state.calendarSettings?.evaluationRules;
+  const notebookRounds = normalizeNotebookRounds(evaluationRules?.notebookRounds);
 
   /**
    * حاسبة واحدة تخدم الجدول والنافذة: `judgementValue` يسمح لشاشة المراجعة
@@ -581,7 +582,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         ...(studentStatsMap[studentId] || {}),
         sessionsCount: classSessions.length,
         documentedSessions: documentedSessionsCount,
-        notebookScores: notebookScoresFor(notebookChecks, studentId),
+        notebookScores: notebookScoresFor(notebookChecks, studentId, notebookRounds),
         participationJudgement: raw === '' ? null : Number(raw),
       },
       state.calendarSettings?.evaluationRules
@@ -1548,8 +1549,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <ul className="list-inside list-disc space-y-1 text-slate-600">
               <li><strong>التقويم المستمر (على 20):</strong> السلوك والانضباط 3، المواظبة والحضور 3، الكراس والواجبات 6، المشاركة والنشاط 8 — كما في القرار الوزاري.</li>
               <li><strong>المواظبة (على 3):</strong> نسبة من حصص الفصل: كل غياب غير مبرر يُنقص النسبة بنقطة كاملة، والتأخر بنصف نقطة، ثم تُضرب النسبة في منحنى تصاعدي. الغياب المبرَّر لا يُخصم.</li>
-              <li><strong>السلوك (على 3):</strong> المخالفة الأولى 0.25 ثم 0.5 لكل مخالفة بعدها؛ فلا يهبط العنصر من أول زلة، ويُفقد كاملًا تقريباً مع التكرار.</li>
-              <li><strong>الكراس (على 6):</strong> متوسط جولتي تفتيش في الفصل على مقياس 0–5. الجولة الواحدة تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
+              <li><strong>السلوك (على 3):</strong> خصم 0.5 عن كل مخالفة من الأولى؛ ست مخالفات تستهلك العنصر كاملاً.</li>
+              <li><strong>الكراس (على 6):</strong> مراقبة واحدة للكراس في الفصل على مقياس 0–5، تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
               <li><strong>المشاركة والنشاط (على 8):</strong> 3 نقاط توثيق آلي تُحسب على الحصص التي وُثِّق فيها شيء فعلاً (لا على كل الحصص)، و5 نقاط تقدير الأستاذ من خمسة مستويات.</li>
               <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً أو سقفه كاملاً.</li>
               <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
@@ -1588,8 +1589,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             </p>
             <p className="text-xs leading-6 text-[var(--text-tertiary)]">
               {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
-              الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id).length > 0).length}/{classStudents.length}
-              {' '}تلميذاً مُفتَّشاً في جولة واحدة على الأقل.
+              الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
+              {' '}تلميذاً تمت مراقبة كراسه.
             </p>
           </div>
           <button

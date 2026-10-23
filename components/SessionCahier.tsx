@@ -573,7 +573,12 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
   }, [classPastSessions]);
 
 const handleExportCahierDoc = () => {
-    const rowsHtml = classDocumentedSessions.map((s, idx) => {
+    // The printed log reads from the oldest session to the newest one, like the
+    // official document it replaces; the on-screen list stays newest-first.
+    const exportSessions = [...classDocumentedSessions].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+    );
+    const rowsHtml = exportSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
       const title = s.customTopic
         ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
@@ -582,7 +587,7 @@ const handleExportCahierDoc = () => {
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
         <tr>
-          <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${classDocumentedSessions.length - idx}</td>
+          <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${idx + 1}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${s.date}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${timeSlot}</td>
           <td style="border: 1px solid #94a3b8; padding: 6px; text-align: right;"><strong>${title}</strong></td>
@@ -591,7 +596,7 @@ const handleExportCahierDoc = () => {
       `;
     }).join('');
 
-    const detailsHtml = classDocumentedSessions.map((s, idx) => {
+    const detailsHtml = exportSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
       const title = s.customTopic
         ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
@@ -600,7 +605,7 @@ const handleExportCahierDoc = () => {
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
         <div style="margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">
-          <h3 style="color: #0d2c3b;">الحصة رقم ${classDocumentedSessions.length - idx}: ${title} (${s.date})</h3>
+          <h3 style="color: #0d2c3b;">الحصة رقم ${idx + 1}: ${title} (${s.date})</h3>
           <p><strong>التوقيت:</strong> ${timeSlot} | <strong>الميدان:</strong> ${domain}</p>
           ${s.sessionGoals ? `<h4>أهداف الحصة:</h4><p style="white-space: pre-wrap;">${s.sessionGoals}</p>` : ''}
           ${s.accomplishments ? `<h4>توثيق وملاحظات الحصة:</h4><p style="white-space: pre-wrap;">${s.accomplishments}</p>` : ''}

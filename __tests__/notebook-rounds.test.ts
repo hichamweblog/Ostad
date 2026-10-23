@@ -4,6 +4,7 @@ import {
   clampNotebookScore,
   collectNotebookChecks,
   nextOpenRound,
+  normalizeNotebookRounds,
   notebookScoresFor,
   roundProgress,
 } from '@/lib/notebook-rounds';
@@ -47,13 +48,17 @@ describe('collectNotebookChecks', () => {
     expect(checks.st1[1]?.score).toBe(5);
   });
 
-  it('separates the two rounds and averages them', () => {
+  it('keeps a legacy second round in storage but reads one round by default', () => {
     const checks = collectNotebookChecks([
       session('s1', { st1: { round: 1, score: 4, at: '2026-10-01T08:00:00Z' } }),
       session('s2', { st1: { round: 2, score: 5, at: '2026-11-01T08:00:00Z' } }),
     ]);
 
-    expect(notebookScoresFor(checks, 'st1')).toEqual([4, 5]);
+    // القاعدة الافتراضية جولة واحدة: الجولة الثانية تُحفظ ولا تدخل الحساب.
+    expect(checks.st1[2]?.score).toBe(5);
+    expect(notebookScoresFor(checks, 'st1')).toEqual([4]);
+    // ويمكن قراءتها صراحةً إن ضُبط العدد على 2.
+    expect(notebookScoresFor(checks, 'st1', 2)).toEqual([4, 5]);
   });
 
   it('ignores cancelled sessions and malformed entries', () => {
@@ -67,13 +72,38 @@ describe('collectNotebookChecks', () => {
 });
 
 describe('round lifecycle', () => {
-  it('keeps round 1 open until every student is inspected', () => {
+  it('never opens a second round when the term asks for one', () => {
+    const partial = collectNotebookChecks([
+      session('s1', { st1: { round: 1, score: 5, at: '2026-10-01T08:00:00Z' } }),
+    ]);
+    const complete = collectNotebookChecks([
+      session('s1', {
+        st1: { round: 1, score: 5, at: '2026-10-01T08:00:00Z' },
+        st2: { round: 1, score: 4, at: '2026-10-01T08:00:00Z' },
+      }),
+    ]);
+
+    expect(nextOpenRound(partial, ['st1', 'st2'])).toBe(1);
+    // اكتملت الجولة الوحيدة: تبقى 1 ليبقى بالإمكان مراجعة الدرجات.
+    expect(nextOpenRound(complete, ['st1', 'st2'])).toBe(1);
+  });
+
+  it('advances to round 2 only when the term explicitly asks for two', () => {
     const checks = collectNotebookChecks([
       session('s1', { st1: { round: 1, score: 5, at: '2026-10-01T08:00:00Z' } }),
     ]);
 
-    expect(nextOpenRound(checks, ['st1', 'st2'])).toBe(1);
-    expect(nextOpenRound(checks, ['st1'])).toBe(2);
+    expect(nextOpenRound(checks, ['st1', 'st2'], 2)).toBe(1);
+    expect(nextOpenRound(checks, ['st1'], 2)).toBe(2);
+    expect(nextOpenRound(checks, ['st1'], 5)).toBe(2); // يُقيَّد بالحد الأقصى
+  });
+
+  it('normalises the configured round count to 1 or 2', () => {
+    expect(normalizeNotebookRounds(undefined)).toBe(1);
+    expect(normalizeNotebookRounds(0)).toBe(1);
+    expect(normalizeNotebookRounds(2)).toBe(2);
+    expect(normalizeNotebookRounds(9)).toBe(2);
+    expect(normalizeNotebookRounds(Number.NaN)).toBe(1);
   });
 
   it('reports progress for the open round', () => {

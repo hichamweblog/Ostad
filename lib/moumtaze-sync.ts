@@ -2,6 +2,7 @@ import { GradeLevel } from './types';
 import { detectLevelAndStream, isSchoolSummaryOrFooterRow } from './excel-sync';
 import { normalizeClassName, getCanonicalClassName } from './name-normalizer';
 import { normalizeDateToIso } from './date-utils';
+import { cleanAcademicYear, cleanSchoolName, cleanStateName } from './institution-metadata';
 
 export interface MoumtazeStudent {
   numberInList: number;
@@ -117,32 +118,23 @@ export async function parseMoumtazeFile(file: File): Promise<ParsedMoumtazeResul
         const cellStr = String(row[c] || '').trim();
         if (!cellStr) continue;
 
-        // School Name (ثانوية ...)
-        if (!detectedSchoolName && /ثانوية\s+[^\n\r]+/i.test(cellStr)) {
-          const match = cellStr.match(/(ثانوية\s+[^\n\r]+)/i);
-          if (match) detectedSchoolName = match[1].trim();
+        // Institution header: same cleaning as the digitisation importer, so the settings never
+        // receive «ثانوية الإمام مالك الموسم الدراسي 2026/2027» as one long school name.
+        if (!detectedSchoolName && /ثانوية|متوسطة|إكمالية|اكمالية/i.test(cellStr)) {
+          const school = cleanSchoolName(cellStr);
+          if (school) detectedSchoolName = school;
         }
 
         // Directorate / State (مديرية التربية لولاية ...)
-        if (!detectedStateName && /مديرية\s+التربية/i.test(cellStr)) {
-          const stateMatch = cellStr.match(/لولاية\s+([^\s\n\r]+)/i);
-          if (stateMatch) {
-            detectedStateName = stateMatch[1].trim();
-          } else {
-            detectedStateName = cellStr.replace(/مديرية\s+التربية\s*/i, '').trim();
-          }
+        if (!detectedStateName && /مديرية\s*التربية/i.test(cellStr)) {
+          const state = cleanStateName(cellStr);
+          if (state) detectedStateName = state;
         }
 
-        // Academic Year (2024-2025 / 2025-2024)
-        if (!detectedAcademicYear && /(?:20\d{2}\s*[-/]\s*20\d{2})/i.test(cellStr)) {
-          const ym = cellStr.match(/(20\d{2})\s*[-/]\s*(20\d{2})/);
-          if (ym) {
-            const y1 = Number(ym[1]);
-            const y2 = Number(ym[2]);
-            const startYear = Math.min(y1, y2);
-            const endYear = Math.max(y1, y2);
-            detectedAcademicYear = `${startYear}/${endYear}`;
-          }
+        // Academic Year (2024-2025 / 2025-2026)
+        if (!detectedAcademicYear) {
+          const year = cleanAcademicYear(cellStr);
+          if (year) detectedAcademicYear = year;
         }
 
         // Room Number (القاعة : 5 / القاعة : 17 / القاعة: 29)

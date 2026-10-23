@@ -7,8 +7,8 @@ import { ContinuousEvaluationRules, CouncilStatistics, Student, StudentGrade } f
  * كانت النسخة السابقة تعطي كل عنصر 5 نقاط وتنقص مقداراً ثابتاً عن كل واقعة،
  * فكانت النتيجة أن القسم كله يتراوح بين 12 و18 مهما اختلف سلوكه. النموذج الحالي:
  * – المواظبة نسبة من الحصص لا عدداً مطلقاً، حتى لا يُعاقب قسم الساعة الواحدة ضعفاً.
- * – السلوك خصم تصاعدي (الأولى 0.25 ثم 0.5) فلا يهبط السقف من أول مخالفة.
- * – الكراس من جولتي تفتيش على مقياس 0–5 (لا عدّ «لم يكتب»).
+ * – السلوك خصم 0.5 عن كل مخالفة، من المخالفة الأولى.
+ * – الكراس من جولة تفتيش واحدة على مقياس 0–5 (لا عدّ «لم يكتب»).
  * – المشاركة = توثيق آلي (3) فوق الحصص الموثّقة فقط + تقدير الأستاذ (5).
  * – أي عنصر بلا أدلة كافية يُستبعد ويُعاد توزيع وزنه على الباقي بدل منحه صفراً
  *   أو سقفه كاملاً.
@@ -46,7 +46,7 @@ export interface SessionBehaviourStats {
   sessionsCount?: number;
   /** عدد الحصص التي وُثِّقت فيها مشاركة تلميذ واحد على الأقل. */
   documentedSessions?: number;
-  /** درجات جولات الكراس (0–5)، أقصاها جولتان. */
+  /** درجات جولات الكراس (0–5)؛ جولة واحدة افتراضياً وجولتان كحد أقصى. */
   notebookScores?: number[];
   /** تقدير الأستاذ للمشاركة والنشاط (0–5). */
   participationJudgement?: number | null;
@@ -98,9 +98,9 @@ function clampScore(value: number, max: number): number {
 }
 
 /**
- * الخصم السلوكي التصاعدي: المخالفة الأولى 0.25 ثم 0.5 لكل مخالفة بعدها.
- * ست مخالفات تستهلك 2.75 من 3، أي أن السلوك المتكرر يُفقد العنصر كاملاً عملياً
- * بينما لا يهبط تلميذ عابر من أول زلّة.
+ * الخصم السلوكي: 0.5 عن كل مخالفة، من المخالفة الأولى.
+ * الإعداد `disruptionRepeatDeduction` يأخذ القيمة نفسها فلا تصاعد بين المخالفات،
+ * وست مخالفات تستهلك العنصر كاملاً (3 من 3).
  */
 function behaviourDeduction(count: number, first: number, repeat: number): number {
   if (count <= 0) return 0;
@@ -132,7 +132,7 @@ export function calculateEvaluationBreakdown(
     behaviorMax -
       behaviourDeduction(
         positiveCount(stats.disruptions),
-        ruleValue(rules?.disruptionDeduction, 0.25),
+        ruleValue(rules?.disruptionDeduction, 0.5),
         ruleValue(rules?.disruptionRepeatDeduction, 0.5),
       ),
     behaviorMax,
@@ -158,9 +158,11 @@ export function calculateEvaluationBreakdown(
       )
     : null;
 
-  // 3) الكراس — متوسط الجولات؛ وإن لم تُنفَّذ جولة قط، تُستخدم علامات «لم يكتب»
-  //    كدليل احتياطي بدل استبعاد العنصر من كل القسم.
-  const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, 2);
+  // 3) الكراس — متوسط الجولات المطلوبة (جولة واحدة افتراضياً). أي درجة محفوظة
+  //    في جولة زائدة عن الإعداد لا تدخل الحساب حتى لا يتغيّر السقف بصمت.
+  //    وإن لم تُنفَّذ جولة قط، تُستخدم علامات «لم يكتب» كدليل احتياطي.
+  const notebookRounds = Math.min(2, Math.max(1, Math.round(ruleValue(rules?.notebookRounds, 1))));
+  const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, notebookRounds);
   const hasRounds = rounds.length > 0;
   const fallbackNotebook = hasRounds
     ? null

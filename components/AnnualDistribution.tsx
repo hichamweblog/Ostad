@@ -513,7 +513,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = () => {
               </div>
 
               {/* Desktop Table */}
-              <div className="hidden lg:block border border-slate-200/90 rounded-xl overflow-hidden shadow-2xs bg-white">
+              <div className="hidden lg:block print:block border border-slate-200/90 rounded-xl overflow-hidden shadow-2xs bg-white">
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs border-collapse">
                     <thead>
@@ -612,7 +612,7 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = () => {
               </div>
 
               {/* Mobile Cards */}
-              <div className="block lg:hidden space-y-3 mt-3">
+              <div className="block lg:hidden print:hidden space-y-3 mt-3">
                 {sec.units.map(({ unit, originalIndex, sched }) => {
                   const unitProg = state.activeClassId
                     ? state.lessonProgress.find(
