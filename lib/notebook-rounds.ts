@@ -29,18 +29,29 @@ export function normalizeNotebookRounds(value: unknown): NotebookRound {
   return Math.min(NOTEBOOK_ROUNDS_MAX, Math.max(1, numeric)) as NotebookRound;
 }
 
-/** درجات التفتيش السريع: أربع درجات تكفي وتُبقي الاختيار بضغطة واحدة. */
+/** أربع حالات لفظية تتحول مباشرة إلى نقاط من 6، بلا إدخال رقمي أو ضرب في 1.2. */
 export const NOTEBOOK_SCORE_CHOICES: { score: number; label: string; hint: string }[] = [
-  { score: 5, label: 'مكتمل', hint: 'كل الدروس والواجبات منظّمة' },
-  { score: 4, label: 'جيد', hint: 'نقص طفيف في درس أو واجب' },
-  { score: 2.5, label: 'ناقص', hint: 'نقص واضح ومتكرر' },
-  { score: 0, label: 'مهمل', hint: 'كراس غير موجود أو شبه فارغ' },
+  { score: 6, label: 'مكتمل ومنظم', hint: 'الكراس وأدوات التعلم كاملة ومنظمة — 6/6' },
+  { score: 4, label: 'جيد، مع نقص طفيف', hint: 'نقص طفيف في الأدوات أو التنظيم — 4/6' },
+  { score: 2, label: 'ناقص أو غير منظم', hint: 'نقص واضح أو ضعف في تنظيم الكراس — 2/6' },
+  { score: 0, label: 'منعدم أو لم يحضر الكراس', hint: 'الكراس غير موجود أو شبه فارغ — 0/6' },
 ];
 
 export function clampNotebookScore(value: unknown): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
-  return Math.max(0, Math.min(5, Math.round(numeric * 10) / 10));
+  return Math.max(0, Math.min(6, Math.round(numeric * 10) / 10));
+}
+
+/**
+ * قراءة اختيارات النسخة السابقة دون إنقاص قيمتها البيداغوجية: 5 كان «مكتملاً»
+ * و2.5 كان «ناقصاً». تبقى القيمة الأصلية في JSON ولا يُعاد كتابتها أثناء المزامنة.
+ */
+function normalizeStoredNotebookScore(value: unknown): number {
+  const numeric = Number(value);
+  if (numeric === 5) return 6;
+  if (numeric === 2.5) return 2;
+  return clampNotebookScore(value);
 }
 
 /**
@@ -55,7 +66,7 @@ export function collectNotebookChecks(sessions: SessionRecord[]): StudentNoteboo
       if (!raw || (raw.round !== 1 && raw.round !== 2)) continue;
       const check: NotebookCheck = {
         round: raw.round,
-        score: clampNotebookScore(raw.score),
+        score: normalizeStoredNotebookScore(raw.score),
         at: typeof raw.at === 'string' && raw.at ? raw.at : '',
       };
       const bucket = (result[studentId] ??= {});
@@ -101,7 +112,7 @@ export function roundProgress(
 }
 
 /**
- * درجات الجولات المطلوبة لتلميذ واحد، على مقياس 0–5.
+ * درجات الجولات المطلوبة لتلميذ واحد، مباشرة على مقياس 0–6.
  * مع جولة واحدة تُقرأ الجولة الأولى فقط، وأي درجة محفوظة في جولة ثانية قديمة
  * تبقى في السجل ولا تدخل الحساب.
  */

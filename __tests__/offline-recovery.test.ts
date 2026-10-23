@@ -706,6 +706,35 @@ describe('§7 a preference or a missing column cannot freeze the queue', () => {
     expect(value.sync_revision).toBe(99);
   });
 
+  it('writes the 4+4 evaluation rules through the existing app_settings JSON payload', async () => {
+    const calendarSettings = getEmptyState().calendarSettings!;
+    const evaluationEntry: SyncOutboxEntry = {
+      ...settingsEntry,
+      id: 'entry-evaluation-settings',
+      operations: [{
+        ...settingsEntry.operations[0],
+        payload: { calendarSettings },
+      }],
+    };
+    const { client, calls } = writeClient();
+
+    await expect(applySyncOutboxEntry(client, ownerId, evaluationEntry, 'device-phone')).resolves.toBeUndefined();
+
+    const written = calls.find((call) => call.table === 'app_settings' && call.method === 'upsert');
+    const value = written?.value as { settings: Record<string, unknown> };
+    expect(value.settings).toMatchObject({
+      calendarSettings: {
+        evaluationRules: {
+          participationRecordedMax: 4,
+          participationJudgementMax: 4,
+          participationTargetRatio: 0.3,
+          unexcusedAbsenceDeduction: 0.5,
+          lateDeduction: 0,
+        },
+      },
+    });
+  });
+
   it('still refuses a stale write on a pedagogical record', async () => {
     const { client, calls } = writeClient({
       existing: { sync_revision: 99, sync_device_id: 'device-laptop', updated_by: 'device-laptop' },
@@ -786,7 +815,7 @@ describe('§6 notebook rounds: the new field must survive the cloud round-trip',
 
   it('writes notebookChecks inside sessions.teacher_notes and restores them on load', async () => {
     const checks: NonNullable<SessionRecord['notebookChecks']> = {
-      [studentId]: { round: 1, score: 4, at: '2026-10-12T09:15:00.000Z' },
+      [studentId]: { round: 1, score: 6, at: '2026-10-12T09:15:00.000Z' },
       'another-student': { round: 2, score: 5, at: '2026-10-12T09:16:00.000Z' },
     };
     const entry: SyncOutboxEntry = {

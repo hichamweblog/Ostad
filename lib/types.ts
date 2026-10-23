@@ -55,32 +55,34 @@ export interface OfficialHoliday {
  * أوزان التقويم المستمر كما في القرار الوزاري:
  * السلوك 3 | المواظبة 3 | الكراس 6 | المشاركة والنشاط 8 = 20.
  *
- * «إحضار الأدوات» (3) لا وجود له في العلوم الإسلامية، فدُمج في الكراس ليصبح 6،
- * و«العمل الفردي/الفوجي/المبادرة» (5) اندمجت في المشاركة مع توثيقها (3) فصارت 8.
+ * «إحضار الأدوات» (3) و«تنظيم الكراس» (3) يجتمعان في «الكراس وأدوات التعلم» (6).
+ * وتبقى المشاركة والنشاط 8، بتقسيم داخلي مبسّط: توثيق 4 وتقدير أستاذ 4.
  */
 export interface ContinuousEvaluationRules {
   behaviorMax: number; // 3
   attendanceMax: number; // 3
   notebookMax: number; // 6
-  participationMax: number; // 8 = توثيق 3 + تقدير 5
+  participationMax: number; // 8 = توثيق 4 + تقدير 4 (تقسيم داخلي مبسّط)
   /** خصم كل مخالفة سلوكية (من 3) — 0.5 من المخالفة الأولى. */
   disruptionDeduction: number; // 0.5
   /** خصم المخالفات التالية؛ يساوي `disruptionDeduction` فلا تصاعد بينها. */
   disruptionRepeatDeduction?: number; // 0.5
   /** خصم عدم كتابة الدروس — احتياطي فقط عند غياب جولات الكراس. */
   unwrittenLessonDeduction: number;
+  /** الخصم المباشر لكل غياب غير مبرر (0.5 افتراضياً). */
   unexcusedAbsenceDeduction: number;
+  /** محفوظ للتوافق فقط؛ التأخر يُسجّل ولا يدخل في العلامة (0). */
   lateDeduction: number;
   /** نقطة تُضاف لكل مشاركة إيجابية (نموذج قديم، أُبقي للتوافق). */
   participationBonus: number;
   /** خصم اختياري عند تسجيل عدم المشاركة (افتراضياً 0 = دون خصم). */
   lackOfParticipationDeduction?: number;
   /** حصة المشاركة الآلية (من 8). والباقي تقدير الأستاذ. */
-  participationRecordedMax?: number; // 3
+  participationRecordedMax?: number; // 4
   /** حصة تقدير الأستاذ (من 8). */
-  participationJudgementMax?: number; // 5
+  participationJudgementMax?: number; // 4
   /** النسبة المستهدفة من الحصص الموثّقة للوصول إلى كامل نقطة التوثيق. */
-  participationTargetRatio?: number; // 0.25
+  participationTargetRatio?: number; // 0.30
   /** عدد جولات الكراس في الفصل (1 افتراضاً، و2 كحد أقصى لسجل قديم). */
   notebookRounds?: number; // 1
   maxScore: number; // 20
@@ -243,7 +245,7 @@ export interface SessionRecord {
   /** Set when the teacher explicitly finishes documenting the class. */
   completedAt?: string;
   /**
-   * جولات تفتيش الكراس: تُسجَّل في الحصة التي جرى فيها التفتيش، والدرجة 0–5.
+   * جولات تفتيش الكراس: تُسجَّل في الحصة التي جرى فيها التفتيش، والدرجة مباشرة 0–6.
    * التلميذ يُفتَّش مرة في كل جولة؛ الجولة الواحدة قد تمتد على عدة حصص
    * (8–10 تلاميذ في الحصة) لأن القسم قد يبلغ 40 تلميذاً.
    */
@@ -253,7 +255,7 @@ export interface SessionRecord {
 /** نتيجة تفتيش الكراس داخل جولة واحدة. */
 export interface NotebookCheck {
   round: 1 | 2;
-  /** 0 = مهمل، 5 = مكتمل ومنظّم. */
+  /** 0 = منعدم، 2 = ناقص، 4 = جيد، 6 = مكتمل ومنظم. */
   score: number;
   /** وقت التفتيش (ISO) لحسم التعارض بين الجهازين. */
   at: string;
@@ -268,8 +270,8 @@ export interface StudentGrade {
   // عناصر التقويم المستمر الأربعة بأوزان القرار الوزاري 3 / 3 / 6 / 8:
   behaviorScore?: number | null; // السلوك والانضباط (على 3)
   attendanceScore?: number | null; // المواظبة والحضور (على 3)
-  notebookScore?: number | null; // الكراس والواجبات (على 6)
-  participationScore?: number | null; // تقدير الأستاذ للمشاركة والنشاط (على 5)؛ الجزء الآلي يُحسب من الحصص
+  notebookScore?: number | null; // الكراس وأدوات التعلم (على 6)
+  participationScore?: number | null; // تقدير الأستاذ للمشاركة والنشاط (0 أو 2 أو 4)؛ الجزء الآلي يُحسب من الحصص
   // تفاصيل التقييم وسجل الملاحظات:
   disruptionsCount?: number; // عدد المخالفات السلوكية المسجلة
   unwrittenLessonsCount?: number; // عدد مرات عدم كتابة الدروس

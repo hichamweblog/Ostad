@@ -374,6 +374,19 @@ export function normalizeCalendarSettings(
     rules.notebookMax = defaults.evaluationRules.notebookMax;
     rules.participationMax = defaults.evaluationRules.participationMax;
   }
+  // ترقية نموذج المشاركة السابق (توثيق 3 + تقدير 5 وعتبة 25%) إلى النموذج
+  // المعتمد (4 + 4 وعتبة 30%). أي تقسيم أو عتبة أخرى يُحترم ولا يُعاد ضبطه.
+  const legacyParticipationModel =
+    rules.participationRecordedMax === 3 && rules.participationJudgementMax === 5;
+  if (legacyParticipationModel) {
+    rules.participationRecordedMax = defaults.evaluationRules.participationRecordedMax;
+    rules.participationJudgementMax = defaults.evaluationRules.participationJudgementMax;
+    if (rules.participationTargetRatio === 0.25) {
+      rules.participationTargetRatio = defaults.evaluationRules.participationTargetRatio;
+    }
+  }
+  // التأخر يبقى حالة حضور للمتابعة فقط، ولا يدخل في العلامة حتى مع إعداد قديم.
+  rules.lateDeduction = 0;
   // خصم السلوك: كان الافتراضي القديم 0.25 للأولى ثم 0.5 تصاعدياً. الإعداد
   // المطابق تماماً لهذا الزوج لم يخصّصه الأستاذ، فيُرفع إلى 0.5 لكل مخالفة.
   // أي زوج مختلف اختاره الأستاذ صراحةً ولا يُمسّ.
