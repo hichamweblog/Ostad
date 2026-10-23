@@ -17,6 +17,7 @@ import {
 } from '@/lib/participation-judgement';
 import { getStudentNameKey } from '@/lib/name-normalizer';
 import { AccessibleDialog } from './AccessibleDialog';
+import { StudentNameButton } from './StudentNameButton';
 import {
   PEDAGOGICAL_TIERS,
   getScoreTier,
@@ -264,9 +265,10 @@ function buildDraft(
 }
 
 interface GradesAndEvaluationProps {
+  onOpenStudent: (studentId: string) => void;
 }
 
-export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
+export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({ onOpenStudent }) => {
   const { state, updateState: onUpdateState, updateStateAndWait } = useAppState();
   const [selectedClassId, setSelectedClassId] = useState<string>(
     state.activeClassId || (state.classes[0]?.id || '')
@@ -1268,9 +1270,9 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                           {student.numberInList}
                         </span>
                         <div className="min-w-0">
-                          <h4 className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
-                            {student.fullName}
-                          </h4>
+                          <div className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
+                            <StudentNameButton student={student} onOpen={onOpenStudent} truncate={false} />
+                          </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <span className={`rounded-full px-2 py-0.5 text-xs font-black ${completedFields === 3 ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-amber-50 text-amber-800'}`}>
                               {completedFields}/3 مكتملة
@@ -1391,7 +1393,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                               {student.numberInList}
                             </td>
                             <td className="p-1 px-2 font-bold text-slate-900">
-                              {student.fullName}
+                              <StudentNameButton student={student} onOpen={onOpenStudent} />
                             </td>
 
                             {/* Continuous Evaluation (0-20) */}

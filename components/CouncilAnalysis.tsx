@@ -7,6 +7,7 @@ import { printElement } from '@/lib/print';
 import { calculateCouncilStatistics } from '@/lib/grade-calculator';
 import { filterByTrimester, normalizeTrimester, trimesterLabel } from '@/lib/academic-calendar';
 import Link from 'next/link';
+import { StudentNameButton } from './StudentNameButton';
 import { AlertTriangle } from 'lucide-react';
 import {
 
@@ -18,9 +19,10 @@ import {
 } from 'lucide-react';
 
 interface CouncilAnalysisProps {
+  onOpenStudent: (studentId: string) => void;
 }
 
-export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
+export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = ({ onOpenStudent }) => {
   const { state, updateState: onUpdateState } = useAppState();
   const [selectedClassId, setSelectedClassId] = useState<string>(
     state.activeClassId || (state.classes[0]?.id || '')
@@ -375,9 +377,15 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
           <div className="text-2xl font-bold text-[var(--primary)] font-mono">
             {stats.highestScore > 0 ? stats.highestScore.toFixed(2) : '-'}
           </div>
-          <div className="text-xs font-bold text-slate-800 truncate mt-1">
-            {stats.topStudentName}
-          </div>
+          {stats.topStudentId ? (
+            <StudentNameButton
+              student={{ id: stats.topStudentId, fullName: stats.topStudentName }}
+              onOpen={onOpenStudent}
+              className="mt-1 text-xs"
+            />
+          ) : (
+            <div className="mt-1 truncate text-xs font-bold text-slate-800">{stats.topStudentName}</div>
+          )}
         </div>
 
         {/* Metric 4: Lowest Student */}
@@ -389,9 +397,15 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
           <div className="text-2xl font-bold text-rose-700 font-mono">
             {stats.lowestScore > 0 ? stats.lowestScore.toFixed(2) : '-'}
           </div>
-          <div className="text-xs font-bold text-slate-800 truncate mt-1">
-            {stats.lowestStudentName}
-          </div>
+          {stats.lowestStudentId ? (
+            <StudentNameButton
+              student={{ id: stats.lowestStudentId, fullName: stats.lowestStudentName }}
+              onOpen={onOpenStudent}
+              className="mt-1 text-xs"
+            />
+          ) : (
+            <div className="mt-1 truncate text-xs font-bold text-slate-800">{stats.lowestStudentName}</div>
+          )}
         </div>
       </div>
 
