@@ -21,14 +21,16 @@ function SummaryCard({
   value,
   unit,
   hint,
+  className = '',
 }: {
   label: string;
   value: string;
   unit?: string;
   hint?: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3">
+    <div className={`rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 ${className}`}>
       <div className="text-xs font-bold text-[var(--text-secondary)]">{label}</div>
       <div className="mt-1 flex items-baseline gap-1 font-mono text-xl font-black text-[var(--text-primary)]" dir="ltr">
         <span>{value}</span>
@@ -170,18 +172,14 @@ export function StudentProfileContent({ profile }: { profile: StudentProfileData
             ملخص {trimesterLabel(profile.activeTrimester)}
           </h3>
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <SummaryCard label="المعدل" value={formatScore(current.average)} unit="/ 20" />
           <SummaryCard label="التقويم المستمر" value={formatScore(current.grade?.continuousEval)} unit="/ 20" />
           <SummaryCard
             label="الغيابات"
             value={current.sessionsCount > 0 ? String(current.stats.absent) : '—'}
             hint={current.sessionsCount > 0 ? `من ${current.sessionsCount} حصة` : 'لا حصص محفوظة'}
-          />
-          <SummaryCard
-            label="التأخر"
-            value={current.sessionsCount > 0 ? String(current.stats.late) : '—'}
-            hint="للمتابعة فقط"
+            className="col-span-2 sm:col-span-1"
           />
         </div>
         <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold text-[var(--text-secondary)]">
