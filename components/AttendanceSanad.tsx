@@ -3,6 +3,7 @@
 import { showToast } from '@/components/Toast';
 import { printElement } from '@/lib/print';
 import { AccessibleDialog } from '@/components/AccessibleDialog';
+import { StudentNameButton } from '@/components/StudentNameButton';
 import { useAppState } from '@/hooks/app-state-context';
 import React, { useEffect, useState } from 'react';
 import { exportToDocx, triggerHapticFeedback } from '@/lib/utils';
@@ -34,11 +35,13 @@ import {
 interface AttendanceSanadProps {
   onNavigateToTimetable?: () => void;
   onNavigateToSessions?: (sessionId?: string) => void;
+  onOpenStudent: (studentId: string) => void;
 }
 
 export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   onNavigateToTimetable,
-  onNavigateToSessions
+  onNavigateToSessions,
+  onOpenStudent,
 }) => {
   const { state, updateState: onUpdateState, updateStateAndWait } = useAppState();
   const [selectedClassId, setSelectedClassId] = useState<string>(
@@ -875,9 +878,9 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                             {student.numberInList}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <h4 className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
-                              {student.fullName}
-                            </h4>
+                            <div className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
+                              <StudentNameButton student={student} onOpen={onOpenStudent} truncate={false} />
+                            </div>
                             {student.isRepeater && (
                               <span className="inline-block text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold mt-0.5">
                                 معيد
@@ -987,7 +990,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                               {student.numberInList}
                             </td>
                             <td className="p-3 font-bold text-slate-900">
-                              {student.fullName}
+                              <StudentNameButton student={student} onOpen={onOpenStudent} />
                               {student.isRepeater && (
                                 <span className="mr-2 text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
                                   معيد

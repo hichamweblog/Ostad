@@ -13,13 +13,15 @@ interface GlobalSearchModalProps {
   onClose: () => void;
   onNavigate: (tab: SanadTab) => void;
   onPrepareUnit?: (unit: ReturnType<typeof getMergedCurriculumUnits>[number]) => void;
+  onOpenStudent: (studentId: string) => void;
 }
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   isOpen,
   onClose,
   onNavigate,
-  onPrepareUnit
+  onPrepareUnit,
+  onOpenStudent,
 }) => {
   const { state, updateState: onUpdateState } = useAppState();
   const [query, setQuery] = useState('');
@@ -208,26 +210,14 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               <div className="space-y-1">
                 {matchedStudents.map(st => {
                   const cls = state.classes.find(c => c.id === st.classId);
+                  const openProfile = () => {
+                    onClose();
+                    onOpenStudent(st.id);
+                  };
                   return (
                     <button
                       key={st.id}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          if (cls) {
-                            onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
-                          }
-                          onClose();
-                          onNavigate('classes');
-                        }
-                      }}
-                      onClick={() => {
-                        if (cls) {
-                          onUpdateState(prev => ({ ...prev, activeClassId: cls.id }));
-                        }
-                        onClose();
-                        onNavigate('classes');
-                      }}
+                      onClick={openProfile}
                       className="p-3 rounded-xl border border-[var(--bg-surface-subtle)] hover:border-[var(--primary)] bg-[var(--bg-page)] hover:bg-[var(--bg-surface)] flex items-center justify-between cursor-pointer transition-all group" >
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center">

@@ -189,7 +189,8 @@ helpers المعتمدة.
   الأوزان في `SettingsSanad`.
 - الاختبارات الملزمة: `grade-calculator.test.ts`، `notebook-rounds.test.ts`،
   `participation-judgement.test.ts`، `attendance-status.test.ts` (الغياب من
-  الضغطة الأولى)، `academic-calendar.test.ts` (ترقية الإعدادات القديمة)،
+  الضغطة الأولى)، `student-profile.test.ts` (الفصول السابقة والقراءة دون كتابة)،
+  `academic-calendar.test.ts` (ترقية الإعدادات القديمة)،
   `grades-sync.test.ts` (حدود الرفع)، `offline-recovery.test.ts` (دورة
   `notebookChecks` وإعدادات التقويم)، `migrate-local-state.test.ts`.
 - الوحدة ذات الحجم الساعي حصة واحدة (`isSingleSessionUnit`) تُدوَّن دون ترقيم؛
@@ -201,6 +202,11 @@ helpers المعتمدة.
   عبر `filterByTrimester()` أو `isDateInTrimester()` قبل العرض أو الحساب، حتى
   يبدأ كل فصل من صفر.
 - `StudentGrade` مفتاحه المنطقي `studentId + trimester`؛ لا تدمج صفوف فصلين.
+- ملف التلميذ قراءة فقط عبر `selectStudentProfile()` في `lib/student-profile.ts`:
+  يعرض الفصل النشط ثم السابقة، ويشتق النتائج والحضور من السجلات المحفوظة نفسها
+  دون تغيير `activeClassId` أو `activeTrimester` أو إنشاء outbox. النقص `—` وليس
+  صفراً، والتأخر للمتابعة فقط. يفتح من `StudentNameButton` أو نتيجة البحث؛ لا
+  تُحوّل صفوف التحرير كاملة إلى أزرار ولا تُراكب الحوارات.
 - تسميات عناصر التقويم المستمر تأتي من `lib/evaluation-labels.ts` ولا تُكتب
   يدويًا في المكوّنات (السلوك والانضباط، المواظبة والحضور، الكراس وأدوات
   التعلم، المشاركة الصفية).

@@ -313,6 +313,8 @@ export interface CouncilStatistics {
   passRate: number; // %
   highestScore: number;
   lowestScore: number;
+  topStudentId: string | null;
+  lowestStudentId: string | null;
   topStudentName: string;
   lowestStudentName: string;
   // Bands according to official Algerian format:

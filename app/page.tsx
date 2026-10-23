@@ -93,6 +93,13 @@ const GlobalSearchModal = dynamic(
     ),
   { ssr: false },
 );
+const StudentProfileOverlay = dynamic(
+  () =>
+    import("@/components/StudentProfileOverlay").then(
+      (mod) => mod.StudentProfileOverlay,
+    ),
+  { ssr: false },
+);
 
 const TAB_ROUTES: Record<SanadTab, string> = {
   dashboard: "/dashboard",
@@ -157,6 +164,7 @@ function AppContent({
   const router = useRouter();
   const currentTab = ROUTE_TABS[pathname] ?? "dashboard";
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [prepUnit, setPrepUnit] = useState<CurriculumUnit | null>(null);
   const [prepTab, setPrepTab] = useState<"card" | "pdf" | "bank">("card");
@@ -246,12 +254,13 @@ function AppContent({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        if (profileStudentId) return;
         setIsSearchOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [profileStudentId]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -395,6 +404,7 @@ function AppContent({
             <ClassesManager
               onNavigate={setCurrentTab}
               initialSubTab="classes"
+              onOpenStudent={setProfileStudentId}
             />
           )}
 
@@ -402,11 +412,13 @@ function AppContent({
             <ClassesManager
               onNavigate={setCurrentTab}
               initialSubTab="students"
+              onOpenStudent={setProfileStudentId}
             />
           )}
 
           {currentTab === "attendance" && (
             <AttendanceSanad
+              onOpenStudent={setProfileStudentId}
               onNavigateToTimetable={() => setCurrentTab("timetable")}
               onNavigateToSessions={(sessionId) => {
                 setSelectedSessionForCahier(sessionId || null);
@@ -417,10 +429,11 @@ function AppContent({
 
           {currentTab === "grades" && (
             <GradesAndEvaluation
+              onOpenStudent={setProfileStudentId}
             />
           )}
 
-          {currentTab === "council" && <CouncilAnalysis />}
+          {currentTab === "council" && <CouncilAnalysis onOpenStudent={setProfileStudentId} />}
 
           {currentTab === "sessions" && (
             <SessionCahier
@@ -498,6 +511,11 @@ function AppContent({
         onClose={() => setIsSearchOpen(false)}
         onNavigate={setCurrentTab}
         onPrepareUnit={handlePrepareUnit}
+        onOpenStudent={setProfileStudentId}
+      />
+      <StudentProfileOverlay
+        studentId={profileStudentId}
+        onClose={() => setProfileStudentId(null)}
       />
       <SyncConflictDialog
         conflict={isConflictOpen ? conflicts[0] || null : null}
