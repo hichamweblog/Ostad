@@ -7,10 +7,15 @@ import { ClassFormDialog } from './classes/ClassFormDialog';
 import { StudentFormDialog } from './classes/StudentFormDialog';
 import React, { useEffect, useState, useRef } from 'react';
 import { DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
-import { AppState } from '@/lib/storage';
+import { AppState, DEFAULT_PROFILE } from '@/lib/storage';
 import { SanadTab } from './SidebarSanad';
 import { ClassRoom, GradeLevel, Student, StudentGrade } from '@/lib/types';
 import { isSchoolSummaryOrFooterRow } from '@/lib/excel-sync';
+import {
+  describeInstitutionMetadata,
+  mergeInstitutionMetadata,
+  type InstitutionMetadata,
+} from '@/lib/institution-metadata';
 import type { ParsedDigitizationResult } from '@/lib/excel-sync';
 import type { ParsedMoumtazeResult } from '@/lib/moumtaze-sync';
 import {  type RosterImportClass, type RosterImportStudent } from '@/lib/supabase/roster-import';
@@ -241,6 +246,8 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     (total, cls) => total + cls.students.length,
     0
   );
+  // ترويسة الملف كما ستظهر في الإعدادات (اسم مؤسسة نظيف، سنة موحّدة الصيغة).
+  const pendingInstitutionText = pendingImport ? describeInstitutionMetadata(pendingImport) : '';
 
   const toggleImportSheet = (sheetName: string) => {
     setExcludedImportSheets(previous =>
@@ -248,6 +255,19 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
         ? previous.filter(name => name !== sheetName)
         : [...previous, sheetName]
     );
+  };
+
+  /**
+   * يحكي ما فعله الملف بإعدادات المؤسسة: يُملأ الفارغ، ولا يُستبدل ما كتبه الأستاذ.
+   * (كل الإشعارات عربية وقابلة للإغلاق، بلا alert/prompt.)
+   */
+  const announceInstitutionMetadata = (applied: InstitutionMetadata, kept: InstitutionMetadata) => {
+    const appliedText = describeInstitutionMetadata(applied);
+    if (appliedText) showToast(`حُدّثت الإعدادات من الملف — ${appliedText}`, 'success');
+    const keptText = describeInstitutionMetadata(kept);
+    if (keptText) {
+      showToast(`أُبقيت إعداداتك كما هي؛ الملف يحمل ${keptText}. يمكنك تعديلها من الإعدادات.`, 'info');
+    }
   };
 
   const handleConfirmDigitizationImport = () => {
@@ -605,14 +625,16 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     // Summary notification
     summaryNotificationMsg = `تم تجهيز ${parsedData.classes.length} أفواج تربوية: إضافة ${totalNewStudentsAdded} تلميذاً وتحديث ${totalExistingStudentsRetained} تلميذاً.`;
 
-    // Only the roster (section name + student names) is imported. Institution metadata found in
-    // the workbook header stays in the preview and is never written into the profile: the teacher
-    // sets the school, the state and the year in the settings screen.
+    // Rosters carry names only; the header fills the school / state / year fields in the settings.
+    const institution = mergeInstitutionMetadata(state.profile, parsedData, {
+      defaultAcademicYear: DEFAULT_PROFILE.academicYear,
+    });
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
+      profile: { ...state.profile, ...institution.applied },
     };
 
     if (targetClassIdToSelect) setSelectedClassId(targetClassIdToSelect);
@@ -622,6 +644,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     try {
       await commitRosterImport(importedClasses, importedStudents, nextState);
       showToast('تم استيراد القوائم ومزامنتها سحابياً بنجاح.', 'success');
+      announceInstitutionMetadata(institution.applied, institution.kept);
     } catch (error) {
       console.error('Atomic roster import sync failed:', error);
       showToast('تم حفظ الاستيراد محلياً، وتعذرت المصادقة السحابية للدفعة. ستتم إعادة المحاولة عبر المزامنة.', 'warning');
@@ -831,12 +854,16 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     const firstClassId = processedClassIds[0] || state.activeClassId || (updatedClasses.length > 0 ? updatedClasses[0].id : null);
     targetClassIdToSelect = firstClassId;
 
-    // Same rule as the roster importer: classes and student names only, never institution or staff data.
+    // Same rule as the roster importer: names go to the rosters, the header to the settings.
+    const institution = mergeInstitutionMetadata(state.profile, moumtazeData, {
+      defaultAcademicYear: DEFAULT_PROFILE.academicYear,
+    });
     const nextState: AppState = {
       ...state,
       classes: updatedClasses,
       students: updatedStudents,
       activeClassId: firstClassId,
+      profile: { ...state.profile, ...institution.applied },
     };
 
     if (targetClassIdToSelect) {
@@ -850,6 +877,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
     try {
       await commitRosterImport(importedClasses, importedStudents, nextState);
       showToast('تم استيراد قوائم الممتاز ومزامنتها سحابياً بنجاح.', 'success');
+      announceInstitutionMetadata(institution.applied, institution.kept);
     } catch (error) {
       console.error('Atomic Moumtaze roster sync failed:', error);
       showToast('تم حفظ الاستيراد محلياً، وتعذرت المصادقة السحابية للدفعة. ستتم إعادة المحاولة عبر المزامنة.', 'warning');
@@ -1356,6 +1384,14 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
               يُستورد القسم وأسماء التلاميذ فقط؛ أوراق الطاقم الإداري والأساتذة تُستثنى تلقائياً، ولا تُحفظ بيانات المؤسسة أو السنة من الملف. وسيتم الاحتفاظ بالتلاميذ الموجودين وإضافة غير الموجودين.
             </p>
+            {pendingInstitutionText && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs leading-6 text-slate-700">
+                <span className="font-bold">من ترويسة الملف إلى الإعدادات:</span> {pendingInstitutionText}
+                <span className="mt-0.5 block text-[11px] text-slate-500">
+                  تُملأ الحقول الفارغة فقط؛ وما كتبته بنفسك في الإعدادات يبقى كما هو.
+                </span>
+              </div>
+            )}
             {selectedPendingClasses.length === 0 && (
               <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs font-bold text-rose-800">
                 حدّد ورقة واحدة على الأقل لتتمكن من التأكيد.

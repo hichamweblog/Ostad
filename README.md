@@ -233,7 +233,7 @@ npm run dev
 
 ```bash
 npm run lint    # فحص خلو الأكواد من الأخطاء والتحذيرات (0 errors, 0 warnings)
-npm run test    # تشغيل 377 اختباراً مؤتمتاً في Vitest عبر 25 ملف اختبار
+npm run test    # تشغيل 389 اختباراً مؤتمتاً في Vitest عبر 26 ملف اختبار
 npm run build   # بناء حزمة الإنتاج بواسطة Webpack
 npm run start   # تشغيل خادم الإنتاج
 ```

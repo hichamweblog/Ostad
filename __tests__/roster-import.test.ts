@@ -127,7 +127,7 @@ describe('multi-sheet roster import', () => {
     expect(result.classes[0].students.map(s => s.fullName)).toEqual(['Benali Noman', 'Cherif Amel']);
   });
 
-  it('cleans the section name from a merged title row and imports no institution data', async () => {
+  it('cleans the section name and the institution header of a merged title row', async () => {
     const file = buildWorkbookFile([
       {
         name: '2 ع ت 1',
@@ -142,9 +142,10 @@ describe('multi-sheet roster import', () => {
 
     const result = await parseDigitizationFile(file);
     expect(result.classes[0].className).toBe('2 ع ت 1');
-    // «القسم وأسماء التلاميذ فقط»: the school, the state and the year never leave the file.
-    expect(result).not.toHaveProperty('schoolName');
-    expect(result).not.toHaveProperty('academicYear');
+    // The header feeds the settings fields (never the rosters), already cleaned.
+    expect(result.schoolName).toBe('ثانوية الإمام مالك');
+    expect(result.academicYear).toBe('2026/2027');
+    // Students carry names only: no grades, no administration columns.
     expect(result.classes[0].students).toHaveLength(1);
     expect(Object.keys(result.classes[0].students[0]).sort()).toEqual([
       'birthDate',

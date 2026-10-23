@@ -4,6 +4,7 @@ import { GradeLevel, Student, StudentGrade } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { parseAlgerianClass, getCanonicalClassName, getStudentNameKey } from './name-normalizer';
 import { normalizeDateToIso } from './date-utils';
+import { extractInstitutionMetadata } from './institution-metadata';
 
 const MAX_EXCEL_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 const EXCEL_FILE_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xlsb', '.xls']);
@@ -70,8 +71,14 @@ export interface ParsedDigitizationResult {
   /** One row per worksheet in the workbook, so the teacher can see what was kept and what was ignored. */
   sheets: ParsedSheetSummary[];
   totalStudents: number;
-  // The workbook header may name the school, the directorate and the year, but none of that is
-  // imported: the request is «القسم وأسماء التلاميذ فقط», and a messy header can be wrong.
+  /**
+   * The title block of the file: school, directorate and academic year, already cleaned
+   * (`ثانوية الإمام مالك — الموسم الدراسي: 2026/2027` → `ثانوية الإمام مالك`).
+   * It fills the matching settings fields; the rosters themselves carry names only.
+   */
+  schoolName?: string;
+  stateName?: string;
+  academicYear?: string;
 }
 
 /**
@@ -620,6 +627,7 @@ export async function parseDigitizationFile(
 
   const parsedClasses: ParsedClassData[] = [];
   const sheetSummaries: ParsedSheetSummary[] = [];
+  const institutionRowTexts: string[] = [];
 
   // Every worksheet is inspected: real files mix rosters, staff lists, empty tabs and summaries.
   for (const sheetName of workbook.SheetNames) {
@@ -648,13 +656,14 @@ export async function parseDigitizationFile(
     assertRowBudget(totalRowsSeen);
     assertTimeBudget(parseStartedAt);
 
-    // The title block only names the institution, the subject or the staff; it is inspected to
-    // reject staff lists, never imported (the request is «القسم وأسماء التلاميذ فقط»).
+    // The title block names the institution, the subject or the staff: it is kept for the
+    // settings fields and used to reject staff lists, but never becomes a student row.
     const headRowTexts = data
       .slice(0, 12)
       .map(row => (row || []).map(cell => String(cell || '').trim()).filter(Boolean).join(' '))
       .filter(Boolean);
     const headText = headRowTexts.join(' | ');
+    institutionRowTexts.push(...headRowTexts);
 
     // Administration sheets (teachers, staff, workers) are reported but never imported.
     if (isAdministrativeSheet(sheetName, headText)) {
@@ -833,10 +842,14 @@ export async function parseDigitizationFile(
     0
   );
 
+  // Institution fields come from the first sheet that spells them; a messy header is cleaned.
+  const institution = extractInstitutionMetadata(institutionRowTexts);
+
   return {
     classes: parsedClasses,
     sheets: sheetSummaries,
     totalStudents,
+    ...institution,
   };
 }
 
