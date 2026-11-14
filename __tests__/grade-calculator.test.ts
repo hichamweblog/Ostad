@@ -116,6 +116,18 @@ describe('calculateEvaluationBreakdown (decree weights 3/3/6/8)', () => {
     expect(calculateEvaluationBreakdown({ notebookScores: [0, 0] }, twoRounds).notebook).toBe(0);
   });
 
+  it('treats unwritten marks as documentation only: no notebook evidence, no penalty', async () => {
+    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+    const breakdown = calculateEvaluationBreakdown(
+      { sessionsCount: 30, documentedSessions: 10, goodPart: 3, participationJudgement: 5, unwritten: 5 },
+      rules,
+    );
+    expect(breakdown.notebook).toBeNull();
+    expect(breakdown.missing).toContain('notebook');
+    expect(breakdown.availableMax).toBe(14);
+    expect(breakdown.total).toBe(20);
+  });
+
   it('counts documented participation on documented sessions only', async () => {
     const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
     // 3 positives out of 12 documented sessions = 25% → full 3 points

@@ -67,8 +67,6 @@ export interface ContinuousEvaluationRules {
   disruptionDeduction: number; // 0.5
   /** خصم المخالفات التالية؛ يساوي `disruptionDeduction` فلا تصاعد بينها. */
   disruptionRepeatDeduction?: number; // 0.5
-  /** خصم عدم كتابة الدروس — احتياطي فقط عند غياب جولات الكراس. */
-  unwrittenLessonDeduction: number;
   unexcusedAbsenceDeduction: number;
   lateDeduction: number;
   /** نقطة تُضاف لكل مشاركة إيجابية (نموذج قديم، أُبقي للتوافق). */

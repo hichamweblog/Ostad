@@ -127,7 +127,16 @@ export async function commitRosterImportBatch(
         .select('id, class_id, number_in_list, reg_number, registration_number, full_name')
         .in('class_id', classIds)
         .eq('owner_id', userId);
-      if (dbStudents) existingDbStudents = dbStudents;
+      if (dbStudents) {
+        existingDbStudents = (dbStudents as any[]).map((row: any) => ({
+          ...row,
+          // الرقم الفعلي قبل أي إزاحة +10000 سابقة (من محاولة استيراد قديمة متوقفة جزئياً)
+          _originalNumber:
+            typeof row.number_in_list === 'number' && row.number_in_list >= 10000
+              ? row.number_in_list - 10000
+              : row.number_in_list,
+        }));
+      }
     } catch (e) {
       console.warn('Error fetching existing students for reconciliation:', e);
     }
@@ -146,13 +155,13 @@ export async function commitRosterImportBatch(
 
       if (!match) {
         match = candidates.find((ex: any) =>
-          ex.number_in_list === s.number_in_list &&
+          ex._originalNumber === s.number_in_list &&
           (ex.full_name?.trim() === s.full_name || !ex.full_name)
         );
       }
 
       if (!match) {
-        match = candidates.find((ex: any) => ex.number_in_list === s.number_in_list);
+        match = candidates.find((ex: any) => ex._originalNumber === s.number_in_list);
       }
 
       if (match) {
@@ -163,6 +172,7 @@ export async function commitRosterImportBatch(
   }
 
   const studentIds = mappedStudents.map((s) => s.id);
+  const importedIdSet = new Set(studentIds);
 
   // Clear stale tombstones for these classes and students so they are never blocked by stale deletions
   try {
@@ -195,45 +205,20 @@ export async function commitRosterImportBatch(
     .upsert(dbClasses, { onConflict: 'id' });
   if (classesErr) throw classesErr;
 
-  // Avoid wiping existing students (which cascades to delete their grades/attendance).
-  // Only delete students belonging to these classes who are truly absent from the new import.
-  if (classIds.length > 0 && existingDbStudents.length > 0) {
-    try {
-
-      if (existingDbStudents && existingDbStudents.length > 0) {
-        const importedIdSet = new Set(mappedStudents.map((s) => s.id));
-        const idsToDelete = existingDbStudents
-          .map((s: any) => s.id)
-          .filter((id: string) => !importedIdSet.has(id));
-
-        if (idsToDelete.length > 0) {
-          for (let i = 0; i < idsToDelete.length; i += 100) {
-            await (client as any)
-              .from('students')
-              .delete()
-              .in('id', idsToDelete.slice(i, i + 100));
-          }
-        }
-
-        // Temporarily shift existing retained students' numbers by +10000 to prevent
-        // duplicate key constraint violations on (workspace_id, class_id, number_in_list) during renumbering
-        const retained = existingDbStudents.filter((s: any) => importedIdSet.has(s.id));
-        if (retained.length > 0) {
-          for (let i = 0; i < retained.length; i += 50) {
-            const batch = retained.slice(i, i + 50);
-            await Promise.all(
-              batch.map((row: any) =>
-                (client as any)
-                  .from('students')
-                  .update({ number_in_list: row.number_in_list + 10000 })
-                  .eq('id', row.id)
-              )
-            );
-          }
-        }
-      }
-    } catch (cleanErr) {
-      console.warn('Non-destructive student cleanup warning:', cleanErr);
+  // استيراد دمجي فقط: لا يُحذف أي تلميذ سحابي غائب عن الملف.
+  // تُزاح أرقام كل التلاميذ الموجودين +10000 قبل رفع الاستيراد كي لا تتصادم
+  // مع قيد (workspace_id, class_id, number_in_list)، ثم يُعاد الترقيم بعد الرفع.
+  if (existingDbStudents.length > 0) {
+    for (let i = 0; i < existingDbStudents.length; i += 50) {
+      const batch = existingDbStudents.slice(i, i + 50);
+      await Promise.all(
+        batch.map((row: any) =>
+          (client as any)
+            .from('students')
+            .update({ number_in_list: row._originalNumber + 10000 })
+            .eq('id', row.id)
+        )
+      );
     }
   }
 
@@ -260,6 +245,77 @@ export async function commitRosterImportBatch(
       .from('students')
       .upsert(chunk, { onConflict: 'id' });
     if (studentsErr) throw studentsErr;
+  }
+
+  // إعادة ترقيم التلاميذ الغائبين عن الملف بعد نجاح الرفع: نُفضّل رقمهم الأصلي
+  // إن صار متاحاً، وإلا أصغر رقم حر. لا يفقد التلميذ أبداً: إن امتلأ القسم
+  // (999 رقماً) يبقى مرئياً برقم مُزاح.
+  const absentDbStudents = existingDbStudents.filter((row: any) => !importedIdSet.has(row.id));
+  if (absentDbStudents.length > 0) {
+    try {
+      const takenByClass = new Map<string, Set<number>>();
+      for (const s of dbStudents) {
+        if (typeof s.number_in_list === 'number' && s.number_in_list < 10000) {
+          let taken = takenByClass.get(s.class_id);
+          if (!taken) {
+            taken = new Set<number>();
+            takenByClass.set(s.class_id, taken);
+          }
+          taken.add(s.number_in_list);
+        }
+      }
+
+      const updates: Array<{ id: string; number_in_list: number }> = [];
+      for (const row of absentDbStudents) {
+        let taken = takenByClass.get(row.class_id);
+        if (!taken) {
+          taken = new Set<number>();
+          takenByClass.set(row.class_id, taken);
+        }
+
+        let assigned: number | null = null;
+        if (
+          typeof row._originalNumber === 'number' &&
+          row._originalNumber >= 1 &&
+          row._originalNumber <= 999 &&
+          !taken.has(row._originalNumber)
+        ) {
+          assigned = row._originalNumber;
+        } else {
+          for (let n = 1; n <= 999; n += 1) {
+            if (!taken.has(n)) {
+              assigned = n;
+              break;
+            }
+          }
+        }
+
+        if (assigned === null) {
+          console.warn(
+            'Skipping renumber for student whose class is full of numbers:',
+            row.id
+          );
+          continue;
+        }
+
+        taken.add(assigned);
+        updates.push({ id: row.id, number_in_list: assigned });
+      }
+
+      for (let i = 0; i < updates.length; i += 50) {
+        const batch = updates.slice(i, i + 50);
+        await Promise.all(
+          batch.map((u) =>
+            (client as any)
+              .from('students')
+              .update({ number_in_list: u.number_in_list })
+              .eq('id', u.id)
+          )
+        );
+      }
+    } catch (renumberErr) {
+      console.warn('Student renumbering warning after roster import:', renumberErr);
+    }
   }
 
   return {

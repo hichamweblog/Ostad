@@ -11,7 +11,11 @@ import { SessionRecord } from '@/lib/types';
 import { getMergedCurriculumUnits } from '@/lib/curriculum-data';
 import { calculateCouncilStatistics, calculateStudentAverage } from '@/lib/grade-calculator';
 import { getDefaultEstimation } from '@/lib/pedagogical-evaluations';
-import { isSessionDocumented } from '@/lib/session-flow';
+import {
+  getUnitSessionDisplayTitle,
+  getUnitTaughtSessions,
+  isSessionDocumented,
+} from '@/lib/session-flow';
 import { filterByTrimester } from '@/lib/academic-calendar';
 import Link from 'next/link';
 import {
@@ -51,9 +55,17 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
   const isSessionCancelled = (session: SessionRecord): boolean =>
     session.sessionStatus === 'CANCELLED';
 
-  /** A cancelled session keeps its scheduled topic but is labelled as cancelled in the export. */
+  /** A cancelled session keeps its scheduled topic but is labelled as cancelled in the export.
+   *  Otherwise the title follows the notebook numbering: units taught once are unnumbered,
+   *  units taught several times are numbered chronologically. */
   const sessionTitleForDoc = (session: SessionRecord, unitTitle?: string): string => {
-    if (!isSessionCancelled(session)) return unitTitle || session.customTopic || 'حصة عادية';
+    if (!isSessionCancelled(session)) {
+      return getUnitSessionDisplayTitle(
+        session,
+        unitTitle,
+        getUnitTaughtSessions(state.sessions, selectedClassId, session.unitId ?? ''),
+      );
+    }
     const reason = session.cancellationReason?.trim();
     if (unitTitle) return `حصة ملغاة${reason ? ` (${reason})` : ''} — ${unitTitle}`;
     return session.customTopic?.trim() || `حصة ملغاة${reason ? ` (${reason})` : ''}`;

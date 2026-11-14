@@ -160,19 +160,13 @@ export function calculateEvaluationBreakdown(
 
   // 3) الكراس — متوسط الجولات المطلوبة (جولة واحدة افتراضياً). أي درجة محفوظة
   //    في جولة زائدة عن الإعداد لا تدخل الحساب حتى لا يتغيّر السقف بصمت.
-  //    وإن لم تُنفَّذ جولة قط، تُستخدم علامات «لم يكتب» كدليل احتياطي.
+  //    عدم إحضار الكتاب («لم يكتب») توثيق فقط ولا يُدرَّج؛ فإن لم تُنفَّذ جولة
+  //    قط فالعنصر يُستبعد (null) وتُعاد نسبة المجموع إلى 20.
   const notebookRounds = Math.min(2, Math.max(1, Math.round(ruleValue(rules?.notebookRounds, 1))));
   const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, notebookRounds);
-  const hasRounds = rounds.length > 0;
-  const fallbackNotebook = hasRounds
-    ? null
-    : positiveCount(stats.unwritten) > 0
-      ? 5 - positiveCount(stats.unwritten) * ruleValue(rules?.unwrittenLessonDeduction, 0.5)
-      : null;
-  const notebookRaw = hasRounds
-    ? rounds.reduce((sum, score) => sum + score, 0) / rounds.length
-    : fallbackNotebook;
-  const notebook = notebookRaw === null ? null : clampScore((notebookRaw / 5) * notebookMax, notebookMax);
+  const notebook = rounds.length > 0
+    ? clampScore(((rounds.reduce((sum, score) => sum + score, 0) / rounds.length) / 5) * notebookMax, notebookMax)
+    : null;
 
   // 4) المشاركة والنشاط = توثيق آلي + تقدير الأستاذ.
   //    المقام هو الحصص التي وُثِّق فيها شيء فعلاً، فلا يُعاقب تلميذ على ضيق الوقت.

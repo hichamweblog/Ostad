@@ -36,13 +36,15 @@ import {
   SESSION_PART_NUMBERS,
   buildCancellationNote,
   buildSessionTitle,
+  getSessionDisplayPart,
+  getUnitSessionDisplayTitle,
+  getUnitTaughtSessions,
   isOrientationSession,
   isSessionCancelled,
   isSessionDocumented,
-  isSingleSessionUnit,
   normalizeSessionPart,
   readSessionPart,
-  stripSingleSessionSuffix,
+  stripPartSuffix,
 } from '@/lib/session-flow';
 import { filterByTrimester, getExcludedDayLabel, normalizeTrimester, trimesterLabel } from '@/lib/academic-calendar';
 
@@ -233,9 +235,16 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
       ? selectedUnitId
       : (nextSuggestedUnitId || availableUnits[0]?.id || '');
   const selectedUnitObj = availableUnits.find(u => u.id === effectiveSelectedUnitId);
-  // A one-hour unit is taught in a single session: its title carries no '(1)' suffix and the
-  // part selector is hidden so the teacher never numbers a unit that has only one session.
-  const isSingleSessionSelection = isSingleSessionUnit(selectedUnitObj?.hourlyVolume);
+  // Numbering is decided by the sessions actually taught for this unit in this class
+  // (non-cancelled and documented), excluding the session being edited itself.
+  const selectedUnitTaughtSessions = React.useMemo(() => {
+    if (isOrientationSelected || !effectiveSelectedUnitId || !state.activeClassId) return [];
+    return getUnitTaughtSessions(state.sessions, state.activeClassId, effectiveSelectedUnitId)
+      .filter(s => s.id !== editingSessionId);
+  }, [isOrientationSelected, effectiveSelectedUnitId, state.activeClassId, state.sessions, editingSessionId]);
+  // A unit taught in a single completed session needs no '(1)' suffix and no part selector;
+  // the selector appears only once the unit actually spans more than one session.
+  const isSingleSessionSelection = selectedUnitTaughtSessions.length === 0;
   const sessionGoals = isOrientationSelected
     ? ORIENTATION_SESSION_GOALS
     : selectedUnitObj
@@ -252,6 +261,8 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     if (isOrientationSelected) return;
     if (!effectiveSelectedUnitId || !state.activeClassId) return;
 
+    // partNumber is ordering metadata only; the next part follows actual taught
+    // sessions (chronological), never the unit's scheduled hourly volume.
     const priorSessions = state.sessions.filter(
       s =>
         s.classId === state.activeClassId &&
@@ -262,10 +273,7 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     const nextPart = normalizeSessionPart(priorSessions.length + 1);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPartNumber(nextPart);
-
-    const totalHours = selectedUnitObj?.hourlyVolume || 2;
-    setIsUnitCompleted(nextPart >= totalHours);
-  }, [effectiveSelectedUnitId, state.activeClassId, editingSessionId, state.sessions, selectedUnitObj?.hourlyVolume, isOrientationSelected]);
+  }, [effectiveSelectedUnitId, state.activeClassId, editingSessionId, state.sessions, isOrientationSelected]);
 
   const handleCancelEdit = () => {
     setEditingSessionId(null);
@@ -403,11 +411,10 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
 
     const sessionTitle = isOrientationSelected
       ? (isCancelled ? buildSessionTitle(ORIENTATION_SESSION_TOPIC, 1, { cancelled: true, reason: effectiveReason }) : ORIENTATION_SESSION_TOPIC)
-      : buildSessionTitle(selectedUnitObj?.title, partNumber, {
-          cancelled: isCancelled,
-          reason: effectiveReason,
-        }, { singleSession: isSingleSessionSelection });
-    // A single-session unit stores no part number at all: there is no '(1)' to read back later.
+      : isCancelled
+        ? buildSessionTitle(selectedUnitObj?.title, partNumber, { cancelled: true, reason: effectiveReason })
+        : (selectedUnitObj?.title || 'حصة تعليمية');
+    // Numbering is derived at display time from the unit's completed sessions; partNumber here is ordering metadata only.
     const storesPartNumber = !isCancelled && !isOrientationSelected && !isSingleSessionSelection;
 
     const accomplishmentsToSave = isCancelled
@@ -572,6 +579,25 @@ export const SessionCahier: React.FC<SessionCahierProps> = ({
     return classPastSessions.filter(isSessionDocumented);
   }, [classPastSessions]);
 
+  // Numbering derives from the sessions actually taught per unit (chronologically),
+  // not from the scheduled hourly volume (§3.4).
+  const taughtByUnit = useMemo(() => {
+    const map = new Map<string, SessionRecord[]>();
+    for (const unit of availableUnits) {
+      map.set(unit.id, getUnitTaughtSessions(state.sessions, state.activeClassId ?? '', unit.id));
+    }
+    return map;
+  }, [availableUnits, state.sessions, state.activeClassId]);
+
+  const exportTitleForSession = (s: SessionRecord): string => {
+    const unitObj = availableUnits.find(u => u.id === s.unitId);
+    return getUnitSessionDisplayTitle(
+      s,
+      unitObj?.title,
+      s.unitId ? taughtByUnit.get(s.unitId) ?? [] : [],
+    );
+  };
+
 const handleExportCahierDoc = () => {
     // The printed log reads from the oldest session to the newest one, like the
     // official document it replaces; the on-screen list stays newest-first.
@@ -579,11 +605,8 @@ const handleExportCahierDoc = () => {
       (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
     );
     const rowsHtml = exportSessions.map((s, idx) => {
-      const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = s.customTopic
-        ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
-        : unitObj?.title || 'حصة تعلمية';
-      const domain = unitObj?.domain || '—';
+      const title = exportTitleForSession(s);
+      const domain = (availableUnits.find(u => u.id === s.unitId))?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
         <tr>
@@ -598,9 +621,7 @@ const handleExportCahierDoc = () => {
 
     const detailsHtml = exportSessions.map((s, idx) => {
       const unitObj = availableUnits.find(u => u.id === s.unitId);
-      const title = s.customTopic
-        ? (isSingleSessionUnit(unitObj?.hourlyVolume) ? stripSingleSessionSuffix(s.customTopic) : s.customTopic)
-        : unitObj?.title || 'حصة تعلمية';
+      const title = exportTitleForSession(s);
       const domain = unitObj?.domain || '—';
       const timeSlot = s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || '—');
       return `
@@ -940,11 +961,7 @@ const handleExportCahierDoc = () => {
                         <button
                           key={num}
                           type="button"
-                          onClick={() => {
-                            setPartNumber(num);
-                            const totalHours = selectedUnitObj?.hourlyVolume || 2;
-                            setIsUnitCompleted(num >= totalHours);
-                          }}
+                          onClick={() => setPartNumber(num)}
                           className={`min-h-9 px-3 rounded-lg text-xs font-black transition-all cursor-pointer ${
                             partNumber === num
                               ? 'bg-[var(--primary)] text-white shadow-xs'
@@ -1130,11 +1147,13 @@ const handleExportCahierDoc = () => {
               const unit = availableUnits.find(u => u.id === ses.unitId);
               const isDocumented = isSessionDocumented(ses);
               const isEditingThis = ses.id === editingSessionId;
-              const rawTitle = ses.customTopic || unit?.title || (ses.sessionGoals ? ses.sessionGoals.slice(0, 40) : 'حصة غير محددة');
-              // One-session units keep no part number, including legacy records already saved as '(1)'.
-              const title = ses.customTopic && isSingleSessionUnit(unit?.hourlyVolume)
-                ? stripSingleSessionSuffix(rawTitle)
-                : rawTitle;
+              // Display titles derive from the taught sessions per unit; the
+              // stored topic may still carry a legacy '(n)' suffix.
+              const title = getUnitSessionDisplayTitle(
+                ses,
+                unit?.title,
+                ses.unitId ? taughtByUnit.get(ses.unitId) ?? [] : [],
+              );
 
               return (
                 <div

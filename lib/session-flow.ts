@@ -90,11 +90,70 @@ export function isSingleSessionUnit(hourlyVolume: number | undefined | null): bo
 }
 
 /**
- * Removes the leftover ' (1)' suffix from a stored title of a single-session unit, so older
- * records are displayed consistently with the new numbering rule.
+ * Removes a leftover ' (n)' suffix from a stored title, so older records keep numbering baked
+ * into `customTopic` are displayed consistently with the display-time numbering rule.
  */
-export function stripSingleSessionSuffix(title: string): string {
-  return title.replace(/\s*\(\s*1\s*\)\s*$/, '').trim();
+export function stripPartSuffix(title: string): string {
+  return title.replace(/\s*\(\s*\d+\s*\)\s*$/, '').trim();
+}
+
+/**
+ * The completed (documented, non-cancelled) sessions of one unit in one class, in the
+ * chronological order they were taught. This order — not the scheduled hourly volume —
+ * is what the notebook numbers.
+ */
+export function getUnitTaughtSessions(
+  sessions: SessionRecord[],
+  classId: string,
+  unitId: string,
+): SessionRecord[] {
+  return sessions
+    .filter(session =>
+      session.classId === classId &&
+      session.unitId === unitId &&
+      !isSessionCancelled(session) &&
+      isSessionDocumented(session)
+    )
+    .sort((a, b) => {
+      const byDate = (a.date || '').localeCompare(b.date || '');
+      if (byDate !== 0) return byDate;
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    });
+}
+
+/** True when the whole unit was taught in exactly one session, so the notebook shows no number. */
+export function isUnitSingleSession(taughtSessions: SessionRecord[]): boolean {
+  return taughtSessions.length === 1;
+}
+
+/** The 1-based chronological position of a session among its unit's taught sessions. */
+export function getSessionDisplayPart(
+  taughtSessions: SessionRecord[],
+  sessionId: string,
+): number {
+  const index = taughtSessions.findIndex(session => session.id === sessionId);
+  return index >= 0 ? index + 1 : 1;
+}
+
+/**
+ * The title shown in the notebook for one session of a unit. Numbering is derived at display
+ * time from the actual taught sessions; a unit taught once has no number at all, and a unit
+ * taught several times is numbered chronologically — so adding a later session renumbers
+ * earlier ones without rewriting stored data.
+ */
+export function getUnitSessionDisplayTitle(
+  session: SessionRecord,
+  unitTitle: string | undefined,
+  taughtSessions: SessionRecord[],
+): string {
+  if (isSessionCancelled(session)) {
+    const reason = session.cancellationReason?.trim() || DEFAULT_CANCELLATION_REASON;
+    return unitTitle ? `حصة ملغاة (${reason}) — ${unitTitle}` : `حصة ملغاة (${reason})`;
+  }
+  const topic = stripPartSuffix(session.customTopic?.trim() || '');
+  const base = unitTitle?.trim() || topic || 'حصة تعليمية';
+  if (taughtSessions.length <= 1) return base;
+  return `${base} (${getSessionDisplayPart(taughtSessions, session.id)})`;
 }
 
 /**

@@ -2,7 +2,12 @@ import { getEmptyState } from '@/lib/storage';
 import { describe, expect, it } from 'vitest';
 import type { AppState } from '../lib/storage';
 import type { SessionRecord, TimetableSlot } from '../lib/types';
-import { resolveOrCreateSession } from '../lib/session-flow';
+import {
+  getUnitSessionDisplayTitle,
+  getUnitTaughtSessions,
+  resolveOrCreateSession,
+  stripPartSuffix,
+} from '../lib/session-flow';
 
 const slot: TimetableSlot = {
   id: 'slot-1',
@@ -136,11 +141,12 @@ describe('single-session units are not numbered in the notebook', () => {
       .toBe('حصة ملغاة (الغياب) — وحدة من حصة واحدة');
   });
 
-  it('cleans a legacy (1) suffix already stored in older records', async () => {
-    const { stripSingleSessionSuffix } = await import('@/lib/session-flow');
-    expect(stripSingleSessionSuffix('وحدة من حصة واحدة (1)')).toBe('وحدة من حصة واحدة');
-    expect(stripSingleSessionSuffix('وحدة من حصتين (2)')).toBe('وحدة من حصتين (2)');
-    expect(stripSingleSessionSuffix('حصة ملغاة (الغياب) — وحدة')).toBe('حصة ملغاة (الغياب) — وحدة');
+  it('cleans a legacy (n) suffix already stored in older records', async () => {
+    expect(stripPartSuffix('وحدة من حصة واحدة (1)')).toBe('وحدة من حصة واحدة');
+    expect(stripPartSuffix('وحدة من حصتين (2)')).toBe('وحدة من حصتين');
+    // Text before the suffix that is not numeric stays untouched.
+    expect(stripPartSuffix('حصة ملغاة (الغياب) — وحدة')).toBe('حصة ملغاة (الغياب) — وحدة');
+    expect(stripPartSuffix('وحدة (1) ملاحظة')).toBe('وحدة (1) ملاحظة');
   });
 
   it('reads the part number as 1 when the title carries no suffix', async () => {
@@ -151,5 +157,117 @@ describe('single-session units are not numbered in the notebook', () => {
       attendance: {}, customTopic: 'وحدة من حصة واحدة',
     };
     expect(readSessionPart(session)).toBe(1);
+  });
+});
+
+describe('unit numbering follows taught sessions chronologically', () => {
+  interface TaughtOptions {
+    id?: string;
+    cancelled?: boolean;
+    unitId?: string;
+  }
+
+  const taughtSession = (index: number, options: TaughtOptions = {}): SessionRecord => {
+    const id = options.id ?? `session-${index}`;
+    const base: SessionRecord = {
+      id,
+      classId: 'class-1',
+      date: `2026-10-${String(index).padStart(2, '0')}`,
+      startTime: '10:00',
+      endTime: '11:00',
+      sessionGoals: '',
+      accomplishments: '',
+      nextSteps: '',
+      teacherNotes: '',
+      attendance: {},
+      unitId: options.unitId ?? 'unit-1',
+      customTopic: 'وسائل القرآن الكريم في بيان العقيدة',
+    };
+    if (options.cancelled) {
+      base.sessionStatus = 'CANCELLED';
+      base.cancellationReason = 'الغياب';
+    }
+    return base;
+  };
+
+  it('shows no numbering when the unit was completed in one session', () => {
+    const session = taughtSession(1);
+    const state = stateWithSessions([session]);
+    const taught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    expect(taught).toHaveLength(1);
+    expect(getUnitSessionDisplayTitle(session, undefined, taught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة'
+    );
+  });
+
+  it('numbers two sessions chronologically as (1) then (2)', () => {
+    const first = taughtSession(1);
+    const second = taughtSession(2);
+    const state = stateWithSessions([second, first]);
+    const taught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    expect(taught.map((s) => s.id)).toEqual(['session-1', 'session-2']);
+    expect(getUnitSessionDisplayTitle(first, undefined, taught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة (1)'
+    );
+    expect(getUnitSessionDisplayTitle(second, undefined, taught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة (2)'
+    );
+  });
+
+  it('ignores cancelled sessions when numbering', () => {
+    const cancelled = taughtSession(1, { cancelled: true, id: 'cancelled' });
+    const taughtOnly = taughtSession(2, { id: 'taught-only' });
+    const state = stateWithSessions([cancelled, taughtOnly]);
+    const taught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    expect(taught).toHaveLength(1);
+    expect(getUnitSessionDisplayTitle(taughtOnly, undefined, taught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة'
+    );
+    expect(getUnitSessionDisplayTitle(cancelled, 'وسائل القرآن الكريم في بيان العقيدة', taught)).toBe(
+      'حصة ملغاة (الغياب) — وسائل القرآن الكريم في بيان العقيدة'
+    );
+  });
+
+  it('numbers each class independently', () => {
+    const otherClass: SessionRecord = {
+      ...taughtSession(1, { id: 'other-1' }),
+      classId: 'class-2',
+      unitId: 'unit-1',
+    };
+    const first = taughtSession(1, { id: 'first-1' });
+    const second = taughtSession(2, { id: 'first-2' });
+    const state = stateWithSessions([first, second, otherClass]);
+    const classOneTaught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    const classTwoTaught = getUnitTaughtSessions(state.sessions, 'class-2', 'unit-1');
+    expect(getUnitSessionDisplayTitle(first, undefined, classOneTaught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة (1)'
+    );
+    expect(getUnitSessionDisplayTitle(otherClass, undefined, classTwoTaught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة'
+    );
+  });
+
+  it('strips a legacy stored (1) suffix from the topic at display time', () => {
+    const session: SessionRecord = {
+      ...taughtSession(1, { id: 'legacy' }),
+      customTopic: 'وسائل القرآن الكريم في بيان العقيدة (1)',
+    };
+    const state = stateWithSessions([session]);
+    const taught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    expect(getUnitSessionDisplayTitle(session, undefined, taught)).toBe(
+      'وسائل القرآن الكريم في بيان العقيدة'
+    );
+  });
+
+  it('falls back to the unit topic when the base title is empty', () => {
+    const base: SessionRecord = {
+      ...taughtSession(1, { id: 'no-topic' }),
+      customTopic: '',
+    };
+    const state = stateWithSessions([base]);
+    const taught = getUnitTaughtSessions(state.sessions, 'class-1', 'unit-1');
+    expect(getUnitSessionDisplayTitle(base, 'إعداد وحدة القراءة', taught)).toBe(
+      'إعداد وحدة القراءة'
+    );
   });
 });

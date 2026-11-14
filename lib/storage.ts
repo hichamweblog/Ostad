@@ -182,7 +182,6 @@ export const DEFAULT_CALENDAR_SETTINGS: AcademicCalendarSettings = {
     // خصم موحّد: 0.5 عن كل مخالفة من الأولى (لا تصاعد).
     disruptionDeduction: 0.5,
     disruptionRepeatDeduction: 0.5,
-    unwrittenLessonDeduction: 0.5,
     unexcusedAbsenceDeduction: 0.5,
     lateDeduction: 0.5,
     participationBonus: 0.5,
