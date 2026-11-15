@@ -194,6 +194,11 @@ export interface ClassLessonProgress {
   completedAt?: string;
   notes?: string;
   remedialNotes?: string;
+  /**
+   * صريح من الأستاذ (اختيار الحالة يدوياً في المنهاج): يفوق الاشتقاق الآلي من الحصص.
+   * صفوف قديمة بلا هذا الحقل تُعامل كاشتقاق آلي. يُحفظ ضمن JSON الحصة في عمود notes.
+   */
+  manual?: boolean;
 }
 
 export type SessionStatus = 'COMPLETED' | 'CANCELLED';

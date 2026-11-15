@@ -1,5 +1,6 @@
 import type { AppState } from './storage';
 import type { SessionRecord, TimetableSlot } from './types';
+import { getLocalDateString } from './date-utils';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -246,4 +247,96 @@ export function resolveOrCreateSession(
     sessionId: session.id,
     created: true,
   };
+}
+
+/**
+ * Converts a time string (e.g. "08:30", "08:30 AM", "02:15 PM") to minutes from midnight.
+ */
+export function timeStringToMinutes(timeStr: string | undefined | null): number | null {
+  if (!timeStr) return null;
+  const str = timeStr.trim().toUpperCase();
+  const match = str.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3];
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+/**
+ * دالة اختيار الحصة الافتراضية (§3.6 من خطة التحسين):
+ * 1. حصة اليوم الجارية حسب التوقيت، ثم أقرب حصة اليوم.
+ * 2. وإن لم توجد: آخر حصة سابقة لم يُسجل حضورها، ثم آخر حصة سابقة.
+ * 3. لا تُختار حصة مستقبلية افتراضياً.
+ */
+export function pickDefaultSession(
+  sessions: SessionRecord[],
+  today = getLocalDateString(),
+  now?: string,
+): SessionRecord | null {
+  if (!sessions || sessions.length === 0) return null;
+
+  // استبعاد الحصص الملغاة من الترشيح التلقائي إن وُجدت غيرها
+  const activeSessions = sessions.filter(s => !isSessionCancelled(s));
+  const pool = activeSessions.length > 0 ? activeSessions : sessions;
+
+  // 1) حصص اليوم
+  const todaySessions = pool.filter(s => s.date === today);
+  if (todaySessions.length > 0) {
+    if (now) {
+      const nowMinutes = timeStringToMinutes(now);
+      if (nowMinutes !== null) {
+        // حصة جارية الآن
+        const ongoing = todaySessions.find(s => {
+          const start = timeStringToMinutes(s.startTime);
+          const end = timeStringToMinutes(s.endTime) ?? (start !== null ? start + 60 : null);
+          if (start === null || end === null) return false;
+          return nowMinutes >= start && nowMinutes < end;
+        });
+        if (ongoing) return ongoing;
+
+        // أقرب حصة اليوم
+        let closest = todaySessions[0];
+        let minDiff = Infinity;
+        for (const s of todaySessions) {
+          const start = timeStringToMinutes(s.startTime);
+          if (start !== null) {
+            const diff = Math.abs(start - nowMinutes);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closest = s;
+            }
+          }
+        }
+        return closest;
+      }
+    }
+    // أقرب حصة زمنياً اليوم
+    return [...todaySessions].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))[0];
+  }
+
+  // 2) الحصص السابقة (تاريخ < اليوم)
+  const pastSessions = pool
+    .filter(s => (s.date || '') < today)
+    .sort((a, b) => {
+      const byDate = (b.date || '').localeCompare(a.date || '');
+      if (byDate !== 0) return byDate;
+      return (b.startTime || '').localeCompare(a.startTime || '');
+    });
+
+  if (pastSessions.length > 0) {
+    // آخر حصة سابقة لم يُسجل حضورها
+    const withoutAttendance = pastSessions.find(
+      s => !s.attendance || Object.keys(s.attendance).length === 0,
+    );
+    if (withoutAttendance) return withoutAttendance;
+
+    // وإلا آخر حصة سابقة
+    return pastSessions[0];
+  }
+
+  // 3) القاعدة: لا تُختار حصة مستقبلية (تاريخ > اليوم) افتراضياً.
+  return null;
 }

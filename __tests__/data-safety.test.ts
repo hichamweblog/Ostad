@@ -504,4 +504,40 @@ describe('§7 outbox helpers', () => {
     expect(entries[0].allowTombstoneOverride).toBe(false);
     await clearSyncOutbox(ownerId);
   });
+
+  it('paginates tables with more than 1000 rows without silently truncating', async () => {
+    const attendanceRows = Array.from({ length: 1500 }, (_, i) => ({
+      id: `att-${i}`,
+      session_id: `ses-${Math.floor(i / 30)}`,
+      student_id: `stu-${i % 30}`,
+      status: 'PRESENT',
+      owner_id: ownerId,
+    }));
+
+    let rangeCalls = 0;
+    const paginatedClient = {
+      auth: { getUser: async () => ({ data: { user: { id: ownerId } } }) },
+      from(table: string) {
+        const chain: any = {
+          select: () => chain,
+          eq: () => chain,
+          is: () => chain,
+          range: async (from: number, to: number) => {
+            if (table === 'attendance') {
+              rangeCalls += 1;
+              return { data: attendanceRows.slice(from, to + 1), error: null };
+            }
+            return { data: [], error: null };
+          },
+          then: (resolve: any) => Promise.resolve({ data: [], error: null }).then(resolve),
+        };
+        return chain;
+      },
+    };
+
+    const loaded = await loadCoreState(paginatedClient as any, getEmptyState());
+    expect(loaded).toBeDefined();
+    // 1500 rows in pages of 1000 required 2 range queries
+    expect(rangeCalls).toBe(2);
+  });
 });

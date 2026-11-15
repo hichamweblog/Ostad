@@ -172,6 +172,18 @@ describe('calculateEvaluationBreakdown (decree weights 3/3/6/8)', () => {
     expect(sparse.total).toBeCloseTo(18.18, 2);
   });
 
+  it('does not give 20/20 when there is no evidence at all (§2.2.2)', async () => {
+    const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
+    const emptyBreakdown = calculateEvaluationBreakdown({}, rules);
+    expect(emptyBreakdown.behavior).toBeNull();
+    expect(emptyBreakdown.attendance).toBeNull();
+    expect(emptyBreakdown.notebook).toBeNull();
+    expect(emptyBreakdown.participation).toBeNull();
+    expect(emptyBreakdown.missing).toEqual(['behavior', 'attendance', 'notebook', 'participation']);
+    expect(emptyBreakdown.availableMax).toBe(0);
+    expect(emptyBreakdown.total).toBe(0);
+  });
+
   it('never exceeds 20 for any combination', async () => {
     const { calculateEvaluationBreakdown } = await import('@/lib/grade-calculator');
     const perfect = calculateEvaluationBreakdown(

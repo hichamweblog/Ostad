@@ -15,7 +15,9 @@ export function normalizeDateToIso(value: unknown): string | null {
 
   if (value instanceof Date) {
     if (isNaN(value.getTime())) return null;
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    // Add 12 hours before formatting in UTC to avoid ±1h timezone shifts across midnight
+    const midday = new Date(value.getTime() + 12 * 3600 * 1000);
+    return `${midday.getUTCFullYear()}-${String(midday.getUTCMonth() + 1).padStart(2, '0')}-${String(midday.getUTCDate()).padStart(2, '0')}`;
   }
 
   // Handle Excel numeric serial dates (e.g. 39584 = 2008-05-16)

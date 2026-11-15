@@ -23,7 +23,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   tone = 'danger',
 }) => {
   return (
-    <AccessibleDialog open={isOpen} titleId="confirm-dialog-title" describedBy="confirm-dialog-message" onClose={onCancel} dismissOnBackdrop className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+    <AccessibleDialog open={isOpen} titleId="confirm-dialog-title" describedBy="confirm-dialog-message" onClose={onCancel} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
       <div>
         <h3 id="confirm-dialog-title" className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
         <p id="confirm-dialog-message" className="text-sm text-slate-600 mb-6">{message}</p>

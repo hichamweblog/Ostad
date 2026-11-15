@@ -275,7 +275,7 @@ export function exportUnitToWordDoc(unit: CurriculumUnit, teacherProfile?: Teach
 
   <!-- Footer -->
   <div class="footer">
-    تم استخراج هذه المذكرة البيداغوجية الرسمية عبر منصة <strong>سند الأستاذ — العلوم الإسلامية</strong> بالتعليم الثانوي بالجزائر.
+    تم استخراج هذه المذكرة البيداغوجية الرسمية عبر منصة <strong>معين الأستاذ — العلوم الإسلامية</strong> بالتعليم الثانوي بالجزائر.
   </div>
 
 </body>

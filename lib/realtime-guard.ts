@@ -36,12 +36,13 @@ export interface RealtimeChangePayload {
  */
 export function isSelfAuthoredChange(payload: RealtimeChangePayload | null | undefined, deviceId: string): boolean {
   if (!payload || !deviceId) return false;
-  for (const record of [payload.new, payload.old]) {
-    if (!record) continue;
-    const author = record.sync_device_id ?? record.device_id;
-    if (typeof author === 'string' && author === deviceId) return true;
-  }
-  return false;
+  // Inspect 'new' for INSERT/UPDATE; only fall back to 'old' on DELETE payloads.
+  // Checking 'old' on an UPDATE would cause an edit made by another device on a row
+  // originally created by this device to be mistakenly discarded as a self-echo.
+  const record = payload.new ?? payload.old;
+  if (!record) return false;
+  const author = record.sync_device_id ?? record.device_id;
+  return typeof author === 'string' && author === deviceId;
 }
 
 export interface RemoteRefreshPreconditions {

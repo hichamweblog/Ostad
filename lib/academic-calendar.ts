@@ -359,7 +359,6 @@ export function normalizeCalendarSettings(
       storedRules[key as keyof typeof rules] === undefined ||
       storedRules[key as keyof typeof rules] === value
     );
-  if (oldDefaultRules) rules.unexcusedAbsenceDeduction = 0.5;
   // أوزان القرار: كل ما كُتب قبل هذا التغيير يحمل 5/5/5/5 لأن الواجهة لم تُتح
   // تعديل الأسقف قط. التطابق التام يعني إعداداً قديماً غير مخصّص فيُرفَع إلى
   // 3/3/6/8؛ أما أي وزن مختلف فقد اختاره الأستاذ صراحةً ولا يُمسّ.

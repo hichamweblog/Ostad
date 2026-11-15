@@ -66,11 +66,20 @@ describe('WordprocessingML generation', () => {
     expect(xml).toContain('<w:jc w:val="right"/>');
   });
 
-  it('maps bold/italic/colour runs', () => {
+  it('maps bold/italic/colour runs including complex script tags for Arabic', () => {
     expect(xml).toContain('<w:b/>');
+    expect(xml).toContain('<w:bCs/>');
     expect(xml).toContain('<w:i/>');
+    expect(xml).toContain('<w:iCs/>');
     expect(xml).toContain('<w:color w:val="DC2626"/>');
     expect(xml).toContain('نص عريض');
+  });
+
+  it('preserves newlines in notes as Word line breaks', () => {
+    const withBreaks = documentXml('<p>السطر الأول\nالسطر الثاني</p>');
+    expect(withBreaks).toContain('<w:br/>');
+    expect(withBreaks).toContain('السطر الأول');
+    expect(withBreaks).toContain('السطر الثاني');
   });
 
   it('maps tables with bidiVisual, borders, header shading and colspan', () => {

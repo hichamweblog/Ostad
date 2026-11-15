@@ -9,6 +9,7 @@ import {  OFFICIAL_LEVELS, getMergedCurriculumUnits, loadAllCurriculum } from '@
 import { useEffect } from 'react';
 import { CurriculumUnit, GradeLevel } from '@/lib/types';
 import { UNIT_STATUS_OPTIONS, normalizeUnitStatus, type UnitStatusOption } from '@/lib/unit-status';
+import { getUnitProgress } from '@/lib/curriculum-progress';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Plus,
@@ -135,25 +136,9 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
     sectionsMap.get(key)!.push(unit);
   }
 
-  // Get status for unit in active class — الحالات الثلاث فقط، مع تطبيع أي حالة قديمة.
+  // Get status for unit in active class — الحالات الثلاث فقط، عبر الدالة الموحدة getUnitProgress
   const getUnitStatus = (unitId: string): UnitStatusOption => {
-    if (!state.activeClassId) return 'NOT_STARTED';
-    const progress = state.lessonProgress.find(
-      p => p.classId === state.activeClassId && p.unitId === unitId
-    );
-    if (progress?.status) return normalizeUnitStatus(progress.status);
-
-    // Automatically recognize as completed if documented in the notebook (excluding cancelled sessions)
-    const isDocumentedInSessions = state.sessions.some(
-      s =>
-        s.classId === state.activeClassId &&
-        s.unitId === unitId &&
-        s.sessionStatus !== 'CANCELLED' &&
-        (s.accomplishments || s.notes || s.sessionGoals)
-    );
-    if (isDocumentedInSessions) return 'COMPLETED';
-
-    return 'NOT_STARTED';
+    return getUnitProgress(state, state.activeClassId, unitId);
   };
 
   const setUnitStatus = async (unitId: string, status: UnitStatusOption) => {
@@ -168,6 +153,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
         updatedProgress[existingIdx] = {
           ...updatedProgress[existingIdx],
           status,
+          manual: true,
           completedAt: status === 'COMPLETED' ? new Date().toISOString().split('T')[0] : undefined
         };
       } else {
@@ -176,6 +162,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
           classId: prev.activeClassId!,
           unitId,
           status,
+          manual: true,
           completedAt: status === 'COMPLETED' ? new Date().toISOString().split('T')[0] : undefined
         });
       }

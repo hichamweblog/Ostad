@@ -32,7 +32,7 @@ export function GlobalContextBar() {
             id="global-context-class"
             value={activeClass?.id ?? ''}
             onChange={event => updateState(prev => ({ ...prev, activeClassId: event.target.value }))}
-            className="min-h-9 min-w-0 flex-1 truncate rounded-lg border border-[var(--border-default)] bg-white px-2 text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[var(--primary)] md:w-56 md:flex-none"
+            className="min-h-11 min-w-0 flex-1 truncate rounded-xl border border-[var(--border-default)] bg-white px-3 text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[var(--primary)] md:w-56 md:flex-none cursor-pointer"
           >
             {!activeClass && <option value="">اختر قسماً</option>}
             {state.classes.map(item => (
@@ -61,7 +61,7 @@ export function GlobalContextBar() {
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => updateState(prev => ({ ...prev, activeTrimester: term }))}
-                className={`min-h-9 rounded-lg px-2 text-xs font-bold transition-colors sm:px-3 ${
+                className={`min-h-11 rounded-lg px-2.5 text-xs font-bold transition-colors sm:px-3.5 cursor-pointer ${
                   isActive
                     ? 'bg-[var(--primary)] text-white shadow-xs'
                     : 'text-[var(--text-secondary)] hover:bg-white'

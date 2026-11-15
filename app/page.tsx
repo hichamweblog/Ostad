@@ -479,7 +479,7 @@ function AppContent({
               </div>
             )}
             <div className="text-xs text-slate-600 font-mono mt-0.5">
-              2026 - 2027
+              {state.profile.academicYear || '2026 - 2027'}
             </div>
           </div>
         </footer>

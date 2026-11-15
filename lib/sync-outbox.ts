@@ -119,6 +119,52 @@ export function orderSyncOperations(operations: SyncOperation[]): SyncOperation[
     .map(({ operation }) => operation);
 }
 
+export function recordExistsInState(entity: SyncEntity, recordId: string, state: AppState): boolean {
+  if (!recordId) return false;
+  switch (entity) {
+    case 'class':
+      return state.classes.some((c) => c.id === recordId);
+    case 'student':
+      return state.students.some((s) => s.id === recordId);
+    case 'grade':
+      return state.grades.some((g) => g.id === recordId);
+    case 'session':
+      return state.sessions.some((s) => s.id === recordId);
+    case 'timetable':
+      return state.timetable.some((t) => t.id === recordId);
+    case 'lessonProgress':
+      return state.lessonProgress.some((p) => p.id === recordId);
+    case 'customUnit':
+      return Boolean(state.customUnits?.some((u) => u.id === recordId));
+    case 'lessonPlan':
+      return Boolean(state.lessonPlans?.some((p) => p.id === recordId));
+    case 'dashboardTask':
+      return Boolean(state.dashboardTasks?.some((t) => t.id === recordId));
+    case 'attendance': {
+      const separator = recordId.indexOf(':');
+      if (separator <= 0) return false;
+      const sessionId = recordId.slice(0, separator);
+      const studentId = recordId.slice(separator + 1);
+      const session = state.sessions.find((s) => s.id === sessionId);
+      return Boolean(session?.attendance && studentId in session.attendance);
+    }
+    case 'behavior': {
+      const parts = recordId.split(':');
+      if (parts.length < 3) return false;
+      const [sessionId, studentId, behavior] = parts;
+      const session = state.sessions.find((s) => s.id === sessionId);
+      const list = session?.[behavior as 'disruptions' | 'unwrittenLessons' | 'poorParticipation' | 'goodParticipation'];
+      return Boolean(Array.isArray(list) && list.includes(studentId));
+    }
+    case 'profile':
+      return recordId === 'profile' && Boolean(state.profile);
+    case 'settings':
+      return recordId === 'settings' && Boolean(state.calendarSettings);
+    default:
+      return false;
+  }
+}
+
 export function getSyncOperationsForState(state: AppState): SyncOperation[] {
   const collections: Array<[SyncEntity, Array<{ id: string }>, boolean]> = [
     ['class', state.classes, true], ['student', state.students, true], ['grade', state.grades, true],
@@ -184,6 +230,7 @@ export function getSyncOperationsForState(state: AppState): SyncOperation[] {
     const recordId = tombstone.slice(separator + 1);
     const relationalEntity = entity === 'attendance' || entity === 'behavior' || entity === 'dashboardTask';
     if ((!collections.some(([kind]) => kind === entity) && !relationalEntity) || !recordId) continue;
+    if (recordExistsInState(entity, recordId, state)) continue;
     operations.push({ id: `delete:${entity}:${recordId}`, entity, action: 'delete', recordId });
   }
   return orderSyncOperations(operations);
@@ -445,6 +492,7 @@ export function getSyncOperationsDelta(
     const entity = tombstone.slice(0, separator) as SyncEntity;
     const recordId = tombstone.slice(separator + 1);
     if (!collections.includes(entity) || !recordId) continue;
+    if (recordExistsInState(entity, recordId, nextState)) continue;
     const id = `delete:${entity}:${recordId}`;
     if (!addedDeleteIds.has(id)) {
       addedDeleteIds.add(id);

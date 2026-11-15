@@ -121,7 +121,7 @@ describe('automatic exclusion of holidays and examination days', () => {
   it('ships the official calendar as the default settings', () => {
     expect(DEFAULT_CALENDAR_SETTINGS.holidays).toBe(OFFICIAL_HOLIDAYS_2026_2027);
     expect(DEFAULT_CALENDAR_SETTINGS.holidays.some((entry) => entry.type === 'exam')).toBe(true);
-    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
   });
 });
 
@@ -269,7 +269,7 @@ describe('untouched legacy defaults migration', () => {
     };
     const normalized = normalizeCalendarSettings(legacy, DEFAULT_CALENDAR_SETTINGS);
     expect(normalized.holidays).toBe(OFFICIAL_HOLIDAYS_2026_2027);
-    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
+    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
     // Do not reset a teacher-edited date or bring deleted entries back.
     const edited = { ...legacy, holidays: legacy.holidays.map((h, i) => i === 2 ? { ...h, dateStr: 'تاريخ مخصص' } : h) };
     expect(normalizeCalendarSettings(edited, DEFAULT_CALENDAR_SETTINGS).holidays[2].dateStr).toBe('تاريخ مخصص');
@@ -292,7 +292,7 @@ describe('untouched legacy defaults migration', () => {
       DEFAULT_CALENDAR_SETTINGS,
     );
     // غياب الحقول الجديدة ليس تخصيصاً: تُرقّى القيم القديمة وتُضاف الجديدة.
-    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
+    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
     expect(normalized.evaluationRules.notebookRounds).toBe(1);
     expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
     expect(normalized.evaluationRules.participationMax).toBe(8);

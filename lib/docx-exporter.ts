@@ -237,8 +237,8 @@ interface RunStyle {
 
 function runPropertiesXml(style: RunStyle): string {
   const parts: string[] = [];
-  if (style.bold) parts.push('<w:b/>');
-  if (style.italic) parts.push('<w:i/>');
+  if (style.bold) parts.push('<w:b/><w:bCs/>');
+  if (style.italic) parts.push('<w:i/><w:iCs/>');
   if (style.underline) parts.push('<w:u w:val="single"/>');
   if (style.color) parts.push(`<w:color w:val="${style.color}"/>`);
   if (style.sizeHalfPoints) {
@@ -285,7 +285,17 @@ function textRunXml(text: string, style: RunStyle): string {
 function renderRuns(node: HtmlNode, inherited: RunStyle, out: string[]): void {
   if (node.type === 'text') {
     const text = node.text || '';
-    if (text.trim() || text) out.push(textRunXml(text.replace(/\s+/g, ' '), inherited));
+    if (!text) return;
+    if (text.includes('\n')) {
+      const lines = text.split('\n');
+      lines.forEach((line, idx) => {
+        if (idx > 0) out.push(`<w:r>${runPropertiesXml(inherited)}<w:br/></w:r>`);
+        const cleaned = line.replace(/[^\S\r\n]+/g, ' ');
+        if (cleaned.trim() || cleaned) out.push(textRunXml(cleaned, inherited));
+      });
+    } else {
+      if (text.trim() || text) out.push(textRunXml(text.replace(/\s+/g, ' '), inherited));
+    }
     return;
   }
   const tag = node.tag || '';
@@ -437,15 +447,15 @@ function tableXml(node: HtmlNode, usableWidth: number): string {
       const width = widths.slice(col, col + cell.colspan).reduce((sum, value) => sum + value, 0);
       const tcPr: string[] = [`<w:tcW w:w="${width}" w:type="dxa"/>`];
       if (cell.colspan > 1) tcPr.push(`<w:gridSpan w:val="${cell.colspan}"/>`);
-      const shading = cell.css.background || (cell.isHeader ? 'E8F4F0' : null);
-      if (shading) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${shading}"/>`);
-      tcPr.push('<w:vAlign w:val="center"/>');
       if (cell.rowspan > 1) {
         tcPr.push('<w:vMerge w:val="restart"/>');
         for (let offset = 0; offset < cell.colspan; offset++) {
           openMerges[col + offset] = cell.rowspan - 1;
         }
       }
+      const shading = cell.css.background || (cell.isHeader ? 'E8F4F0' : null);
+      if (shading) tcPr.push(`<w:shd w:val="clear" w:color="auto" w:fill="${shading}"/>`);
+      tcPr.push('<w:vAlign w:val="center"/>');
       const baseStyle: RunStyle = cell.isHeader ? { bold: true } : {};
       const paragraphs = renderCellContent(cell.node, baseStyle, cell.css.align, Math.max(1, width - 160));
       cellXmlParts.push(`<w:tc><w:tcPr>${tcPr.join('')}</w:tcPr>${paragraphs}</w:tc>`);
@@ -498,8 +508,18 @@ function renderBlocks(nodes: HtmlNode[], usableWidth: number, listDepth = 0, inh
 
   for (const node of nodes) {
     if (node.type === 'text') {
-      const text = (node.text || '').replace(/\s+/g, ' ');
-      if (text.trim()) runs.push(textRunXml(text, runStyle));
+      const rawText = node.text || '';
+      if (rawText.includes('\n')) {
+        const lines = rawText.split('\n');
+        lines.forEach((line, idx) => {
+          if (idx > 0) runs.push(`<w:r>${runPropertiesXml(runStyle)}<w:br/></w:r>`);
+          const cleaned = line.replace(/[^\S\r\n]+/g, ' ');
+          if (cleaned.trim()) runs.push(textRunXml(cleaned, runStyle));
+        });
+      } else {
+        const text = rawText.replace(/\s+/g, ' ');
+        if (text.trim()) runs.push(textRunXml(text, runStyle));
+      }
       continue;
     }
     const tag = node.tag || '';

@@ -40,6 +40,21 @@ describe('parseGradeTable', () => {
 
     expect(result.rows[0].values.continuousEval).toBe('13.75');
   });
+
+  it('rejects negative marks instead of stripping the minus sign', () => {
+    const result = parseGradeTable('عمر\t-5\t12\t14');
+
+    expect(result.rows).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0].reason).toContain('نقطة غير صالحة: -5');
+  });
+
+  it('correctly handles decimal commas in comma-separated lines', () => {
+    const result = parseGradeTable('كمال, 14,5, 12, 16');
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].values).toEqual({ continuousEval: '14.5', quiz: '12', exam: '16' });
+  });
 });
 
 describe('nextGradeCell', () => {

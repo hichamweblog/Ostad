@@ -18,6 +18,7 @@ import {
   roundProgress,
 } from '@/lib/notebook-rounds';
 import { getLocalDateString } from '@/lib/date-utils';
+import { pickDefaultSession } from '@/lib/session-flow';
 import { AttendanceStatus, SessionRecord } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -68,7 +69,8 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   ).sort((a, b) => b.date.localeCompare(a.date));
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
-    classSessions[0]?.id || '' );
+    () => pickDefaultSession(classSessions)?.id || classSessions[0]?.id || ''
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('quick');
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
@@ -163,8 +165,15 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
   // الأستاذ (5) فيُدخل في نهاية الفصل من شاشة «مراجعة التقويم».
   const evaluationRules = state.calendarSettings?.evaluationRules;
   const participationMax = evaluationRules?.participationRecordedMax ?? 3;
-  // الحصة الملغاة لا تُحتسب في المقام: لا تُدرّس ولا تُوثَّق.
-  const scoredSessions = classSessions.filter(session => session.sessionStatus !== 'CANCELLED');
+  // الحصة الملغاة أو المستقبلية أو التي لم يُسجل حضورها لا تُحتسب في مقام المواظبة
+  const todayIso = getLocalDateString();
+  const scoredSessions = classSessions.filter(
+    session =>
+      session.sessionStatus !== 'CANCELLED' &&
+      session.date <= todayIso &&
+      session.attendance &&
+      Object.keys(session.attendance).length > 0,
+  );
   const documentedSessionsCount = scoredSessions.filter(
     session => (session.goodParticipation?.length ?? 0) + (session.poorParticipation?.length ?? 0) > 0,
   ).length;
@@ -660,7 +669,12 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
               value={selectedClassId}
               onChange={e => {
                 handleSelectClass(e.target.value);
-                const nextSes = state.sessions.find(s => s.classId === e.target.value);
+                const nextClassSessions = filterByTrimester(
+                  state.sessions.filter(s => s.classId === e.target.value),
+                  state.calendarSettings?.termDates,
+                  activeTrimester,
+                );
+                const nextSes = pickDefaultSession(nextClassSessions) || nextClassSessions[0];
                 if (nextSes) setSelectedSessionId(nextSes.id);
               }}
               className="block w-full max-w-full min-w-0 text-wrap whitespace-normal font-bold text-slate-900 bg-transparent text-base focus:outline-none border-b border-dashed border-[var(--primary)] cursor-pointer" >

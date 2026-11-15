@@ -7,6 +7,7 @@ import {
   loadAllCurriculum,
 } from "@/lib/curriculum-data";
 import { CurriculumUnit, GradeLevel } from "@/lib/types";
+import { getUnitProgress } from "@/lib/curriculum-progress";
 import { exportToDocx } from "@/lib/utils";
 import { Layers, Printer } from "lucide-react";
 import { printElement } from "@/lib/print";
@@ -536,26 +537,9 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = () => {
                           unit,
                           originalIndex,
                         );
-                        const unitProg = state.activeClassId
-                          ? state.lessonProgress.find(
-                              (p) =>
-                                p.classId === state.activeClassId &&
-                                p.unitId === unit.id,
-                            )
-                          : undefined;
-                        const isUnitCompleted = Boolean(
-                          state.activeClassId && (
-                            unitProg
-                              ? unitProg.status === "COMPLETED"
-                              : state.sessions.some(
-                                  (s) =>
-                                    s.classId === state.activeClassId &&
-                                    s.unitId === unit.id &&
-                                    s.sessionStatus !== "CANCELLED" &&
-                                    (s.accomplishments || s.notes || s.sessionGoals),
-                                )
-                          ),
-                        );
+                        const isUnitCompleted =
+                          Boolean(state.activeClassId) &&
+                          getUnitProgress(state, state.activeClassId, unit.id, unit.hourlyVolume) === "COMPLETED";
 
                         return (
                           <tr
@@ -614,26 +598,9 @@ export const AnnualDistribution: React.FC<AnnualDistributionProps> = () => {
               {/* Mobile Cards */}
               <div className="block lg:hidden print:hidden space-y-3 mt-3">
                 {sec.units.map(({ unit, originalIndex, sched }) => {
-                  const unitProg = state.activeClassId
-                    ? state.lessonProgress.find(
-                        (p) =>
-                          p.classId === state.activeClassId &&
-                          p.unitId === unit.id,
-                      )
-                    : undefined;
-                  const isUnitCompleted = Boolean(
-                    state.activeClassId && (
-                      unitProg
-                        ? unitProg.status === "COMPLETED"
-                        : state.sessions.some(
-                            (s) =>
-                              s.classId === state.activeClassId &&
-                              s.unitId === unit.id &&
-                              s.sessionStatus !== "CANCELLED" &&
-                              (s.accomplishments || s.notes || s.sessionGoals),
-                          )
-                    ),
-                  );
+                  const isUnitCompleted =
+                    Boolean(state.activeClassId) &&
+                    getUnitProgress(state, state.activeClassId, unit.id, unit.hourlyVolume) === "COMPLETED";
 
                   return (
                     <div

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEmptyState, isDemoState, DEFAULT_CALENDAR_SETTINGS, type AppState } from '@/lib/storage';
 import { normalizeCalendarSettings } from '@/lib/academic-calendar';
-import type { ClassRoom, SessionRecord, Student, StudentGrade, TimetableSlot } from '@/lib/types';
+import type { ClassRoom, SessionRecord, Student, StudentGrade, TeacherProfile, TimetableSlot } from '@/lib/types';
 import type { Database } from './database.types';
 import { getWeeklyHours } from '@/lib/curriculum-data';
 import { enqueueSyncState, orderSyncOperations, replayOutboxEntriesOnState, type SyncEntity, type SyncOperation, type SyncOutboxEntry } from '@/lib/sync-outbox';
@@ -387,6 +387,44 @@ function fromRow(entity: SyncEntity, row: any): any {
   return null;
 }
 
+async function fetchPaginatedRows<T = any>(
+  client: AnyClient,
+  table: string,
+  filterColumn: string,
+  filterValue: string,
+  options?: {
+    select?: string;
+    extraFilter?: (query: any) => any;
+    pageSize?: number;
+  },
+): Promise<{ data: T[]; error: any }> {
+  const pageSize = options?.pageSize ?? 1000;
+  let allData: T[] = [];
+  let from = 0;
+
+  while (true) {
+    let query = client
+      .from(table)
+      .select(options?.select ?? '*')
+      .eq(filterColumn, filterValue);
+
+    if (options?.extraFilter) {
+      query = options.extraFilter(query);
+    }
+
+    const hasRange = typeof query.range === 'function';
+    const result = hasRange ? await query.range(from, from + pageSize - 1) : await query;
+    if (result.error) return { data: [], error: result.error };
+
+    const batch = (result.data || []) as T[];
+    allData = allData.concat(batch);
+    if (!hasRange || batch.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: allData, error: null };
+}
+
 export async function loadCoreState(
   client: Client,
   localState: AppState,
@@ -398,17 +436,32 @@ export async function loadCoreState(
     if (!userId) return localState;
     const pendingRecordIds = options.pendingRecordIds;
     const results = await Promise.all(Object.entries(tables).map(async ([entity, table]) => {
-      const query = c.from(table).select('*');
-      const result = entity === 'profile' ? await query.eq('id', userId) : await query.eq('owner_id', userId);
+      const filterCol = entity === 'profile' ? 'id' : 'owner_id';
+      const result = await fetchPaginatedRows(c, table, filterCol, userId);
       return [entity, result] as const;
     }));
-    const memorandaResult = await c.from('memoranda_files').select('unit_key,file_name,storage_path,created_at,updated_at,is_bundled,deleted_at').eq('owner_id', userId).eq('is_bundled', false).is('deleted_at', null);
+    const memorandaResult = await fetchPaginatedRows(
+      c,
+      'memoranda_files',
+      'owner_id',
+      userId,
+      {
+        select: 'unit_key,file_name,storage_path,created_at,updated_at,is_bundled,deleted_at',
+        extraFilter: (query: any) => query.eq('is_bundled', false).is('deleted_at', null),
+      },
+    );
     if (memorandaResult.error) throw memorandaResult.error;
     for (const [, result] of results) if (result.error) throw result.error;
 
     // Server-side deletions. A tombstone is the cloud's answer to "was this record
     // deleted?", so it must be read before any local record is allowed to survive.
-    const tombstones = await c.from('sync_tombstones').select('entity_type,entity_id').eq('owner_id', userId);
+    const tombstones = await fetchPaginatedRows(
+      c,
+      'sync_tombstones',
+      'owner_id',
+      userId,
+      { select: 'entity_type,entity_id' },
+    );
     if (tombstones.error) throw tombstones.error;
     const tombstonedKeys = new Set<string>(
       ((tombstones.data || []) as Array<{ entity_type?: string; entity_id?: string }>)
@@ -538,30 +591,30 @@ export async function loadCoreState(
     const filterByClass = <T extends { classId?: string }>(items: T[]): T[] =>
       classes.length > 0 ? items.filter((item) => classMatches(item.classId)) : [];
 
-    const resolvedProfile = profilePending
+    const resolvedProfile: TeacherProfile = profilePending
       ? localState.profile
       : profile
         ? {
             ...localState.profile,
-            name: profile.full_name || localState.profile.name,
-            title: profile.title || localState.profile.title,
-            schoolName: profile.school_name || localState.profile.schoolName,
-            stateName: profile.state_name || localState.profile.stateName,
-            academicYear: profile.academic_year || localState.profile.academicYear,
-            hijriYear: profile.hijri_year || localState.profile.hijriYear,
-            firstNameAr: profile.first_name_ar || undefined,
-            lastNameAr: profile.last_name_ar || undefined,
-            firstNameEn: profile.first_name_en || undefined,
-            lastNameEn: profile.last_name_en || undefined,
-            email: profile.email || undefined,
-            phoneNumber: profile.phone || undefined,
-            avatarUrl: remoteAvatarUrl || profile.avatar_url || undefined,
-            avatarStorageKey: profile.avatar_storage_key || undefined,
-            firstAppointmentDate: profile.first_appointment_date || undefined,
-            experienceYears: profile.experience_years ?? undefined,
-            birthDate: profile.birth_date || undefined,
-            birthPlace: profile.birth_place || undefined,
-            familyStatus: profile.family_status || undefined,
+            name: typeof profile.full_name === 'string' && profile.full_name.trim() ? profile.full_name.trim() : localState.profile.name,
+            title: typeof profile.title === 'string' && profile.title.trim() ? profile.title.trim() : localState.profile.title,
+            schoolName: typeof profile.school_name === 'string' && profile.school_name.trim() ? profile.school_name.trim() : localState.profile.schoolName,
+            stateName: typeof profile.state_name === 'string' && profile.state_name.trim() ? profile.state_name.trim() : localState.profile.stateName,
+            academicYear: typeof profile.academic_year === 'string' && profile.academic_year.trim() ? profile.academic_year.trim() : localState.profile.academicYear,
+            hijriYear: typeof profile.hijri_year === 'string' ? profile.hijri_year : localState.profile.hijriYear,
+            firstNameAr: typeof profile.first_name_ar === 'string' ? profile.first_name_ar : undefined,
+            lastNameAr: typeof profile.last_name_ar === 'string' ? profile.last_name_ar : undefined,
+            firstNameEn: typeof profile.first_name_en === 'string' ? profile.first_name_en : undefined,
+            lastNameEn: typeof profile.last_name_en === 'string' ? profile.last_name_en : undefined,
+            email: typeof profile.email === 'string' ? profile.email : undefined,
+            phoneNumber: typeof profile.phone === 'string' ? profile.phone : undefined,
+            avatarUrl: remoteAvatarUrl || (typeof profile.avatar_url === 'string' ? profile.avatar_url : undefined),
+            avatarStorageKey: typeof profile.avatar_storage_key === 'string' ? profile.avatar_storage_key : undefined,
+            firstAppointmentDate: typeof profile.first_appointment_date === 'string' ? profile.first_appointment_date : undefined,
+            experienceYears: typeof profile.experience_years === 'number' ? profile.experience_years : undefined,
+            birthDate: typeof profile.birth_date === 'string' ? profile.birth_date : undefined,
+            birthPlace: typeof profile.birth_place === 'string' ? profile.birth_place : undefined,
+            familyStatus: typeof profile.family_status === 'string' ? profile.family_status : undefined,
             gender: profile.gender === 'M' || profile.gender === 'F' ? profile.gender : undefined,
           }
         : localState.profile;

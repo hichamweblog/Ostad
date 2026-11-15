@@ -177,6 +177,21 @@ describe('sync outbox', () => {
     );
   });
 
+  it('does not emit a delete operation for a revived record present in next state', () => {
+    const previous = getEmptyState();
+    const next = getEmptyState();
+    next.students = [{ id: 'student-1', name: 'أحمد', classId: 'class-1', numberInList: 1 }];
+    // Even if deletedRecordIds still had the tombstone (from an earlier toggle off)
+    next.deletedRecordIds = ['student:student-1'];
+
+    const operations = getSyncOperationsDelta(previous, next);
+    const deleteOps = operations.filter((op) => op.action === 'delete' && op.recordId === 'student-1');
+    const upsertOps = operations.filter((op) => op.action === 'upsert' && op.recordId === 'student-1');
+
+    expect(deleteOps).toHaveLength(0);
+    expect(upsertOps).toHaveLength(1);
+  });
+
   it('does not emit cross-table deletes for an entity-specific tombstone', async () => {
     const state = getEmptyState();
     state.deletedRecordIds = ['student:shared-id'];

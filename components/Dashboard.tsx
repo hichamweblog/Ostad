@@ -586,29 +586,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {state.classes.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <label htmlFor="dashboard-active-class-select" className="sr-only">تغيير القسم النشط</label>
-                  <select
-                    id="dashboard-active-class-select"
-                    value={activeClass?.id || ''}
-                    onChange={(e) => {
-                      const newId = e.target.value;
-                      onUpdateState(prev => ({ ...prev, activeClassId: newId }));
-                      const targetClass = state.classes.find(c => c.id === newId);
-                      if (targetClass) {
-                        showToast(`تم تفعيل قسم ${targetClass.name} كقسم نشط`, 'success');
-                      }
-                    }}
-                    className="min-h-9 px-2.5 py-1 rounded-xl border border-[var(--primary)]/30 bg-white font-bold text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer shadow-2xs"
-                  >
-                    {state.classes.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.stream})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {activeClass && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--primary-soft)] text-[var(--primary-ink)] font-bold text-xs">
+                  {activeClass.name}
+                </span>
               )}
               <button
                 type="button"

@@ -251,7 +251,7 @@ export const TimetableSanad: React.FC<TimetableSanadProps> = () => {
  <tr>
  <td style="width: 33%; text-align: center; border: 1px dashed #94a3b8; padding: 14px; vertical-align: top;">
  <p style="margin: 0 0 40px; font-weight: bold; font-size: 10pt;">توقيع الأستاذ(ة):</p>
- <p style="margin: 0; font-size: 8.5pt; color: #64748b;">حرر في: .... / .... / 2026</p>
+ <p style="margin: 0; font-size: 8.5pt; color: #64748b;">حرر في: .... / .... / ${new Date().getFullYear()}</p>
  </td>
  <td style="width: 33%; text-align: center; border: 1px dashed #94a3b8; padding: 14px; vertical-align: top;">
  <p style="margin: 0 0 40px; font-weight: bold; font-size: 10pt;">تأشيرة مدير المؤسسة:</p>

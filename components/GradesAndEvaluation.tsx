@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '@/hooks/app-state-context';
 import { calculateEvaluationBreakdown, calculateStudentAverage } from '@/lib/grade-calculator';
 import { filterByTrimester } from '@/lib/academic-calendar';
+import { getLocalDateString } from '@/lib/date-utils';
 import { EVALUATION_CRITERIA, criterionMax } from '@/lib/evaluation-labels';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
@@ -513,6 +514,10 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     state.calendarSettings?.termDates,
     selectedTrimester,
   );
+  const todayIso = getLocalDateString();
+  const eligibleAttendanceSessions = classSessions.filter(
+    s => s.date <= todayIso && s.attendance && Object.keys(s.attendance).length > 0,
+  );
   const studentStatsMap: Record<string, {
     absent: number; late: number; excused: number;
     disruptions: number; unwritten: number; poorPart: number; goodPart: number;
@@ -580,7 +585,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     return calculateEvaluationBreakdown(
       {
         ...(studentStatsMap[studentId] || {}),
-        sessionsCount: classSessions.length,
+        sessionsCount: eligibleAttendanceSessions.length,
         documentedSessions: documentedSessionsCount,
         notebookScores: notebookScoresFor(notebookChecks, studentId, notebookRounds),
         participationJudgement: raw === '' ? null : Number(raw),

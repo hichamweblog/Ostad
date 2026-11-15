@@ -59,7 +59,7 @@ export async function parseMoumtazeFile(file: File): Promise<ParsedMoumtazeResul
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, {
     type: 'array',
-    cellDates: true,
+    cellDates: false,
   });
 
   const parsedClasses: MoumtazeClass[] = [];

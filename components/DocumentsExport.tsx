@@ -35,12 +35,8 @@ type DocCategory =
 export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
   const { state, updateState: onUpdateState } = useAppState();
   const [docType, setDocType] = useState<DocCategory>('JOURNAL');
-  const [selectedClassId, setSelectedClassId] = useState<string>(
-    state.activeClassId || (state.classes[0]?.id || '')
-  );
-  const [selectedTrimester, setSelectedTrimester] = useState<1 | 2 | 3>(
-    state.activeTrimester || 1
-  );
+  const selectedClassId = state.activeClassId || (state.classes[0]?.id || '');
+  const selectedTrimester = state.activeTrimester || 1;
   const ecoPaperMode = true;
 
   const activeClass = state.classes.find(c => c.id === selectedClassId);
@@ -565,10 +561,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
             <span>القسم:</span>
             <select
               value={selectedClassId}
-              onChange={e => {
-                setSelectedClassId(e.target.value);
-                onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }));
-              }}
+              onChange={e => onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }))}
               className="bg-white px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer shadow-2xs" >
               {state.classes.map(c => (
                 <option key={c.id} value={c.id}>
@@ -583,11 +576,7 @@ export const DocumentsExport: React.FC<DocumentsExportProps> = () => {
               <span>الفصل:</span>
               <select
                 value={selectedTrimester}
-                onChange={e => {
-                  const next = Number(e.target.value) as 1 | 2 | 3;
-                  setSelectedTrimester(next);
-                  onUpdateState(prev => ({ ...prev, activeTrimester: next }));
-                }}
+                onChange={e => onUpdateState(prev => ({ ...prev, activeTrimester: Number(e.target.value) as 1 | 2 | 3 }))}
                 className="bg-white px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer shadow-2xs" >
                 <option value={1}>الفصل الأول</option>
                 <option value={2}>الفصل الثاني</option>

@@ -111,35 +111,33 @@ export function calculateEvaluationBreakdown(
   stats: SessionBehaviourStats = {},
   rules?: Partial<ContinuousEvaluationRules> | null,
 ): ContinuousEvaluationBreakdown {
-  const behaviorMax = scoreCeiling(rules?.behaviorMax, DEFAULT_MAX.behavior);
-  const attendanceMax = scoreCeiling(rules?.attendanceMax, DEFAULT_MAX.attendance);
-  const notebookMax = scoreCeiling(rules?.notebookMax, DEFAULT_MAX.notebook);
-  const participationMax = scoreCeiling(rules?.participationMax, DEFAULT_MAX.participation);
-  const judgementMax = scoreCeiling(rules?.participationJudgementMax, DEFAULT_JUDGEMENT_MAX);
-  const recordedMax = Math.max(
-    0,
-    Math.min(
-      participationMax,
-      Number.isFinite(Number(rules?.participationRecordedMax))
-        ? Number(rules?.participationRecordedMax)
-        : participationMax - judgementMax,
-    ),
-  );
+  // أوزان القرار الوزاري 3/3/6/8 ثابتة ولا تتغير
+  const behaviorMax = 3;
+  const attendanceMax = 3;
+  const notebookMax = 6;
+  const participationMax = 8;
+  const judgementMax = 5;
+  const recordedMax = 3;
   const targetRatio = scoreCeiling(rules?.participationTargetRatio, DEFAULT_TARGET_RATIO) || DEFAULT_TARGET_RATIO;
 
-  // 1) السلوك والانضباط — دائماً متاح: عدم التسجيل يعني عدم المخالفة.
-  const behavior = clampScore(
-    behaviorMax -
-      behaviourDeduction(
-        positiveCount(stats.disruptions),
-        ruleValue(rules?.disruptionDeduction, 0.5),
-        ruleValue(rules?.disruptionRepeatDeduction, 0.5),
-      ),
-    behaviorMax,
-  );
+  // 1) السلوك والانضباط — متاح عند وجود أدلة (حصة واحدة على الأقل أو مخالفة مسجلة).
+  // غياب أي حصة أو تسجيل يعني انعدام الأدلة فلا يُمنح 20/20 مجاناً لغياب السجل.
+  const sessionsCount = positiveCount(stats.sessionsCount);
+  const disruptionsCount = positiveCount(stats.disruptions);
+  const behaviorAvailable = sessionsCount > 0 || disruptionsCount > 0;
+  const behavior = behaviorAvailable
+    ? clampScore(
+        behaviorMax -
+          behaviourDeduction(
+            disruptionsCount,
+            ruleValue(rules?.disruptionDeduction, 0.5),
+            ruleValue(rules?.disruptionRepeatDeduction, 0.5),
+          ),
+        behaviorMax,
+      )
+    : null;
 
   // 2) المواظبة والحضور — نسبة من الحصص، ولا تُحتسب قبل 5 حصص (أدلة كافية).
-  const sessionsCount = positiveCount(stats.sessionsCount);
   const attendanceAvailable = sessionsCount >= MIN_SESSIONS_FOR_RATIO;
   const attendance = attendanceAvailable
     ? clampScore(

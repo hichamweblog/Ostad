@@ -22,26 +22,8 @@ interface CouncilAnalysisProps {
 
 export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
   const { state, updateState: onUpdateState } = useAppState();
-  const [selectedClassId, setSelectedClassId] = useState<string>(
-    state.activeClassId || (state.classes[0]?.id || '')
-  );
-  const [selectedTrimester, setSelectedTrimester] = useState<1 | 2 | 3>(
-    state.activeTrimester || 1
-  );
-
-  // Keep the local context in sync with the global class / term switcher.
-  useEffect(() => {
-    if (state.activeClassId && state.activeClassId !== selectedClassId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedClassId(state.activeClassId);
-    }
-  }, [state.activeClassId, selectedClassId]);
-
-  useEffect(() => {
-    const term = normalizeTrimester(state.activeTrimester);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (term !== selectedTrimester) setSelectedTrimester(term);
-  }, [state.activeTrimester, selectedTrimester]);
+  const selectedClassId = state.activeClassId || (state.classes[0]?.id || '');
+  const selectedTrimester = normalizeTrimester(state.activeTrimester);
 
   const activeClass = state.classes.find(c => c.id === selectedClassId);
 
@@ -253,10 +235,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
             <span className="text-xs font-bold text-slate-500 block">اختر القسم:</span>
             <select
               value={selectedClassId}
-              onChange={e => {
-                setSelectedClassId(e.target.value);
-                onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }));
-              }}
+              onChange={e => onUpdateState(prev => ({ ...prev, activeClassId: e.target.value }))}
               className="bg-white px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 outline-none cursor-pointer" >
               {state.classes.map(c => (
                 <option key={c.id} value={c.id}>
@@ -272,10 +251,7 @@ export const CouncilAnalysis: React.FC<CouncilAnalysisProps> = () => {
               {([1, 2, 3] as const).map(tri => (
                 <button
                   key={tri}
-                  onClick={() => {
-                    setSelectedTrimester(tri);
-                    onUpdateState(prev => ({ ...prev, activeTrimester: tri }));
-                  }}
+                  onClick={() => onUpdateState(prev => ({ ...prev, activeTrimester: tri }))}
                   aria-pressed={selectedTrimester === tri}
                   className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     selectedTrimester === tri

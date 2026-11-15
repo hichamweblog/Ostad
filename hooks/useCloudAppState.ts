@@ -32,6 +32,8 @@ import {
   listPendingRecordIds,
   compactSyncOutbox,
   replayOutboxEntriesOnState,
+  recordExistsInState,
+  type SyncEntity,
   type SyncConflictDescriptor,
 } from '@/lib/sync-outbox';
 import { clearMemorandaOutbox } from '@/lib/supabase/memoranda-outbox';
@@ -1033,7 +1035,13 @@ export function useCloudAppState(user: User | null) {
       deletedRecordIds: Array.from(new Set([
         ...(previous.deletedRecordIds || []),
         ...deletedRecordIds,
-      ])),
+      ])).filter((tombstone) => {
+        const sep = tombstone.indexOf(':');
+        if (sep <= 0) return false;
+        const entity = tombstone.slice(0, sep) as SyncEntity;
+        const recordId = tombstone.slice(sep + 1);
+        return !recordExistsInState(entity, recordId, next);
+      }),
     };
     latestStateRef.current = committedState;
     setState(committedState);
@@ -1055,7 +1063,13 @@ export function useCloudAppState(user: User | null) {
       deletedRecordIds: Array.from(new Set([
         ...(previous.deletedRecordIds || []),
         ...deletedRecordIds,
-      ])),
+      ])).filter((tombstone) => {
+        const sep = tombstone.indexOf(':');
+        if (sep <= 0) return false;
+        const entity = tombstone.slice(0, sep) as SyncEntity;
+        const recordId = tombstone.slice(sep + 1);
+        return !recordExistsInState(entity, recordId, computed);
+      }),
     };
     latestStateRef.current = nextState;
     setState(nextState);
@@ -1119,14 +1133,12 @@ export function useCloudAppState(user: User | null) {
       const client = createSupabaseBrowserClient();
       if (!client) throw new Error('لا يمكن مزامنة إعادة التعيين دون اتصال بالخادم السحابي.');
 
-      // Purge outbox so any old pending or failed operations are cleared
-      await clearSyncOutbox(user.id);
       setCloudStatus('sync-pending');
       setSyncError(null);
 
       try {
         await clearCloudRosterData(client, user.id);
-        // Purge outbox again to ensure clean slate
+        // Purge outbox only after acknowledgment from the cloud
         await clearSyncOutbox(user.id);
       } catch (error) {
         setCloudStatus('sync-failed');

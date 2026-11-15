@@ -92,6 +92,18 @@ describe('§2 own writes are ignored, remote ones are not', () => {
     expect(isSelfAuthoredChange({ new: { sync_device_id: 'device-other' } }, deviceId)).toBe(false);
   });
 
+  it('reacts to an UPDATE where another device updated a row originally written by this device', () => {
+    expect(
+      isSelfAuthoredChange(
+        {
+          new: { sync_device_id: 'device-other' },
+          old: { sync_device_id: deviceId },
+        },
+        deviceId,
+      ),
+    ).toBe(false);
+  });
+
   it('reacts to a DELETE payload, which only carries the old record', () => {
     // With replica identity full the old row is present, so a delete by another device is
     // recognised as remote work and triggers the refresh.

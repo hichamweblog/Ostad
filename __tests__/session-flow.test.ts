@@ -271,3 +271,104 @@ describe('unit numbering follows taught sessions chronologically', () => {
     );
   });
 });
+
+describe('pickDefaultSession (§3.6 automatic session picking)', () => {
+  it('picks the ongoing session of today when current time falls within its slot', async () => {
+    const { pickDefaultSession } = await import('@/lib/session-flow');
+    const s1: SessionRecord = {
+      id: 's1',
+      classId: 'c1',
+      date: '2026-11-15',
+      startTime: '08:00',
+      endTime: '09:00',
+      attendance: {},
+    };
+    const s2: SessionRecord = {
+      id: 's2',
+      classId: 'c1',
+      date: '2026-11-15',
+      startTime: '10:00',
+      endTime: '11:00',
+      attendance: {},
+    };
+
+    // At 08:30 (during s1), pick s1
+    expect(pickDefaultSession([s1, s2], '2026-11-15', '08:30')?.id).toBe('s1');
+    // At 10:15 (during s2), pick s2
+    expect(pickDefaultSession([s1, s2], '2026-11-15', '10:15')?.id).toBe('s2');
+  });
+
+  it('picks the closest session of today when outside any active slot', async () => {
+    const { pickDefaultSession } = await import('@/lib/session-flow');
+    const s1: SessionRecord = {
+      id: 's1',
+      classId: 'c1',
+      date: '2026-11-15',
+      startTime: '08:00',
+      endTime: '09:00',
+      attendance: {},
+    };
+    const s2: SessionRecord = {
+      id: 's2',
+      classId: 'c1',
+      date: '2026-11-15',
+      startTime: '14:00',
+      endTime: '15:00',
+      attendance: {},
+    };
+
+    // At 07:45, closest is s1 (08:00)
+    expect(pickDefaultSession([s1, s2], '2026-11-15', '07:45')?.id).toBe('s1');
+    // At 13:30, closest is s2 (14:00)
+    expect(pickDefaultSession([s1, s2], '2026-11-15', '13:30')?.id).toBe('s2');
+  });
+
+  it('falls back to the latest past session without attendance when today has no session', async () => {
+    const { pickDefaultSession } = await import('@/lib/session-flow');
+    const past1: SessionRecord = {
+      id: 'past-1',
+      classId: 'c1',
+      date: '2026-11-10',
+      startTime: '08:00',
+      attendance: {}, // not taken!
+    };
+    const past2: SessionRecord = {
+      id: 'past-2',
+      classId: 'c1',
+      date: '2026-11-12',
+      startTime: '08:00',
+      attendance: { stu1: 'PRESENT' }, // taken!
+    };
+
+    // Today is 2026-11-15, past-1 has missing attendance
+    expect(pickDefaultSession([past1, past2], '2026-11-15')?.id).toBe('past-1');
+  });
+
+  it('never picks a future session by default (rule 3)', async () => {
+    const { pickDefaultSession } = await import('@/lib/session-flow');
+    const futureSession: SessionRecord = {
+      id: 'future-1',
+      classId: 'c1',
+      date: '2026-11-20',
+      startTime: '08:00',
+      attendance: {},
+    };
+
+    // Today is 2026-11-15, only future session exists -> returns null
+    expect(pickDefaultSession([futureSession], '2026-11-15')).toBeNull();
+  });
+
+  it('handles midnight edge case safely', async () => {
+    const { pickDefaultSession } = await import('@/lib/session-flow');
+    const s1: SessionRecord = {
+      id: 's1',
+      classId: 'c1',
+      date: '2026-11-15',
+      startTime: '08:00',
+      endTime: '09:00',
+      attendance: {},
+    };
+
+    expect(pickDefaultSession([s1], '2026-11-15', '00:00')?.id).toBe('s1');
+  });
+});

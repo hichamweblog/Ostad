@@ -57,8 +57,18 @@ export function parseGradeTable(text: string, fallbackField: GradeField = 'conti
     .filter(Boolean);
 
   lines.forEach((line, index) => {
-    const separator = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
-    const cells = line.split(separator).map(cell => cell.trim());
+    let processedLine = line;
+    let separator: string;
+    if (line.includes('\t')) {
+      separator = '\t';
+    } else if (line.includes(';')) {
+      separator = ';';
+    } else {
+      // In comma-separated text, protect decimal commas between digits (e.g. 14,5 -> 14.5)
+      processedLine = line.replace(/(\d)[,،٫](\d)/g, '$1.$2');
+      separator = ',';
+    }
+    const cells = processedLine.split(separator).map(cell => cell.trim());
 
     if (!headerSkipped && index === 0 && looksLikeHeader(cells)) {
       headerSkipped = true;
@@ -87,9 +97,9 @@ export function parseGradeTable(text: string, fallbackField: GradeField = 'conti
     rawValues.slice(0, targets.length).forEach((cell, i) => {
       const field = targets[i];
       if (!field) return;
-      const normalized = normalizeGradeInput(cell).replace(/[^\d.]/g, '');
+      const normalized = normalizeGradeInput(cell).trim();
       const numeric = Number(normalized);
-      if (normalized === '' || Number.isNaN(numeric) || numeric < 0 || numeric > 20) {
+      if (normalized === '' || Number.isNaN(numeric) || numeric < 0 || numeric > 20 || !/^-?\d+(?:\.\d+)?$/.test(normalized)) {
         invalid = cell || '(فارغ)';
         return;
       }
