@@ -76,7 +76,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     () => pickDefaultSession(classSessions)?.id || classSessions[0]?.id || ''
   );
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceMode, setAttendanceMode] = useState<'quick' | 'detailed'>('quick');
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const [notebookDraft, setNotebookDraft] = useState<Record<string, number>>({});
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
@@ -804,23 +803,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث عن تلميذ..." className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
               </div>
-              <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-black">
-                <button
-                  type="button"
-                  onClick={() => setAttendanceMode('quick')}
-                  className={`min-h-9 rounded-lg px-3 ${attendanceMode === 'quick' ? 'bg-white text-[var(--primary)] shadow-xs' : 'text-slate-500'}`}
-                >
-                  سريع
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAttendanceMode('detailed')}
-                  className={`min-h-9 rounded-lg px-3 ${attendanceMode === 'detailed' ? 'bg-white text-[var(--primary)] shadow-xs' : 'text-slate-500'}`}
-                >
-                  مفصل
-                </button>
-              </div>
-
             </div>
 
             <button
@@ -929,42 +911,36 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                       </div>
 
                       {/* Unified Attendance & Behavior Buttons (Mobile) */}
-                      <div className={`grid ${attendanceMode === 'detailed' ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleAbsence(student.id)}
-                                  aria-pressed={status === 'ABSENT'}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                                    status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-300' }`}
-                                  title="تسجيل غياب" >
-                                  الغياب -
-                                </button>
-                                {attendanceMode === 'detailed' && (
-                                  <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleBehavior(student.id, 'disruptions')}
-                                  aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                                    activeSession.disruptions?.includes(student.id)
-                                      ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--text-primary)] hover:border-slate-400' }`}
-                                  title="مخالفة سلوكية وانضباط" >
-                                  سلوك -
-                                </button>
-                                  </>
-                                )}
-                                {/* Participation is always reachable: it is the mark that raises the
-                                    participation point from 0, so it cannot hide behind detailed mode. */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
-                                  aria-pressed={Boolean(activeSession.goodParticipation?.includes(student.id))}
-                                  className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
-                                    activeSession.goodParticipation?.includes(student.id)
-                                      ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--primary)] hover:border-[var(--primary)]' }`}
-                                  title="مشاركة إيجابية" >
-                                  مشاركة +
-                                </button>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAbsence(student.id)}
+                          aria-pressed={status === 'ABSENT'}
+                          className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
+                            status === 'ABSENT' ? 'bg-rose-500 text-white border-rose-600 shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-300' }`}
+                          title="تسجيل غياب" >
+                          الغياب -
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBehavior(student.id, 'disruptions')}
+                          aria-pressed={Boolean(activeSession.disruptions?.includes(student.id))}
+                          className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
+                            activeSession.disruptions?.includes(student.id)
+                              ? 'bg-[var(--text-primary)] text-white border-[var(--text-primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--text-primary)] hover:border-slate-400' }`}
+                          title="مخالفة سلوكية وانضباط" >
+                          سلوك -
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
+                          aria-pressed={Boolean(activeSession.goodParticipation?.includes(student.id))}
+                          className={`min-h-11 px-1 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer border ${
+                            activeSession.goodParticipation?.includes(student.id)
+                              ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs' : 'border-slate-200 bg-white text-slate-600 hover:text-[var(--primary)] hover:border-[var(--primary)]' }`}
+                          title="مشاركة إيجابية" >
+                          مشاركة +
+                        </button>
                       </div>
                     </div>
                   );
@@ -1019,8 +995,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   title="تسجيل غياب" >
                                   الغياب -
                                 </button>
-                                {attendanceMode === 'detailed' && (
-                                  <>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'disruptions')}
@@ -1031,10 +1005,6 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
                                   title="مخالفة سلوكية وانضباط" >
                                   سلوك -
                                 </button>
-                                  </>
-                                )}
-                                {/* Participation stays visible in quick mode: it is the mark that
-                                    raises the participation point from 0 upwards. */}
                                 <button
                                   type="button"
                                   onClick={() => handleToggleBehavior(student.id, 'goodParticipation')}
