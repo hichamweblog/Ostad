@@ -864,7 +864,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
           </div>
           <div>
             <label htmlFor="absence-deduction" className="mb-1 block text-xs font-bold text-slate-700">
-              وزن الغياب غير المبرر
+              خصم الغياب غير المبرر
             </label>
             <input
               id="absence-deduction"
@@ -872,9 +872,9 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               step="0.25"
               min="0.1"
               max="3"
-              value={calendarSettings.evaluationRules.unexcusedAbsenceDeduction ?? 1}
+              value={calendarSettings.evaluationRules.unexcusedAbsenceDeduction ?? 0.5}
               onChange={(e) => {
-                const val = Math.max(0, parseFloat(e.target.value) || 1);
+                const val = Math.max(0, parseFloat(e.target.value) || 0.5);
                 setCalendarSettings((prev) => ({
                   ...prev,
                   evaluationRules: {
@@ -885,32 +885,7 @@ export const SettingsSanad: React.FC<SettingsSanadProps> = () => {
               }}
               className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
-            <span className="mt-1 block text-xs text-slate-500">افتراضياً 1 (يساوي غياب حصة كاملة).</span>
-          </div>
-          <div>
-            <label htmlFor="late-deduction" className="mb-1 block text-xs font-bold text-slate-700">
-              وزن التأخر
-            </label>
-            <input
-              id="late-deduction"
-              type="number"
-              step="0.25"
-              min="0.1"
-              max="3"
-              value={calendarSettings.evaluationRules.lateDeduction ?? 0.5}
-              onChange={(e) => {
-                const val = Math.max(0, parseFloat(e.target.value) || 0.5);
-                setCalendarSettings((prev) => ({
-                  ...prev,
-                  evaluationRules: {
-                    ...prev.evaluationRules,
-                    lateDeduction: val,
-                  },
-                }));
-              }}
-              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-            <span className="mt-1 block text-xs text-slate-500">افتراضياً 0.5 (تأخران يعادلان غياباً واحداً).</span>
+            <span className="mt-1 block text-xs text-slate-500">الافتراضي: 0.5 عن كل غياب غير مبرر.</span>
           </div>
           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs leading-6 text-[var(--text-secondary)] sm:col-span-2">
             <strong className="text-[var(--text-primary)]">قاعدة الأدلة:</strong> العنصر الذي لا توجد له

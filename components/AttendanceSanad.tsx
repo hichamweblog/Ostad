@@ -367,7 +367,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           : ses)
       }));
       showToast(
-        `تم إنهاء الحضور — ${trimesterLabel(activeTrimester)}: ${presentCount} حاضر، ${lateCount} متأخر، ${absentCount} غائب.`,
+        `تم إنهاء الحضور — ${trimesterLabel(activeTrimester)}: ${presentCount} حاضر، ${absentCount} غائب.`,
         'success',
       );
       setShowFinishReview(false);
@@ -525,21 +525,17 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
     s.fullName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Active session stats. A student with no explicit record is considered present
-  // (that is how the sheet is filled), then each status is counted separately so
-  // late and excused students are never silently merged into "present".
+  // Active session stats. A student is strictly either ABSENT or PRESENT
   const statusCounts = classStudents.reduce(
     (counts, student) => {
-      const status = activeAttendance[student.id] || 'PRESENT';
+      const status = (activeAttendance[student.id] || 'PRESENT') === 'ABSENT' ? 'ABSENT' : 'PRESENT';
       counts[status] += 1;
       return counts;
     },
-    { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 } as Record<AttendanceStatus, number>,
+    { PRESENT: 0, ABSENT: 0 } as Record<'PRESENT' | 'ABSENT', number>,
   );
   const presentCount = statusCounts.PRESENT;
   const absentCount = statusCounts.ABSENT;
-  const lateCount = statusCounts.LATE;
-  const excusedCount = statusCounts.EXCUSED;
 
   // Export official attendance sheet to Word (.docx) with clean table and RTL visual columns
   const handleExportDoc = () => {
@@ -1214,7 +1210,7 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
         </div>
       </AccessibleDialog>
 
-      {/* مراجعة إلزامية قبل إنهاء الحضور: لا حفظ بلا رؤية الملخص */}
+      {/* مراجعة إلزامية قبل إنهاء الحضور: التلميذ إما حاضر أو غائب */}
       <AccessibleDialog
         open={showFinishReview}
         titleId="finish-attendance-title"
@@ -1229,24 +1225,35 @@ export const AttendanceSanad: React.FC<AttendanceSanadProps> = ({
           {activeClass?.name} — {trimesterLabel(activeTrimester)} — {activeSession?.date}
         </p>
 
-        <div id="finish-attendance-summary" className="mt-4 grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <div className="text-lg font-black text-emerald-800">{presentCount}</div>
-            <div className="text-xs font-bold text-emerald-700">حاضر</div>
+        <div id="finish-attendance-summary" className="mt-4 grid grid-cols-2 gap-3 text-center">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+            <div className="text-2xl font-black text-emerald-800">{presentCount}</div>
+            <div className="mt-1 text-xs font-bold text-emerald-700">حاضر</div>
           </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <div className="text-lg font-black text-amber-800">{lateCount}</div>
-            <div className="text-xs font-bold text-amber-700">متأخر</div>
-          </div>
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
-            <div className="text-lg font-black text-sky-800">{excusedCount}</div>
-            <div className="text-xs font-bold text-sky-700">غائب مبرر</div>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-            <div className="text-lg font-black text-rose-800">{absentCount}</div>
-            <div className="text-xs font-bold text-rose-700">غائب</div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3">
+            <div className="text-2xl font-black text-rose-800">{absentCount}</div>
+            <div className="mt-1 text-xs font-bold text-rose-700">غائب</div>
           </div>
         </div>
+
+        {absentCount > 0 ? (
+          <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/50 p-3 text-xs">
+            <span className="font-bold text-rose-800">التلاميذ الغائبون ({absentCount}):</span>
+            <div className="mt-1.5 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+              {classStudents
+                .filter(s => (activeAttendance[s.id] || 'PRESENT') === 'ABSENT')
+                .map(s => (
+                  <span key={s.id} className="rounded-md border border-rose-200 bg-white px-2 py-0.5 font-bold text-rose-700 shadow-2xs">
+                    {s.numberInList ? `${s.numberInList}. ` : ''}{s.fullName}
+                  </span>
+                ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-2.5 text-center text-xs font-bold text-emerald-800">
+            جميع التلاميذ حاضرون ({presentCount})
+          </div>
+        )}
 
         <p className="mt-4 rounded-xl bg-[var(--bg-surface-subtle)] px-3 py-2 text-xs leading-5 text-[var(--text-secondary)]">
           بعد الإنهاء يفتح دفتر النصوص.
