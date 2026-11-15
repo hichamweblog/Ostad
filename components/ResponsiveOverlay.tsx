@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { twMerge } from 'tailwind-merge';
 import { AccessibleDialog } from './AccessibleDialog';
 
 interface ResponsiveOverlayProps {
@@ -50,7 +51,10 @@ export function ResponsiveOverlay({
       open={open}
       titleId={titleId}
       onClose={close}
-      className={`fixed inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:static sm:max-h-[88dvh] sm:w-full sm:max-w-lg sm:rounded-2xl ${className}`}
+      className={twMerge(
+        'fixed inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:static sm:max-h-[88dvh] sm:w-full sm:max-w-lg sm:rounded-2xl',
+        className,
+      )}
     >
       <div className="sticky top-0 z-10 border-b border-[var(--border-subtle)] bg-white/95 px-5 pb-3 pt-2 backdrop-blur sm:rounded-t-2xl">
         <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />

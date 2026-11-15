@@ -5,6 +5,7 @@ import { useAppState } from '@/hooks/app-state-context';
 import { useDialogA11y } from '@/hooks/use-dialog-a11y';
 import { ClassFormDialog } from './classes/ClassFormDialog';
 import { StudentFormDialog } from './classes/StudentFormDialog';
+import { StudentNameButton } from './StudentNameButton';
 import React, { useEffect, useState, useRef } from 'react';
 import { DEFAULT_CLASS_COLOR, pickClassColor } from "@/lib/class-colors";
 import { AppState, DEFAULT_PROFILE } from '@/lib/storage';
@@ -43,6 +44,7 @@ import {
 interface ClassesManagerProps {
   onNavigate?: (tab: SanadTab) => void;
   initialSubTab?: 'classes' | 'students';
+  onOpenStudent: (studentId: string) => void;
 }
 
 interface ImportConflict {
@@ -61,6 +63,7 @@ interface StudentMergePair {
 export const ClassesManager: React.FC<ClassesManagerProps> = ({
   onNavigate,
   initialSubTab = 'classes',
+  onOpenStudent,
 }) => {
   const { state, updateState: onUpdateState, updateStateAndWait, commitRosterImport } = useAppState();
   const [activeSubTab] = useState<'classes' | 'students'>(initialSubTab);
@@ -1794,7 +1797,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                           {student.numberInList}
                         </td>
                         <td className="py-2.5 px-4 font-bold text-slate-900">
-                          {student.fullName}
+                          <StudentNameButton student={student} onOpen={onOpenStudent} />
                         </td>
                         <td className="py-2.5 px-4">
                           <span
@@ -1840,7 +1843,7 @@ export const ClassesManager: React.FC<ClassesManagerProps> = ({
                       </span>
                       <div className="space-y-1">
                         <div className="font-bold text-sm text-slate-900">
-                          {student.fullName}
+                          <StudentNameButton student={student} onOpen={onOpenStudent} truncate={false} />
                         </div>
                         <div className="flex items-center gap-2">
                           <span

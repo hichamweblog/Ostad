@@ -5,7 +5,7 @@ import { useAppState } from '@/hooks/app-state-context';
 import { calculateEvaluationBreakdown, calculateStudentAverage } from '@/lib/grade-calculator';
 import { filterByTrimester } from '@/lib/academic-calendar';
 import { getLocalDateString } from '@/lib/date-utils';
-import { EVALUATION_CRITERIA, criterionMax } from '@/lib/evaluation-labels';
+import { EVALUATION_CRITERIA, criterionLabel, criterionMax } from '@/lib/evaluation-labels';
 import { triggerHapticFeedback } from '@/lib/utils';
 import { Student, StudentGrade } from '@/lib/types';
 import { normalizeGradeInput as normalizeNumerals } from '@/lib/grade-input';
@@ -18,6 +18,7 @@ import {
 } from '@/lib/participation-judgement';
 import { getStudentNameKey } from '@/lib/name-normalizer';
 import { AccessibleDialog } from './AccessibleDialog';
+import { StudentNameButton } from './StudentNameButton';
 import {
   PEDAGOGICAL_TIERS,
   getScoreTier,
@@ -227,7 +228,7 @@ export interface GradeDraftEntry {
   estimation: string;
   guidance: string;
   remarks: string;
-  /** تقدير الأستاذ للمشاركة والنشاط (0–5) — يُحفظ في participationScore. */
+  /** تقدير الأستاذ للمشاركة والنشاط (0 أو 2 أو 4) — يُحفظ في participationScore. */
   participationJudgement: string;
 }
 
@@ -265,9 +266,10 @@ function buildDraft(
 }
 
 interface GradesAndEvaluationProps {
+  onOpenStudent: (studentId: string) => void;
 }
 
-export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
+export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = ({ onOpenStudent }) => {
   const { state, updateState: onUpdateState, updateStateAndWait } = useAppState();
   const [selectedClassId, setSelectedClassId] = useState<string>(
     state.activeClassId || (state.classes[0]?.id || '')
@@ -278,7 +280,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
   const [showFormulaModal, setShowFormulaModal] = useState(false);
   const [showReview, setShowReview] = useState(false);
-  // تقديرات جلسة المراجعة الحالية فقط — تُملأ بالاقتراح الآلي أو المحفوظ،
+  // تقديرات جلسة المراجعة الحالية فقط — تُملأ بالاقتراح الافتراضي أو المحفوظ،
   // ولا تُكتب في الحالة إلا بزر «تطبيق على القسم».
   const [reviewJudgements, setReviewJudgements] = useState<Record<string, string>>({});
   const [saveToast, setSaveToast] = useState(false);
@@ -520,17 +522,17 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   );
   const studentStatsMap: Record<string, {
     absent: number; late: number; excused: number;
-    disruptions: number; unwritten: number; poorPart: number; goodPart: number;
+    disruptions: number; poorPart: number; goodPart: number;
   }> = {};
 
   for (const s of classStudents) {
-    studentStatsMap[s.id] = { absent: 0, late: 0, excused: 0, disruptions: 0, unwritten: 0, poorPart: 0, goodPart: 0 };
+    studentStatsMap[s.id] = { absent: 0, late: 0, excused: 0, disruptions: 0, poorPart: 0, goodPart: 0 };
   }
 
   for (const session of classSessions) {
     if (session.attendance) {
       for (const [studentId, status] of Object.entries(session.attendance)) {
-        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, late: 0, excused: 0, disruptions: 0, unwritten: 0, poorPart: 0, goodPart: 0 };
+        if (!studentStatsMap[studentId]) studentStatsMap[studentId] = { absent: 0, late: 0, excused: 0, disruptions: 0, poorPart: 0, goodPart: 0 };
         if (status === 'ABSENT') studentStatsMap[studentId].absent++;
         else if (status === 'LATE') studentStatsMap[studentId].late++;
         else if (status === 'EXCUSED') studentStatsMap[studentId].excused++;
@@ -539,11 +541,6 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
     if (session.disruptions) {
       for (const studentId of session.disruptions) {
         if (studentStatsMap[studentId]) studentStatsMap[studentId].disruptions++;
-      }
-    }
-    if (session.unwrittenLessons) {
-      for (const studentId of session.unwrittenLessons) {
-        if (studentStatsMap[studentId]) studentStatsMap[studentId].unwritten++;
       }
     }
     if (session.poorParticipation) {
@@ -568,7 +565,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   /**
    * One shared breakdown drives the suggested mark, the tooltip and the saved value.
    * Auto components come from the notebook (attendance + behaviour + participation
-   * evidence); the teacher's 0–5 judgement is added on top of the documented part.
+   * evidence); the teacher's 0–4 judgement is added on top of the documented part.
    */
   const evaluationRules = state.calendarSettings?.evaluationRules;
   const notebookRounds = normalizeNotebookRounds(evaluationRules?.notebookRounds);
@@ -596,16 +593,8 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
   const autoBreakdownFor = (studentId: string) => breakdownFor(studentId);
 
-  /** اقتراح تقدير المشاركة من أدلة التوثيق؛ لا يُحفظ حتى يضغط الأستاذ «تطبيق». */
-  const suggestedJudgementFor = (studentId: string): string => {
-    const suggestion = suggestParticipationJudgement({
-      goodPart: studentStatsMap[studentId]?.goodPart ?? 0,
-      poorPart: studentStatsMap[studentId]?.poorPart ?? 0,
-      documentedSessions: documentedSessionsCount,
-      targetRatio: evaluationRules?.participationTargetRatio,
-    });
-    return suggestion === null ? '' : String(suggestion);
-  };
+  /** «متوسط 2/4» اقتراح محايد عند المراجعة؛ لا يُحفظ حتى يضغط الأستاذ «تطبيق». */
+  const suggestedJudgement = (): string => String(suggestParticipationJudgement());
 
   const calcAutoContinuousEval = (studentId: string): number => autoBreakdownFor(studentId).total;
 
@@ -641,14 +630,14 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
   };
 
   /**
-   * يفتح المراجعة وقد ملأ كل صف: التقدير المحفوظ إن وُجد، وإلا الاقتراح الآلي.
+   * يفتح المراجعة وقد ملأ كل صف: التقدير المحفوظ إن وُجد، وإلا «متوسط 2/4».
    * الاقتراح يظهر في القائمة فقط ولا يمسّ الحالة، فيمكن إغلاق النافذة دون أثر.
    */
   const openReview = () => {
     const seeded: Record<string, string> = {};
     for (const student of classStudents) {
       const stored = gradesDraft[student.id]?.participationJudgement || '';
-      seeded[student.id] = stored || suggestedJudgementFor(student.id);
+      seeded[student.id] = stored || suggestedJudgement();
     }
     setReviewJudgements(seeded);
     setShowReview(true);
@@ -670,7 +659,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       }
       return next;
     });
-    setToastMessage('تم تطبيق التقديرات المقترحة (وما عدّلته) على القسم. راجع النقاط ثم احفظ.');
+    setToastMessage('طُبّقت التقديرات على القسم.');
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 4000);
     setShowReview(false);
@@ -738,7 +727,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
       }
       return next;
     });
-    setToastMessage(`تم تطبيق التقديرات والإرشادات آلياً لـ (${count}) تلميذ حسب نقاطهم ومعدلاتهم بنجاح!`);
+    setToastMessage(`طُبّقت التقديرات والإرشادات على ${count} تلميذاً.`);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3500);
   };
@@ -776,7 +765,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           estimation: estVal,
           guidance: guidanceVal,
           // المكوّنات تُحفظ كما احتُسبت كي تعكس السحابة النموذج نفسه، مع بقاء
-          // المشاركة في العمود المخصّص لها: الجزء التقديري (0–5) الذي اختاره الأستاذ.
+          // المشاركة في العمود المخصّص لها: الجزء التقديري (0 أو 2 أو 4) الذي اختاره الأستاذ.
           behaviorScore: breakdown.behavior,
           attendanceScore: breakdown.attendance,
           notebookScore: breakdown.notebook,
@@ -1097,7 +1086,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <button
               onClick={openReview}
               className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--primary)]/30 bg-white px-3.5 py-2 text-xs font-bold text-[var(--primary-ink)] shadow-2xs transition-colors hover:bg-[var(--primary-soft)]"
-              title="مراجعة مكوّنات التقويم لكل تلميذ؛ التقدير مقترح آلياً ويمكن تعديله">
+              title="مراجعة مكوّنات التقويم لكل تلميذ؛ الاقتراح الافتراضي متوسط 2/4 ويمكن تعديله">
               <ListFilter className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>مراجعة التقويم</span>
             </button>
@@ -1286,9 +1275,9 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                           {student.numberInList}
                         </span>
                         <div className="min-w-0">
-                          <h4 className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
-                            {student.fullName}
-                          </h4>
+                          <div className="font-bold text-sm text-[var(--text-primary)] whitespace-normal break-words leading-tight">
+                            <StudentNameButton student={student} onOpen={onOpenStudent} truncate={false} />
+                          </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <span className={`rounded-full px-2 py-0.5 text-xs font-black ${completedFields === 3 ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-amber-50 text-amber-800'}`}>
                               {completedFields}/3 مكتملة
@@ -1409,7 +1398,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                               {student.numberInList}
                             </td>
                             <td className="p-1 px-2 font-bold text-slate-900">
-                              {student.fullName}
+                              <StudentNameButton student={student} onOpen={onOpenStudent} />
                             </td>
 
                             {/* Continuous Evaluation (0-20) */}
@@ -1552,15 +1541,15 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
           <div className="space-y-1.5">
             <span className="block font-bold text-slate-900">شرح العناصر:</span>
             <ul className="list-inside list-disc space-y-1 text-slate-600">
-              <li><strong>التقويم المستمر (على 20):</strong> السلوك والانضباط 3، المواظبة والحضور 3، الكراس والواجبات 6، المشاركة والنشاط 8 — كما في القرار الوزاري.</li>
-              <li><strong>المواظبة (على 3):</strong> نسبة من حصص الفصل: كل غياب غير مبرر يُنقص النسبة بنقطة كاملة، والتأخر بنصف نقطة، ثم تُضرب النسبة في منحنى تصاعدي. الغياب المبرَّر لا يُخصم.</li>
-              <li><strong>السلوك (على 3):</strong> خصم 0.5 عن كل مخالفة من الأولى؛ ست مخالفات تستهلك العنصر كاملاً.</li>
-              <li><strong>الكراس (على 6):</strong> مراقبة واحدة للكراس في الفصل على مقياس 0–5، تمتد على عدة حصص (8–10 تلاميذ في الحصة).</li>
-              <li><strong>المشاركة والنشاط (على 8):</strong> 3 نقاط توثيق آلي تُحسب على الحصص التي وُثِّق فيها شيء فعلاً (لا على كل الحصص)، و5 نقاط تقدير الأستاذ من خمسة مستويات.</li>
-              <li><strong>عنصر بلا أدلة:</strong> يُستبعد ويُعاد توزيع وزنه على بقية العناصر بدل منحه صفراً أو سقفه كاملاً.</li>
-              <li><strong>الفرض المحروس (على 20):</strong> فرض واحد رسمي خلال الفصل مدته ساعة كاملة.</li>
-              <li><strong>الاختبار الفصلي (على 20):</strong> اختبار موحد يضاعف بمعامل 2 طبقاً للقرارات الوزارية المنظمة للتقويم في الطور الثانوي.</li>
-              <li><strong>معامل المادة:</strong> ثابت (2) في كافة السنوات والشعب (علمي، رياضي، تقني رياضي، تسيير واقتصاد، آداب وفلسفة، لغات أجنبية).</li>
+              <li><strong>التقويم المستمر:</strong> سلوك 3 + مواظبة 3 + كراس 6 + مشاركة 8.</li>
+              <li><strong>المواظبة:</strong> 0.5 عن كل غياب غير مبرر.</li>
+              <li><strong>السلوك:</strong> 0.5 عن كل مخالفة.</li>
+              <li><strong>الكراس:</strong> مراقبة فصلية: 6 أو 4 أو 2 أو 0.</li>
+              <li><strong>المشاركة:</strong> توثيق 4 يكتمل عند 30% + تقدير 4 (4 أو 2 أو 0).</li>
+              <li><strong>بلا دليل:</strong> يُستبعد العنصر ولا يُصفر.</li>
+              <li><strong>الفرض:</strong> علامة واحدة على 20.</li>
+              <li><strong>الاختبار:</strong> على 20 ويُضاعف.</li>
+              <li><strong>معامل المادة:</strong> 2.</li>
             </ul>
           </div>
         </div>
@@ -1586,16 +1575,11 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
             <h3 id="grade-review-title" className="text-base font-black text-[var(--text-primary)]">
               مراجعة التقويم المستمر
             </h3>
-            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
-              الأوزان: السلوك 3 · المواظبة 3 · الكراس 6 · المشاركة والنشاط 8 (منها 3 توثيق و5 تقدير).
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+              الافتراضي: متوسط 2/4. لا يُحفظ قبل «تطبيق على القسم».
             </p>
-            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-              التقدير مُقترَح آلياً من مشاركاتك المسجّلة؛ عدّله من القائمة إن أردت ثم اضغط «تطبيق على القسم».
-            </p>
-            <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-              {classSessions.length} حصة هذا الفصل · {documentedSessionsCount} حصة موثّقة للمشاركة ·
-              الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
-              {' '}تلميذاً تمت مراقبة كراسه.
+            <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+              الحصص: {classSessions.length} · الموثّقة: {documentedSessionsCount} · الكراس: {classStudents.filter(st => notebookScoresFor(notebookChecks, st.id, notebookRounds).length > 0).length}/{classStudents.length}
             </p>
           </div>
           <button
@@ -1611,7 +1595,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
           {classStudents.map(student => {
             const storedJudgement = gradesDraft[student.id]?.participationJudgement || '';
-            const suggestion = suggestedJudgementFor(student.id);
+            const suggestion = suggestedJudgement();
             const judgement = reviewJudgements[student.id] ?? '';
             const showsSuggestion = storedJudgement === '' && judgement !== '' && judgement === suggestion;
             const breakdown = breakdownFor(student.id, judgement);
@@ -1647,7 +1631,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
                     الكراس {missingNotebook || breakdown.notebook === null ? '—' : `${breakdown.notebook.toFixed(1)}/${criterionMax(evaluationRules, 'notebook')}`}
                   </span>
                   <span className="rounded-lg bg-[var(--bg-page)] px-2 py-1 text-[var(--text-secondary)]">
-                    التوثيق {breakdown.participationRecorded === null ? '—' : `${breakdown.participationRecorded.toFixed(1)}/${evaluationRules?.participationRecordedMax ?? 3}`}
+                    التوثيق {breakdown.participationRecorded === null ? '—' : `${breakdown.participationRecorded.toFixed(1)}/${evaluationRules?.participationRecordedMax ?? 4}`}
                   </span>
                 </div>
 
@@ -1681,7 +1665,7 @@ export const GradesAndEvaluation: React.FC<GradesAndEvaluationProps> = () => {
 
         <div className="flex flex-col-reverse gap-2 border-t border-[var(--border-subtle)] pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-6 text-[var(--text-tertiary)]">
-            العنصر بلا أدلة يُستبعد ويُعاد توزيع وزنه، فلا صفر جزاءً على نقص التسجيل.
+            العنصر بلا دليل يُستبعد ولا يُصفر.
           </p>
           <div className="flex gap-2">
             <button

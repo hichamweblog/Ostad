@@ -121,7 +121,11 @@ describe('automatic exclusion of holidays and examination days', () => {
   it('ships the official calendar as the default settings', () => {
     expect(DEFAULT_CALENDAR_SETTINGS.holidays).toBe(OFFICIAL_HOLIDAYS_2026_2027);
     expect(DEFAULT_CALENDAR_SETTINGS.holidays.some((entry) => entry.type === 'exam')).toBe(true);
-    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.lateDeduction).toBe(0);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.participationRecordedMax).toBe(4);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.participationJudgementMax).toBe(4);
+    expect(DEFAULT_CALENDAR_SETTINGS.evaluationRules.participationTargetRatio).toBe(0.3);
   });
 });
 
@@ -179,8 +183,42 @@ describe('normalizeCalendarSettings migration', () => {
     expect(normalized.evaluationRules.attendanceMax).toBe(3);
     expect(normalized.evaluationRules.notebookMax).toBe(6);
     expect(normalized.evaluationRules.participationMax).toBe(8);
-    expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
-    expect(normalized.evaluationRules.participationJudgementMax).toBe(5);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(4);
+    expect(normalized.evaluationRules.participationJudgementMax).toBe(4);
+  });
+
+  it('upgrades the previous 3+5 participation model and its 25% default', () => {
+    const stored: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: {
+        ...base.evaluationRules,
+        participationRecordedMax: 3,
+        participationJudgementMax: 5,
+        participationTargetRatio: 0.25,
+        lateDeduction: 0.5,
+      },
+    };
+    const normalized = normalizeCalendarSettings(stored, base);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(4);
+    expect(normalized.evaluationRules.participationJudgementMax).toBe(4);
+    expect(normalized.evaluationRules.participationTargetRatio).toBe(0.3);
+    expect(normalized.evaluationRules.lateDeduction).toBe(0);
+  });
+
+  it('preserves a non-default participation target while upgrading the split', () => {
+    const stored: AcademicCalendarSettings = {
+      ...base,
+      evaluationRules: {
+        ...base.evaluationRules,
+        participationRecordedMax: 3,
+        participationJudgementMax: 5,
+        participationTargetRatio: 0.4,
+      },
+    };
+    const normalized = normalizeCalendarSettings(stored, base);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(4);
+    expect(normalized.evaluationRules.participationJudgementMax).toBe(4);
+    expect(normalized.evaluationRules.participationTargetRatio).toBe(0.4);
   });
 
   it('leaves a customised weight set alone', () => {
@@ -269,7 +307,7 @@ describe('untouched legacy defaults migration', () => {
     };
     const normalized = normalizeCalendarSettings(legacy, DEFAULT_CALENDAR_SETTINGS);
     expect(normalized.holidays).toBe(OFFICIAL_HOLIDAYS_2026_2027);
-    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
+    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
     // Do not reset a teacher-edited date or bring deleted entries back.
     const edited = { ...legacy, holidays: legacy.holidays.map((h, i) => i === 2 ? { ...h, dateStr: 'تاريخ مخصص' } : h) };
     expect(normalizeCalendarSettings(edited, DEFAULT_CALENDAR_SETTINGS).holidays[2].dateStr).toBe('تاريخ مخصص');
@@ -292,9 +330,9 @@ describe('untouched legacy defaults migration', () => {
       DEFAULT_CALENDAR_SETTINGS,
     );
     // غياب الحقول الجديدة ليس تخصيصاً: تُرقّى القيم القديمة وتُضاف الجديدة.
-    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(1);
+    expect(normalized.evaluationRules.unexcusedAbsenceDeduction).toBe(0.5);
     expect(normalized.evaluationRules.notebookRounds).toBe(1);
-    expect(normalized.evaluationRules.participationRecordedMax).toBe(3);
+    expect(normalized.evaluationRules.participationRecordedMax).toBe(4);
     expect(normalized.evaluationRules.participationMax).toBe(8);
   });
 });

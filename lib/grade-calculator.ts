@@ -1,17 +1,17 @@
 import { ContinuousEvaluationRules, CouncilStatistics, Student, StudentGrade } from './types';
 
 /**
- * حساب نقطة التقويم المستمر (على 20) وفق أوزان القرار الوزاري:
- * 3 السلوك والانضباط | 3 المواظبة والحضور | 6 الكراس والواجبات | 8 المشاركة والنشاط.
+ * حساب نقطة التقويم المستمر (على 20) وفق الأوزان الثابتة:
+ * 3 السلوك والانضباط | 3 المواظبة والحضور | 6 الكراس وأدوات التعلم | 8 المشاركة والنشاط.
  *
- * كانت النسخة السابقة تعطي كل عنصر 5 نقاط وتنقص مقداراً ثابتاً عن كل واقعة،
- * فكانت النتيجة أن القسم كله يتراوح بين 12 و18 مهما اختلف سلوكه. النموذج الحالي:
- * – المواظبة نسبة من الحصص لا عدداً مطلقاً، حتى لا يُعاقب قسم الساعة الواحدة ضعفاً.
+ * النموذج المعتمد:
+ * – المواظبة خصم مباشر 0.5 عن كل غياب غير مبرر؛ التأخر لا يُخصم.
  * – السلوك خصم 0.5 عن كل مخالفة، من المخالفة الأولى.
- * – الكراس من جولة تفتيش واحدة على مقياس 0–5 (لا عدّ «لم يكتب»).
- * – المشاركة = توثيق آلي (3) فوق الحصص الموثّقة فقط + تقدير الأستاذ (5).
- * – أي عنصر بلا أدلة كافية يُستبعد ويُعاد توزيع وزنه على الباقي بدل منحه صفراً
- *   أو سقفه كاملاً.
+ * – الكراس حالة مباشرة من 6: 6 أو 4 أو 2 أو 0، في مراقبة واحدة بالفصل.
+ * – المشاركة = توثيق آلي (4) فوق الحصص الموثّقة فقط + تقدير الأستاذ (4).
+ * – يكتمل التوثيق عند 30% من الحصص الموثّقة، وما دونها يُقرّب لأقرب 0.5.
+ * – العنصر الذي يحتاج دليلاً ولا يتوفر عليه يُستبعد من البسط والمقام وتُعاد
+ *   نسبة المجموع إلى 20 بدل منحه صفراً جزاءً على نقص التسجيل.
  */
 /** جمع مكوّنات التقويم الأربعة مع سقف لكل عنصر حسب وزنه في القرار. */
 export function calculateContinuousEvaluation(
@@ -39,16 +39,17 @@ export interface SessionBehaviourStats {
   absent?: number;
   late?: number;
   disruptions?: number;
+  /** بيانات يومية قديمة؛ لا تدخل في نقطة الكراس. */
   unwritten?: number;
   poorPart?: number;
   goodPart?: number;
-  /** عدد حصص الفصل غير الملغاة — مقام نسبة المواظبة والمشاركة. */
+  /** عدد حصص الفصل غير الملغاة — يُحفظ ضمن الأدلة ولا يدخل في خصم المواظبة. */
   sessionsCount?: number;
   /** عدد الحصص التي وُثِّقت فيها مشاركة تلميذ واحد على الأقل. */
   documentedSessions?: number;
-  /** درجات جولات الكراس (0–5)؛ جولة واحدة افتراضياً وجولتان كحد أقصى. */
+  /** درجات جولات الكراس المباشرة (0–6)؛ جولة واحدة افتراضياً وجولتان كحد أقصى. */
   notebookScores?: number[];
-  /** تقدير الأستاذ للمشاركة والنشاط (0–5). */
+  /** تقدير الأستاذ للمشاركة والنشاط (0 أو 2 أو 4). */
   participationJudgement?: number | null;
 }
 
@@ -70,9 +71,8 @@ export interface ContinuousEvaluationBreakdown {
 }
 
 const DEFAULT_MAX = { behavior: 3, attendance: 3, notebook: 6, participation: 8 };
-const DEFAULT_JUDGEMENT_MAX = 5;
-const DEFAULT_TARGET_RATIO = 0.25;
-const MIN_SESSIONS_FOR_RATIO = 5;
+const DEFAULT_JUDGEMENT_MAX = 4;
+const DEFAULT_TARGET_RATIO = 0.3;
 
 function positiveCount(value: number | undefined | null): number {
   const count = Number(value);
@@ -93,6 +93,10 @@ function roundScore(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function roundToHalf(value: number): number {
+  return Math.round(value * 2) / 2;
+}
+
 function clampScore(value: number, max: number): number {
   return roundScore(Math.max(0, Math.min(max, value)));
 }
@@ -111,74 +115,65 @@ export function calculateEvaluationBreakdown(
   stats: SessionBehaviourStats = {},
   rules?: Partial<ContinuousEvaluationRules> | null,
 ): ContinuousEvaluationBreakdown {
-  // أوزان القرار الوزاري 3/3/6/8 ثابتة ولا تتغير
-  const behaviorMax = 3;
-  const attendanceMax = 3;
-  const notebookMax = 6;
-  const participationMax = 8;
-  const judgementMax = 5;
-  const recordedMax = 3;
+  const behaviorMax = scoreCeiling(rules?.behaviorMax, DEFAULT_MAX.behavior);
+  const attendanceMax = scoreCeiling(rules?.attendanceMax, DEFAULT_MAX.attendance);
+  const notebookMax = scoreCeiling(rules?.notebookMax, DEFAULT_MAX.notebook);
+  const participationMax = scoreCeiling(rules?.participationMax, DEFAULT_MAX.participation);
+  const judgementMax = scoreCeiling(rules?.participationJudgementMax, DEFAULT_JUDGEMENT_MAX);
+  const recordedMax = Math.max(
+    0,
+    Math.min(
+      participationMax,
+      Number.isFinite(Number(rules?.participationRecordedMax))
+        ? Number(rules?.participationRecordedMax)
+        : participationMax - judgementMax,
+    ),
+  );
   const targetRatio = scoreCeiling(rules?.participationTargetRatio, DEFAULT_TARGET_RATIO) || DEFAULT_TARGET_RATIO;
 
-  // 1) السلوك والانضباط — متاح عند وجود أدلة (حصة واحدة على الأقل أو مخالفة مسجلة).
-  // غياب أي حصة أو تسجيل يعني انعدام الأدلة فلا يُمنح 20/20 مجاناً لغياب السجل.
-  const sessionsCount = positiveCount(stats.sessionsCount);
-  const disruptionsCount = positiveCount(stats.disruptions);
-  const behaviorAvailable = sessionsCount > 0 || disruptionsCount > 0;
-  const behavior = behaviorAvailable
-    ? clampScore(
-        behaviorMax -
-          behaviourDeduction(
-            disruptionsCount,
-            ruleValue(rules?.disruptionDeduction, 0.5),
-            ruleValue(rules?.disruptionRepeatDeduction, 0.5),
-          ),
-        behaviorMax,
-      )
-    : null;
+  // 1) السلوك والانضباط — دائماً متاح: عدم التسجيل يعني عدم المخالفة.
+  const behavior = clampScore(
+    behaviorMax -
+      behaviourDeduction(
+        positiveCount(stats.disruptions),
+        ruleValue(rules?.disruptionDeduction, 0.5),
+        ruleValue(rules?.disruptionRepeatDeduction, 0.5),
+      ),
+    behaviorMax,
+  );
 
-  // 2) المواظبة والحضور — نسبة من الحصص، ولا تُحتسب قبل 5 حصص (أدلة كافية).
-  const attendanceAvailable = sessionsCount >= MIN_SESSIONS_FOR_RATIO;
-  const attendance = attendanceAvailable
-    ? clampScore(
-        attendanceMax *
-          Math.pow(
-            1 -
-              Math.min(
-                1,
-                (positiveCount(stats.absent) * ruleValue(rules?.unexcusedAbsenceDeduction, 1) +
-                  positiveCount(stats.late) * ruleValue(rules?.lateDeduction, 0.5)) /
-                  sessionsCount,
-              ),
-            2,
-          ),
-        attendanceMax,
-      )
-    : null;
+  // 2) المواظبة والحضور — خصم مباشر للغياب غير المبرر فقط. التأخر والغياب
+  //    المبرر لا يدخلان الحساب، وعدم تسجيل غياب يعني عدم وجود خصم.
+  const attendance = clampScore(
+    attendanceMax -
+      positiveCount(stats.absent) * ruleValue(rules?.unexcusedAbsenceDeduction, 0.5),
+    attendanceMax,
+  );
 
-  // 3) الكراس — متوسط الجولات المطلوبة (جولة واحدة افتراضياً). أي درجة محفوظة
-  //    في جولة زائدة عن الإعداد لا تدخل الحساب حتى لا يتغيّر السقف بصمت.
-  //    عدم إحضار الكتاب («لم يكتب») توثيق فقط ولا يُدرَّج؛ فإن لم تُنفَّذ جولة
-  //    قط فالعنصر يُستبعد (null) وتُعاد نسبة المجموع إلى 20.
+  // 3) الكراس — المراقبة الفصلية هي المصدر الوحيد: 6/4/2/0 مباشرة.
+  //    لا تتحول الملاحظات اليومية القديمة إلى درجة، وبلا مراقبة يبقى العنصر ناقصاً.
   const notebookRounds = Math.min(2, Math.max(1, Math.round(ruleValue(rules?.notebookRounds, 1))));
   const rounds = (stats.notebookScores || []).filter(score => Number.isFinite(score)).slice(0, notebookRounds);
   const notebook = rounds.length > 0
-    ? clampScore(((rounds.reduce((sum, score) => sum + score, 0) / rounds.length) / 5) * notebookMax, notebookMax)
+    ? clampScore(rounds.reduce((sum, score) => sum + score, 0) / rounds.length, notebookMax)
     : null;
 
-  // 4) المشاركة والنشاط = توثيق آلي + تقدير الأستاذ.
-  //    المقام هو الحصص التي وُثِّق فيها شيء فعلاً، فلا يُعاقب تلميذ على ضيق الوقت.
+  // 4) المشاركة والنشاط = توثيق آلي (4) + تقدير الأستاذ (4).
+  //    يبلغ التوثيق سقفه عند 30% من الحصص الموثّقة؛ وما دون ذلك يُحسب
+  //    تناسبياً ثم يُقرّب لأقرب 0.5. التقدير قيمة مباشرة 0 أو 2 أو 4.
   const documentedSessions = positiveCount(stats.documentedSessions);
   const participationRecorded = documentedSessions > 0
     ? clampScore(
-        recordedMax * Math.min(1, positiveCount(stats.goodPart) / documentedSessions / targetRatio),
+        roundToHalf(
+          recordedMax * Math.min(1, positiveCount(stats.goodPart) / documentedSessions / targetRatio),
+        ),
         recordedMax,
       )
     : null;
   const judgementRaw = stats.participationJudgement;
   const participationJudgement = judgementRaw === null || judgementRaw === undefined || !Number.isFinite(Number(judgementRaw))
     ? null
-    : clampScore((Number(judgementRaw) / 5) * judgementMax, judgementMax);
+    : clampScore(Number(judgementRaw), judgementMax);
   const participation = participationRecorded === null && participationJudgement === null
     ? null
     : roundScore((participationRecorded ?? 0) + (participationJudgement ?? 0));
@@ -302,6 +297,8 @@ export function calculateCouncilStatistics(
       passRate: 0,
       highestScore: 0,
       lowestScore: 0,
+      topStudentId: null,
+      lowestStudentId: null,
       topStudentName: '—',
       lowestStudentName: '—',
       lessThan8: 0,
@@ -381,6 +378,8 @@ export function calculateCouncilStatistics(
     passRate,
     highestScore,
     lowestScore,
+    topStudentId: validGrades[validGrades.length - 1].studentId,
+    lowestStudentId: validGrades[0].studentId,
     topStudentName,
     lowestStudentName,
     lessThan8,
